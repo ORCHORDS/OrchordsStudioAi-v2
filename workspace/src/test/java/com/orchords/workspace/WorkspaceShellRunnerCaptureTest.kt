@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 class WorkspaceShellRunnerCaptureTest {
     @Test
@@ -61,5 +62,54 @@ class WorkspaceShellRunnerCaptureTest {
         assertEquals(MAX_OUTPUT_CHARS, result.stdout.length)
         assertTrue(result.truncated)
         assertFalse(result.outputIncomplete)
+    }
+
+    @Test
+    fun commandTimeoutDestroysProcessAndReturnsPromptly() {
+        assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
+        val process = ProcessBuilder(
+            "/bin/sh",
+            "-c",
+            "printf 'before-timeout'; sleep 30",
+        ).start()
+        val startedAt = System.nanoTime()
+
+        val result = process.readResult(timeoutMillis = 100)
+        val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
+
+        assertEquals(-1, result.exitCode)
+        assertTrue(result.timedOut)
+        assertTrue("timeout cleanup took ${elapsedMillis}ms", elapsedMillis < 5_000)
+        assertFalse("timed-out process must be destroyed", process.isAlive)
+    }
+
+    @Test
+    fun interruptedWaitDestroysProcessAndCollectorThreadsDoNotHoldCaller() {
+        assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
+        val process = ProcessBuilder(
+            "/bin/sh",
+            "-c",
+            "sleep 30",
+        ).start()
+        val failure = AtomicReference<Throwable?>()
+        val worker = Thread {
+            try {
+                process.readResult(timeoutMillis = 30_000)
+                failure.set(AssertionError("readResult returned normally after caller interruption"))
+            } catch (_: InterruptedException) {
+                // Expected: readResult cleans up the process/streams and preserves interruption.
+            } catch (t: Throwable) {
+                failure.set(t)
+            }
+        }
+
+        worker.start()
+        Thread.sleep(100)
+        worker.interrupt()
+        worker.join(5_000)
+
+        assertFalse("interrupted readResult caller must terminate", worker.isAlive)
+        assertFalse("interrupted command process must be destroyed", process.isAlive)
+        failure.get()?.let { throw AssertionError("unexpected readResult failure", it) }
     }
 }

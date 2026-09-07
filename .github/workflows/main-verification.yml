@@ -22,7 +22,7 @@ concurrency:
 jobs:
   verify:
     name: Main Verification
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout repository
@@ -30,22 +30,11 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-          clean: false
 
-      - name: Verify dedicated Android toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          java_bin="$(readlink -f "$(command -v java)")"
-          java_version="$("$java_bin" -version 2>&1 | head -n1)"
-          printf '%s\n' "$java_version"
-          printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")' || {
-            echo "::error::Java 21 is required on the dedicated verification runner"
-            exit 1
-          }
-          java_home="$(dirname "$(dirname "$java_bin")")"
-          echo "JAVA_HOME=$java_home" >> "$GITHUB_ENV"
-          echo "$java_home/bin" >> "$GITHUB_PATH"
+      - name: Set up Android build toolchain
+        uses: ./.github/actions/setup-build
+        with:
+          web: false
 
       - name: Verify app, providers, lint and debug APK
         shell: bash

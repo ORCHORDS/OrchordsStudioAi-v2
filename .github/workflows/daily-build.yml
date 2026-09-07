@@ -16,11 +16,7 @@ concurrency:
 
 jobs:
   nightly:
-    # Single job on the dedicated runner: no job boundaries and no artifact
-    # upload/download round-trips between build, attest and publish. Pinned to
-    # the verification runner (b2) so nightly APK builds never claim the
-    # CodeQL runner (a1) and evict its warm analysis workspace.
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: write
@@ -65,23 +61,12 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           persist-credentials: false
-          clean: false
 
-      - name: Verify dedicated Android toolchain
+      - name: Set up Android build toolchain
         if: steps.check.outputs.should_build == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          java_bin="$(readlink -f "$(command -v java)")"
-          java_version="$("$java_bin" -version 2>&1 | head -n1)"
-          printf '%s\n' "$java_version"
-          printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")' || {
-            echo "::error::Java 21 is required on the dedicated nightly runner"
-            exit 1
-          }
-          java_home="$(dirname "$(dirname "$java_bin")")"
-          echo "JAVA_HOME=$java_home" >> "$GITHUB_ENV"
-          echo "$java_home/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-build
+        with:
+          web: false
 
       - name: Select build mode
         if: steps.check.outputs.should_build == 'true'

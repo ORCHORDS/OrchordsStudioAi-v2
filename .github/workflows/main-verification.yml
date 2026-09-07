@@ -63,13 +63,17 @@ jobs:
 
           printf 'Java: %s\n' "$java_version"
           printf 'Gradle home: %s\n' "$GRADLE_USER_HOME"
+          printf 'Logical CPUs: %s\n' "$(nproc)"
+          printf 'Memory: %s\n' "$(free -h | awk '/^Mem:/ {print $2}')"
 
       - name: Fast app, provider and workspace verification
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace -PciVerify \
+          # Keep the isolated daemon warm on the persistent Lenovo runner.
+          # No --max-workers is set: Gradle may use every CPU visible to the job.
+          ./gradlew --stacktrace -PciVerify \
             :app:testDebugUnitTest \
             :ai:test \
             :workspace:test

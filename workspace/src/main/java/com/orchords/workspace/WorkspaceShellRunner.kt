@@ -1,5 +1,6 @@
 package com.orchords.workspace
 
+import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -36,38 +37,64 @@ class HostShellRunner : WorkspaceShellRunner {
 }
 
 const val MAX_OUTPUT_CHARS = 128 * 1024
+private const val OUTPUT_DRAIN_TIMEOUT_MS = 1_000L
+private const val FORCED_CLOSE_JOIN_MS = 1_000L
 
 fun Process.readResult(timeoutMillis: Long, stdin: ByteArray? = null): WorkspaceCommandResult {
-    val stdout = StreamCollector(inputStream)
-    val stderr = StreamCollector(errorStream)
+    val stdoutStream = inputStream
+    val stderrStream = errorStream
+    val stdout = StreamCollector(stdoutStream)
+    val stderr = StreamCollector(stderrStream)
     val stdinWriter = stdin?.let { bytes -> StreamWriter(outputStream, bytes) }
     if (stdinWriter == null) {
-        try {
-            outputStream.close()
-        } catch (_: IOException) {
-        }
+        outputStream.closeQuietly()
     }
     try {
         val finished = waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
         if (!finished) {
             destroyForcibly()
         }
-        stdinWriter?.join(1_000)
-        stdout.join(1_000)
-        stderr.join(1_000)
+        stdinWriter?.join(OUTPUT_DRAIN_TIMEOUT_MS)
+
+        val stdoutDrained = stdout.awaitTermination(OUTPUT_DRAIN_TIMEOUT_MS)
+        val stderrDrained = stderr.awaitTermination(OUTPUT_DRAIN_TIMEOUT_MS)
+        val forcedCaptureClose = !stdoutDrained || !stderrDrained
+        if (forcedCaptureClose) {
+            stdoutStream.closeQuietly()
+            stderrStream.closeQuietly()
+            stdout.join(FORCED_CLOSE_JOIN_MS)
+            stderr.join(FORCED_CLOSE_JOIN_MS)
+        }
+
+        val outputIncomplete = forcedCaptureClose ||
+            !stdout.completedNormally ||
+            !stderr.completedNormally
         return WorkspaceCommandResult(
             exitCode = if (finished) exitValue() else -1,
             stdout = stdout.text(),
             stderr = stderr.text(),
             timedOut = !finished,
-            truncated = stdout.truncated || stderr.truncated,
+            // Keep legacy callers fail-closed: they already reject truncated output.
+            // outputIncomplete distinguishes capture failure from a size-bound truncation.
+            truncated = stdout.truncated || stderr.truncated || outputIncomplete,
+            outputIncomplete = outputIncomplete,
         )
     } catch (e: InterruptedException) {
         destroyForcibly()
-        stdinWriter?.join(1_000)
-        stdout.join(1_000)
-        stderr.join(1_000)
+        outputStream.closeQuietly()
+        stdoutStream.closeQuietly()
+        stderrStream.closeQuietly()
+        stdinWriter?.join(FORCED_CLOSE_JOIN_MS)
+        stdout.join(FORCED_CLOSE_JOIN_MS)
+        stderr.join(FORCED_CLOSE_JOIN_MS)
         throw e
+    }
+}
+
+private fun Closeable.closeQuietly() {
+    try {
+        close()
+    } catch (_: IOException) {
     }
 }
 
@@ -101,13 +128,20 @@ private class StreamCollector(
     var truncated = false
         private set
 
+    @Volatile
+    var completedNormally = false
+        private set
+
     private val thread = Thread {
         try {
             stream.bufferedReader().use { reader ->
                 val buffer = CharArray(4096)
                 while (true) {
                     val read = reader.read(buffer)
-                    if (read < 0) break
+                    if (read < 0) {
+                        completedNormally = true
+                        break
+                    }
                     synchronized(builder) {
                         val remaining = maxChars - builder.length
                         if (remaining > 0) {
@@ -120,10 +154,16 @@ private class StreamCollector(
                 }
             }
         } catch (_: IOException) {
+            // A read failure is intentionally represented by completedNormally=false.
         }
     }.apply {
         isDaemon = true
         start()
+    }
+
+    fun awaitTermination(millis: Long): Boolean {
+        thread.join(millis)
+        return !thread.isAlive
     }
 
     fun join(millis: Long) = thread.join(millis)

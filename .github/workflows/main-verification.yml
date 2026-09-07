@@ -23,7 +23,7 @@ jobs:
   verify:
     name: Main Verification
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 12
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,9 +34,11 @@ jobs:
       - name: Set up Android and web build toolchain
         uses: ./.github/actions/setup-build
 
-      - name: Verify app, providers, workspace, lint and debug APK
+      - name: Fast app, provider and workspace verification
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew -PciVerify :app:testDebugUnitTest :ai:test :workspace:test :app:lintDebug :app:assembleDebug
+          # Keep ordinary main feedback focused on compile + unit-test correctness.
+          # Full Android lint and APK/release packaging run in the scheduled Daily Build lane.
+          ./gradlew -PciVerify :app:testDebugUnitTest :ai:test :workspace:test

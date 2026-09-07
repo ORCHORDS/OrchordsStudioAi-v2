@@ -62,11 +62,9 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Android build toolchain
+      - name: Set up Android and web build toolchain
         if: steps.check.outputs.should_build == 'true'
         uses: ./.github/actions/setup-build
-        with:
-          web: false
 
       - name: Select build mode
         if: steps.check.outputs.should_build == 'true'

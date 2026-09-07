@@ -22,6 +22,8 @@ import com.orchords.orchordsai.ui.theme.LocalDarkMode
 import com.orchords.orchordsai.utils.computeAIIconByName
 import com.orchords.orchordsai.utils.toCssHex
 
+private const val LEGACY_ORCHORDS_ICON_ASSET = "orchordsai.svg"
+
 @Composable
 private fun AIIcon(
     path: String,
@@ -58,6 +60,26 @@ private fun AIIcon(
 }
 
 @Composable
+private fun OrchordsAIIcon(
+    name: String,
+    modifier: Modifier = Modifier,
+    loading: Boolean = false,
+    color: Color = MaterialTheme.colorScheme.secondaryContainer,
+) {
+    Surface(
+        modifier = modifier.size(24.dp),
+        shape = rememberAvatarShape(loading),
+        color = color,
+    ) {
+        AsyncImage(
+            model = R.mipmap.ic_launcher,
+            contentDescription = name,
+            modifier = Modifier.padding(2.dp),
+        )
+    }
+}
+
+@Composable
 fun AutoAIIcon(
     name: String,
     modifier: Modifier = Modifier,
@@ -66,6 +88,15 @@ fun AutoAIIcon(
 ) {
     val path = remember(name) { computeAIIconByName(name) } ?: run {
         TextAvatar(text = name, modifier = modifier, loading = loading, color = color)
+        return
+    }
+    if (path == LEGACY_ORCHORDS_ICON_ASSET) {
+        OrchordsAIIcon(
+            name = name,
+            modifier = modifier,
+            loading = loading,
+            color = color,
+        )
         return
     }
     AIIcon(

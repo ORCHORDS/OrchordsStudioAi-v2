@@ -63,4 +63,6 @@ data class WorkspaceCommandResult(
     val stderr: String,
     val timedOut: Boolean = false,
     val truncated: Boolean = false,
+    /** True when stdout/stderr capture could not be proven drained to EOF. */
+    val outputIncomplete: Boolean = false,
 )

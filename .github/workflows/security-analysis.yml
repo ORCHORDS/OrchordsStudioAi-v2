@@ -81,30 +81,32 @@ jobs:
           submodules: recursive
           persist-credentials: false
           clean: false
-      - name: Install pinned Semgrep on private runner
+      - name: Install pinned Semgrep in private tool cache
         shell: bash
         run: |
           set -euo pipefail
           root="/home/orchords/actions-toolcache/Semgrep/${SEMGREP_VERSION}"
-          bin="$root/venv/bin/semgrep"
+          site="$root/site"
           mkdir -p /home/orchords/actions-toolcache/Semgrep
           exec 9>/home/orchords/actions-toolcache/Semgrep/.install.lock
           flock 9
-          if [ ! -x "$bin" ]; then
+          if [ ! -f "$root/.complete" ]; then
             staging="${root}.staging-$$"
             rm -rf "$staging"
-            python3 -m venv "$staging/venv"
-            "$staging/venv/bin/python" -m pip install --disable-pip-version-check --no-input "semgrep==${SEMGREP_VERSION}"
+            mkdir -p "$staging/site"
+            python3 -m pip install --disable-pip-version-check --no-input --target "$staging/site" "semgrep==${SEMGREP_VERSION}"
+            PYTHONPATH="$staging/site" python3 -m semgrep --version | grep -Fx "$SEMGREP_VERSION"
+            touch "$staging/.complete"
             rm -rf "$root"
             mv "$staging" "$root"
           fi
-          "$bin" --version | grep -Fx "$SEMGREP_VERSION"
-          echo "SEMGREP_BIN=$bin" >> "$GITHUB_ENV"
+          PYTHONPATH="$site" python3 -m semgrep --version | grep -Fx "$SEMGREP_VERSION"
+          echo "SEMGREP_SITE=$site" >> "$GITHUB_ENV"
       - name: Run pinned Semgrep
         shell: bash
         run: |
           set -euo pipefail
-          "$SEMGREP_BIN" scan \
+          PYTHONPATH="$SEMGREP_SITE" python3 -m semgrep scan \
             --config p/auto \
             --config p/owasp-top-ten \
             --error \

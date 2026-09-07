@@ -51,6 +51,26 @@ class WorkspaceShellRunnerCaptureTest {
     }
 
     @Test
+    fun outputAtAndBelowCapIsCompleteAndNotTruncated() {
+        assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
+
+        for (size in listOf(MAX_OUTPUT_CHARS - 1, MAX_OUTPUT_CHARS)) {
+            val process = ProcessBuilder(
+                "/bin/sh",
+                "-c",
+                "awk 'BEGIN { for (i = 0; i < $size; i++) printf \"a\" }'",
+            ).start()
+
+            val result = process.readResult(timeoutMillis = 10_000)
+
+            assertEquals(0, result.exitCode)
+            assertEquals(size, result.stdout.length)
+            assertFalse("size=$size must not be truncated", result.truncated)
+            assertFalse("size=$size must be fully captured", result.outputIncomplete)
+        }
+    }
+
+    @Test
     fun sizeTruncationIsDistinctFromCaptureIncompleteness() {
         assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
         val process = ProcessBuilder(

@@ -34,9 +34,9 @@ jobs:
       - name: Set up Android and web build toolchain
         uses: ./.github/actions/setup-build
 
-      - name: Verify app, providers, lint and debug APK
+      - name: Verify app, providers, workspace, lint and debug APK
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew -PciVerify :app:testDebugUnitTest :app:lintDebug :ai:test :app:assembleDebug
+          ./gradlew -PciVerify :app:testDebugUnitTest :ai:test :workspace:test :app:lintDebug :app:assembleDebug

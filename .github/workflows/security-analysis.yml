@@ -82,6 +82,38 @@ jobs:
           submodules: recursive
           persist-credentials: false
           clean: false
+      - name: Enforce intentional Android activity exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          manifest = 'app/src/main/AndroidManifest.xml'
+          android = '{http://schemas.android.com/apk/res/android}'
+          root = ET.parse(manifest).getroot()
+          expected = {'com.orchords.orchordsai.OrchordsAiActivity'}
+          exported = set()
+          launcher_ok = False
+
+          for activity in root.findall('./application/activity'):
+              name = activity.get(android + 'name')
+              if activity.get(android + 'exported') == 'true':
+                  exported.add(name)
+              if name == 'com.orchords.orchordsai.OrchordsAiActivity':
+                  for intent_filter in activity.findall('intent-filter'):
+                      actions = {a.get(android + 'name') for a in intent_filter.findall('action')}
+                      categories = {c.get(android + 'name') for c in intent_filter.findall('category')}
+                      if ('android.intent.action.MAIN' in actions and
+                              'android.intent.category.LAUNCHER' in categories):
+                          launcher_ok = True
+
+          if exported != expected:
+              raise SystemExit(f'Unexpected exported Android activities: {sorted(exported)}; expected {sorted(expected)}')
+          if not launcher_ok:
+              raise SystemExit('OrchordsAiActivity must remain the MAIN/LAUNCHER activity')
+          print('Android exported-activity policy verified:', ', '.join(sorted(exported)))
+          PY
       - name: Install pinned uv and Semgrep in private tool cache
         shell: bash
         run: |
@@ -125,6 +157,7 @@ jobs:
             --config p/owasp-top-ten \
             --error \
             --metrics=off \
+            --exclude-rule java.android.security.exported_activity.exported_activity \
             --exclude 'material3/material-color-utilities/**' \
             --exclude '**/build/**' \
             --exclude 'web-ui/node_modules/**' \

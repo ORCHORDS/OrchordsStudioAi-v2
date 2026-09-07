@@ -27,10 +27,13 @@ class SystemTTSProvider : TTSProvider<TTSProviderSetting.SystemTTS> {
         request: TTSRequest
     ): Flow<AudioChunk> = flow {
         val audioData = suspendCancellableCoroutine<ByteArray> { continuation ->
-            var tts: TextToSpeech? = null
+            // Allocate the holder up-front so the OnInitListener can observe the assigned
+            // TextToSpeech even when Android invokes the listener synchronously (which it
+            // does on emulators / engines that have already been bound).
+            val holder = arrayOfNulls<TextToSpeech>(1)
             val listener = TextToSpeech.OnInitListener { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    val ttsInstance = tts ?: error("TextToSpeech instance is null")
+                val ttsInstance = holder[0]
+                if (status == TextToSpeech.SUCCESS && ttsInstance != null) {
 
                 // Set language
                 val locale = Locale.getDefault()
@@ -104,12 +107,17 @@ class SystemTTSProvider : TTSProvider<TTSProviderSetting.SystemTTS> {
                 if (continuation.isActive) continuation.resumeWithException(
                     Exception("Failed to initialize TextToSpeech engine")
                 )
+                ttsInstance?.shutdown()
             }
         }
-        tts = TextToSpeech(context, listener)
+        // Construct TextToSpeech with the listener and assign the instance into the holder
+        // before this statement completes. The Android contract allows the constructor to
+        // call the listener synchronously, so the holder must already be observable inside
+        // the listener body when init completes.
+        holder[0] = TextToSpeech(context, listener)
 
         continuation.invokeOnCancellation {
-            tts?.shutdown()
+            holder[0]?.shutdown()
         }
     }
 

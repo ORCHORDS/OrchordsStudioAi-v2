@@ -280,7 +280,11 @@ class TtsController internal constructor(
                         awaitOrCreate(chunk, provider)
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
-                        val message = "Speech synthesis failed at chunk ${chunk.index + 1}"
+                        // Surface the underlying cause so users get an actionable hint
+                        // (e.g. "Failed to initialize TextToSpeech engine") instead of a
+                        // generic wrap that hides the real problem.
+                        val cause = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                        val message = "Speech synthesis failed at chunk ${chunk.index + 1}: $cause"
                         logSpeechFailure(message, e)
                         failedChunk = chunk
                         _error.update { message }

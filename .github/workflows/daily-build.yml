@@ -3,13 +3,7 @@ name: Daily Build
 # Full APK packaging, checksums, provenance attestation and rolling prerelease
 # publication are heavyweight release work. Keep them scheduled/manual rather
 # than rebuilding and republishing after every individual main commit.
-# The workflow-file-only push trigger below is temporary verification for the
-# nightly publication repair and will be removed after one green end-to-end run.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/daily-build.yml'
   schedule:
     - cron: '0 9,18 * * *'
   workflow_dispatch:

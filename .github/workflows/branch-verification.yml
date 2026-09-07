@@ -2,8 +2,7 @@ name: Branch Verification
 
 # Speculative same-repository branch feedback. This is intentionally not a
 # protected required gate; pull-request validation owns full Android lint and
-# all required contexts. Hosted execution prevents speculative work from
-# starving the trusted persistent main-verification runner.
+# all required contexts. Private-repo execution uses the same dedicated runner.
 on:
   push:
     branches-ignore:
@@ -24,21 +23,24 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    runs-on: main-verification
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
 
       - name: Set up build toolchain
         uses: ./.github/actions/setup-build
+        with:
+          gradle: false
 
       - name: Verify branch tests, providers and debug APK
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon -PciVerify :app:testDebugUnitTest :ai:test :app:assembleDebug
+          ./gradlew -PciVerify :app:testDebugUnitTest :ai:test :app:assembleDebug

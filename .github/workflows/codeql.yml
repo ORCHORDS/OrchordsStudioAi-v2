@@ -26,11 +26,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # Every leg runs on GitHub-hosted runners. The self-hosted java-kotlin
-    # route measured 11m48s vs 7m12s hosted for the same commit (runs
-    # 33529475242 / 33529437085): the runner's 2013-era Xeon E5-2690 v2
-    # loses more per-core speed than its warm Gradle workspace saves back.
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 45
     permissions:
       security-events: write
@@ -69,16 +65,11 @@ jobs:
           test -f material3/material-color-utilities/kotlin/dynamiccolor/DynamicScheme.kt
 
       - name: Set up build toolchain
-        # CodeQL never runs the web-ui build (see web/build.gradle.kts), so
-        # pnpm/Node are not needed on this leg.
         if: matrix.build
         uses: ./.github/actions/setup-build
         with:
           web: false
-          # Hosted runners need Gradle User Home (distribution, dependencies,
-          # build cache) restored from the Actions cache on every event.
-          gradle: true
-          cache-encryption-key: ${{ secrets.GRADLE_CACHE_ENCRYPTION_KEY }}
+          gradle: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
@@ -87,8 +78,6 @@ jobs:
           build-mode: ${{ matrix.build && 'manual' || 'none' }}
 
       - name: Compile for extraction
-        # Force only compiler/KSP tasks so CodeQL observes real compilation;
-        # preserve unrelated warm outputs and build-cache reuse.
         if: matrix.build
         run: ./gradlew -PcodeqlForceCompile=true :material3:compileDebugUnitTestKotlin :app:compileDebugKotlin --no-daemon --stacktrace
 

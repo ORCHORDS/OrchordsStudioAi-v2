@@ -22,17 +22,22 @@ concurrency:
 jobs:
   verify:
     name: Main Verification
-    runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    runs-on: main-verification
+    timeout-minutes: 8
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
 
       - name: Set up Android and web build toolchain
         uses: ./.github/actions/setup-build
+        with:
+          # The dedicated private runner keeps Gradle state locally. Avoid
+          # downloading/restoring the large GitHub Actions Gradle cache.
+          gradle: false
 
       - name: Fast app, provider and workspace verification
         shell: bash

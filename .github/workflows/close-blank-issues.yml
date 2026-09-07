@@ -8,9 +8,7 @@ permissions: {}
 
 jobs:
   close-blank-issues:
-    # 1-CPU container runner, free and faster to boot than a full VM; this
-    # job runs github-script only and finishes in seconds.
-    runs-on: ubuntu-slim
+    runs-on: main-verification
     timeout-minutes: 5
     permissions:
       issues: write

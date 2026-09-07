@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   report:
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 10
     steps:
       - name: Summarize workflow duration and reliability
@@ -56,7 +56,7 @@ jobs:
           by_name = {}
           for r in runs:
               if not r.get("conclusion"):
-                  continue  # skip in-progress runs
+                  continue
               duration = (
                   dt.datetime.fromisoformat(r["updated_at"].replace("Z", "+00:00"))
                   - dt.datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))

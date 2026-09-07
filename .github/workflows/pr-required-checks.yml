@@ -16,37 +16,43 @@ concurrency:
 jobs:
   app_tests:
     name: App Unit Tests
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
       - uses: ./.github/actions/setup-build
+        with:
+          gradle: false
       - name: Run app unit tests
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon :app:testDebugUnitTest
+          ./gradlew :app:testDebugUnitTest
 
   android_lint:
     name: Android Lint
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
       - uses: ./.github/actions/setup-build
+        with:
+          gradle: false
       - name: Run Android lint with Gradle profile
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --profile :app:lintDebug
+          ./gradlew --profile :app:lintDebug
       - name: Upload lint Gradle profile
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -58,22 +64,24 @@ jobs:
 
   ai_tests:
     name: AI Provider Tests
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
       - uses: ./.github/actions/setup-build
         with:
+          gradle: false
           web: false
       - name: Run AI provider tests
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon :ai:test
+          ./gradlew :ai:test
 
   verify:
     name: Main Verification
@@ -82,7 +90,7 @@ jobs:
       - app_tests
       - android_lint
       - ai_tests
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 5
     steps:
       - name: Require every verification shard to succeed
@@ -113,20 +121,23 @@ jobs:
 
   build:
     name: Daily Build
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
       - uses: ./.github/actions/setup-build
+        with:
+          gradle: false
       - name: Validate unsigned APK and checksums without publishing
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon -PciVerify :app:assembleDebug
+          ./gradlew -PciVerify :app:assembleDebug
           cd app/build/outputs/apk/debug
           sha256sum -- *.apk > SHA256SUMS
           sha256sum --check SHA256SUMS
@@ -134,31 +145,31 @@ jobs:
 
   citations:
     name: Citation Integrity Tests
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
       - uses: ./.github/actions/setup-build
+        with:
+          gradle: false
       - name: Run citation integrity regressions
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon :app:testDebugUnitTest --tests 'com.orchords.orchordsai.ui.components.message.CitationScopeTest'
+          ./gradlew :app:testDebugUnitTest --tests 'com.orchords.orchordsai.ui.components.message.CitationScopeTest'
 
   dependencies:
     name: Dependency Submission
-    runs-on: ubuntu-24.04
+    runs-on: main-verification
     timeout-minutes: 25
     permissions:
       contents: write
     steps:
-      # A skipped required job is reported as successful. Fail explicitly for
-      # forks until a trusted, no-checkout workflow_run submission relay exists.
-      # Never execute external PR build logic with a publication token.
       - name: Require same-repository source before privileged execution
         env:
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
@@ -174,6 +185,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
+          clean: false
       - uses: ./.github/actions/setup-build
         with:
           gradle: false

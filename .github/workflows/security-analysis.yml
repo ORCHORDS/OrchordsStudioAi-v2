@@ -101,7 +101,7 @@ jobs:
             curl --proto '=https' --tlsv1.2 -LsSf \
               "https://releases.astral.sh/github/uv/releases/download/${UV_VERSION}/uv-installer.sh" \
               | env UV_UNMANAGED_INSTALL="$staging" sh
-            "$staging/uv" --version | grep -Fx "uv ${UV_VERSION}"
+            "$staging/uv" --version | grep -F "uv ${UV_VERSION}"
             rm -rf "$uv_root"
             mv "$staging" "$uv_root"
           fi

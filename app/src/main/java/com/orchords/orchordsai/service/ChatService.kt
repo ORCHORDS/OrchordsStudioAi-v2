@@ -572,7 +572,10 @@ class ChatService(
             // reset suggestions
             updateConversation(conversationId, initialConversation.copy(chatSuggestions = emptyList()))
 
-            // memory tool
+            // Tool-capability gate. The user explicitly requested a tool-driven feature
+            // (external web search or an MCP tool), so abort generation rather than letting
+            // the model proceed without a tool surface — silently dropping the request makes
+            // the chat appear to "not call for web search".
             if (!model.abilities.contains(ModelAbility.TOOL)) {
                 if (useExternalWebSearch || mcpManager.getAllAvailableTools().isNotEmpty()) {
                     addError(
@@ -580,6 +583,7 @@ class ChatService(
                         conversationId,
                         title = context.getString(R.string.error_title_tool_unavailable)
                     )
+                    if (useExternalWebSearch) return@runCatching
                 }
             }
 

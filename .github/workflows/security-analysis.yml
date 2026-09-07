@@ -1,0 +1,169 @@
+name: Security Analysis
+
+# Free private-repository replacement for GitHub CodeQL/Code Security.
+# Fast source/secrets checks run on relevant main pushes. Heavier dependency
+# and workflow/configuration sweeps run weekly or on owner dispatch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'ai/**'
+      - 'common/**'
+      - 'document/**'
+      - 'oauth/**'
+      - 'search/**'
+      - 'speech/**'
+      - 'tools/**'
+      - 'trace-cli/**'
+      - 'videogen/**'
+      - 'web-ui/**'
+      - '**/*.gradle'
+      - '**/*.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'settings.gradle.kts'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '31 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  TRIVY_VERSION: 0.74.0
+  OSV_VERSION: 2.5.1
+  SEMGREP_VERSION: 1.174.0
+
+jobs:
+  secrets:
+    name: Gitleaks
+    runs-on: ubuntu-24.04-x64
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          clean: false
+      - name: Install gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz -C /tmp
+          install -m 0755 /tmp/gitleaks "$RUNNER_TEMP/gitleaks"
+      - name: Scan committed history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mode='--log-opts=HEAD'
+          if [ "${{ github.event_name }}" = schedule ] || [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            mode='--log-opts=--all'
+          fi
+          "$RUNNER_TEMP/gitleaks" git . --redact $mode
+
+  sast:
+    name: Semgrep SAST
+    runs-on: ubuntu-24.04-x64
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+          clean: false
+      - name: Install Semgrep in isolated environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --disable-pip-version-check "semgrep==${SEMGREP_VERSION}"
+      - name: Run Kotlin/Java/JS security rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan \
+            --config p/auto \
+            --config p/owasp-top-ten \
+            --error \
+            --metrics=off \
+            --exclude 'material3/material-color-utilities/**' \
+            --exclude '**/build/**' \
+            --exclude 'web-ui/node_modules/**' \
+            .
+
+  dependencies:
+    name: Trivy Vulnerabilities
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-x64
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+          clean: false
+      - name: Install Trivy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar xz -C /tmp
+          install -m 0755 /tmp/trivy "$RUNNER_TEMP/trivy"
+      - name: Block HIGH/CRITICAL dependency vulnerabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/trivy" fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed .
+
+  osv:
+    name: OSV Dependency Cross-check
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-x64
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+          clean: false
+      - name: Install OSV Scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP" go install "github.com/google/osv-scanner/v2/cmd/osv-scanner@v${OSV_VERSION}"
+      - name: Scan dependency manifests and lockfiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/osv-scanner" scan source -r .
+
+  configuration:
+    name: Trivy Misconfiguration
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-x64
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Install Trivy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar xz -C /tmp
+          install -m 0755 /tmp/trivy "$RUNNER_TEMP/trivy"
+      - name: Scan repository configuration and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/trivy" fs --scanners misconfig,secret --severity HIGH,CRITICAL --exit-code 1 .

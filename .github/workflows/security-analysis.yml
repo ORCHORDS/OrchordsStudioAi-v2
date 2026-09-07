@@ -79,7 +79,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
           persist-credentials: false
           clean: false
       - name: Enforce intentional Android activity exports
@@ -158,7 +157,7 @@ jobs:
             --error \
             --metrics=off \
             --exclude-rule java.android.security.exported_activity.exported_activity \
-            --exclude 'material3/material-color-utilities/**' \
+            --exclude 'material3/third-party/**' \
             --exclude '**/build/**' \
             --exclude 'web-ui/node_modules/**' \
             .
@@ -171,7 +170,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
           persist-credentials: false
           clean: false
       - name: Install Trivy
@@ -194,7 +192,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
           persist-credentials: false
           clean: false
       - name: Install OSV Scanner

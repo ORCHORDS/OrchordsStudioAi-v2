@@ -10,22 +10,17 @@ next-review: "2026-11-29"
 
 # Building ORCHORDS AI
 
-Use JDK 17, Android SDK, Git submodules, Node.js 22, and pnpm 11.
+Use JDK 17, Android SDK, Node.js 22, and pnpm 11.
 
 ## Setup
 
-Clone or initialize Git submodules recursively. The `material3/material-color-utilities`
-submodule is required for `:material3` to compile. Recommended clone:
+The repository ships everything it needs. A plain `git clone` is enough:
 
 ```bash
-git clone --recurse-submodules https://github.com/ORCHORDS/OrchordsStudioAi.git
+git clone https://github.com/ORCHORDS/OrchordsStudioAi.git
 ```
 
-If you already cloned, run from the repo root:
-
-```bash
-git submodule update --init --recursive
-```
+`material-color-utilities` is vendored into `material3/src/main/java/` under Apache License 2.0. The license, upstream source, and attribution live alongside the vendored sources (see `material3/src/main/java/LICENSE.material-color-utilities` and `THIRD_PARTY_NOTICES.md`). No submodule, manual download, or extra Gradle step is required.
 
 In `web-ui`, install JavaScript dependencies with:
 

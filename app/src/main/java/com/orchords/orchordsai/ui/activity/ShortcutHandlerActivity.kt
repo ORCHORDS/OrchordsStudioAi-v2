@@ -6,9 +6,9 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.FileProvider
-import com.orchords.orchordsai.BuildConfig
 import com.orchords.orchordsai.OrchordsAiActivity
+import com.orchords.orchordsai.data.files.StagedShareRoot
+import com.orchords.orchordsai.data.files.createStagedShareUri
 import java.io.File
 
 class ShortcutHandlerActivity : ComponentActivity() {
@@ -47,7 +47,9 @@ class ShortcutHandlerActivity : ComponentActivity() {
     private fun launchCamera() {
         val cameraDir = File(cacheDir, "camera").apply { mkdirs() }
         val imageFile = File(cameraDir, "shortcut_camera_image.jpg")
-        photoURI = FileProvider.getUriForFile(this, "${BuildConfig.APPLICATION_ID}.fileprovider", imageFile)
+        imageFile.parentFile?.mkdirs()
+        if (!imageFile.exists()) imageFile.createNewFile()
+        photoURI = createStagedShareUri(this, imageFile, StagedShareRoot.CAMERA)
         photoURI?.let {
             takePictureLauncher.launch(it)
         } ?: finish()

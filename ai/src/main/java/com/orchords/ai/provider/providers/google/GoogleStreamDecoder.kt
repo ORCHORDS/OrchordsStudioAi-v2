@@ -82,8 +82,8 @@ internal class GoogleStreamDecoder(
         }
         part.containsKey("functionCall") -> {
             val functionCall = part["functionCall"]!!.jsonObject
-            val toolCallId = functionCall["id"]?.jsonPrimitive?.contentOrNull
-                ?: "$responseId:tool-${++toolSequence}"
+            val providerFunctionCallId = functionCall["id"]?.jsonPrimitive?.contentOrNull
+            val toolCallId = providerFunctionCallId ?: "$responseId:tool-${++toolSequence}"
             UIMessagePart.Tool(
                 toolCallId = toolCallId,
                 toolName = functionCall["name"]?.jsonPrimitive?.contentOrNull ?: "",
@@ -91,6 +91,7 @@ internal class GoogleStreamDecoder(
                 output = emptyList(),
                 metadata = GoogleThoughtMetadata(
                     thoughtSignature = part["thoughtSignature"]?.jsonPrimitive?.contentOrNull,
+                    functionCallId = providerFunctionCallId,
                 ).toMetadata(),
             )
         }
@@ -200,9 +201,7 @@ internal class GoogleStreamDecoder(
                         }
                     }
                     is UIMessagePart.ServerTool -> {
-                        addAll(closeText()); addAll(closeReasoning()); addAll(closeImage()); addAll(
-                            closeTools()
-                        )
+                        addAll(closeText()); addAll(closeReasoning()); addAll(closeImage()); addAll(closeTools())
                         if (part.status == ServerToolStatus.IN_PROGRESS) {
                             add(
                                 StreamChunk.ServerToolStart(

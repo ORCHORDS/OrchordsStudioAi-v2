@@ -14,11 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.orchords.orchordsai.data.files.StagedShareRoot
+import com.orchords.orchordsai.data.files.createStagedShareUri
 import java.io.File
 
 @Stable
@@ -48,11 +49,7 @@ class ExporterState<T>(
                 file.writeText(value)
                 file
             }
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
+            val uri = createStagedShareUri(context, file, StagedShareRoot.EXPORT)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "application/json"
                 putExtra(Intent.EXTRA_STREAM, uri)

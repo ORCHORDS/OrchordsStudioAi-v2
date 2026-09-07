@@ -201,11 +201,23 @@ jobs:
           test -s release-notes.md
           test -s "$APK_DIR/SHA256SUMS"
 
+      - name: Remove previous rolling nightly release
+        if: steps.check.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          fi
+
       - name: Publish nightly prerelease
         if: steps.check.outputs.should_build == 'true'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: nightly
+          target_commitish: ${{ github.sha }}
           name: ORCHORDS Studio AI — Latest Nightly
           prerelease: true
           body_path: release-notes.md

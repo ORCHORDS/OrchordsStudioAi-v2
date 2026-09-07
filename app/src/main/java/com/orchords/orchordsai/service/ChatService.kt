@@ -142,6 +142,38 @@ internal fun createForkConversation(
     folderId = source.folderId,
 )
 
+/**
+ * Pick a single title from the model output used for `generateTitle`.
+ *
+ * The title prompt instructs "Reply directly with the title", but small models commonly
+ * return a numbered list of candidate titles ("1. Foo\n2. Bar…"). Picking the whole blob
+ * surfaces the full list to the user. This helper extracts the first usable title line:
+ *
+ *  - strips markdown code fences
+ *  - removes leading list markers ("1.", "-", "*")
+ *  - takes the first non-empty line
+ *  - truncates to 50 characters and drops trailing punctuation
+ *
+ * Returns an empty string when the model produced nothing usable.
+ */
+internal fun pickFirstTitleLine(raw: String, maxLength: Int = 50): String {
+    val stripped = raw
+        // Strip triple-backtick fences line by line so the inner text survives.
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotBlank() && !it.matches(Regex("^```.*")) }
+        .map { line ->
+            // Drop leading list markers such as "1.", "1)", "-", "*", "•".
+            line.replace(Regex("^\\s*(?:\\d+[.)]|[-*•])\\s*"), "").trim()
+        }
+        .filter { it.isNotBlank() }
+        .firstOrNull()
+        ?: return ""
+    val truncated = if (stripped.length > maxLength) stripped.substring(0, maxLength).trim() else stripped
+    // Drop a single trailing punctuation mark for header cleanliness.
+    return truncated.trimEnd('.', '!', '?', '。', '！', '？')
+}
+
 data class ChatError(
     val id: Uuid = Uuid.random(),
     val title: String? = null,
@@ -868,8 +900,11 @@ class ChatService(
             )
 
             if (conversationRepo.existsConversationById(conversation.id)) {
-                mutateConversation(conversationId) {
-                    it.copy(title = result.message.toText().trim())
+                val title = pickFirstTitleLine(result.message.toText())
+                if (title.isNotBlank()) {
+                    mutateConversation(conversationId) {
+                        it.copy(title = title)
+                    }
                 }
             }
         }.onFailure {
@@ -893,8 +928,10 @@ class ChatService(
             val settings = settingsStore.settingsFlow.first()
             if (!settings.enableSuggestion) return@runCatching
             val model = settings.findModelById(settings.fastModelId)
-                ?: return@runCatching
-            val provider = model.findProvider(settings.providers) ?: return@runCatching
+                ?: settings.getCurrentChatModel()
+                ?: throw IllegalStateException("No model available for suggestion generation")
+            val provider = model.findProvider(settings.providers)
+                ?: throw IllegalStateException("No provider for model ${model.modelId}")
 
             sessions[conversationId]?.let { session ->
                 updateConversation(

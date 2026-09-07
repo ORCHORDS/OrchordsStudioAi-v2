@@ -40,6 +40,7 @@ import com.orchords.ai.provider.TextGenerationResult
 import com.orchords.ai.provider.TextGenerationParams
 import com.orchords.ai.provider.resolveRouteCapabilities
 import com.orchords.ai.provider.resolveToolBudget
+import com.orchords.ai.provider.resolveToolResultName
 import com.orchords.ai.provider.stream.SseEvent
 import com.orchords.ai.provider.providers.PartGroup
 import com.orchords.ai.provider.providers.groupPartsByToolBoundary
@@ -240,6 +241,7 @@ class ChatCompletionsAPI(
                     supportInputModalities = params.model.inputModalities,
                     instructionRoleMode = providerSetting.instructionRoleMode,
                     host = host,
+                    includeToolResultName = resolveToolResultName(providerSetting.toolResultNameMode, host),
                 )
             )
 
@@ -521,6 +523,7 @@ class ChatCompletionsAPI(
         supportInputModalities: List<Modality> = listOf(Modality.TEXT, Modality.IMAGE),
         instructionRoleMode: InstructionRoleMode = InstructionRoleMode.AUTO,
         host: String = "api.openai.com",
+        includeToolResultName: Boolean = false,
     ) = buildJsonArray {
         val filteredMessages = messages.filter { it.isValidToUpload() }
 
@@ -531,6 +534,7 @@ class ChatCompletionsAPI(
                     includeReasoning = includeHistoryReasoning,
                     includeOpenRouterReasoningDetails = includeOpenRouterReasoningDetails,
                     supportInputModalities = supportInputModalities,
+                    includeToolResultName = includeToolResultName,
                 )
             } else {
                 addNonAssistantMessage(
@@ -548,6 +552,7 @@ class ChatCompletionsAPI(
         includeReasoning: Boolean,
         includeOpenRouterReasoningDetails: Boolean,
         supportInputModalities: List<Modality>,
+        includeToolResultName: Boolean,
     ) {
         val groups = groupPartsByToolBoundary(message.parts)
         val contentBuffer = mutableListOf<UIMessagePart>()
@@ -579,9 +584,17 @@ class ChatCompletionsAPI(
                     reasoningPart = null
 
                     group.tools.forEach { tool ->
+                        require(tool.toolCallId.isNotBlank()) {
+                            "OpenAI Chat tool result requires a non-blank tool_call_id"
+                        }
+                        if (includeToolResultName) {
+                            require(tool.toolName.isNotBlank()) {
+                                "OpenAI Chat tool result requires a provider-visible name on this route"
+                            }
+                        }
                         add(buildJsonObject {
                             put("role", "tool")
-                            put("name", tool.toolName)
+                            if (includeToolResultName) put("name", tool.toolName)
                             put("tool_call_id", tool.toolCallId)
                             put("content", tool.toToolResultContent(supportInputModalities))
                         })

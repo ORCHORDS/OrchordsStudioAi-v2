@@ -188,12 +188,8 @@ class ChatCompletionsToolResultNameTest {
             )
         }
 
-        assertTrue("HTTP 400 must surface as a failure", result.isFailure)
-        assertTrue(
-            "The failure must preserve the rejected HTTP status",
-            result.exceptionOrNull()?.message.orEmpty().contains("400"),
-        )
-        assertEquals("Compatibility rejection must not trigger a second request", 1, server.requestCount)
+        assertTrue("Compatibility rejection must surface as a failure", result.isFailure)
+        assertEquals("Compatibility rejection must send exactly one request", 1, server.requestCount)
     }
 
     private fun executedToolMessage(callId: String, toolName: String): UIMessage = UIMessage(

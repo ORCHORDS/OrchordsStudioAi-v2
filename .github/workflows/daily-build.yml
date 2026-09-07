@@ -141,21 +141,74 @@ jobs:
         with:
           subject-path: 'app/build/outputs/apk/*/*.apk'
 
+      - name: Generate complete release notes
+        if: steps.check.outputs.should_build == 'true'
+        env:
+          APK_DIR: ${{ steps.build_mode.outputs.apk_dir }}
+          SIGNED_BUILD: ${{ steps.build_mode.outputs.signed }}
+          BUILD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          built_at="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          if [ "$SIGNED_BUILD" = "true" ]; then
+            build_type="signed release APK"
+          else
+            build_type="unsigned debug APK"
+          fi
+
+          {
+            echo '# ORCHORDS Studio AI — Latest Nightly'
+            echo
+            echo 'This is the newest installable Android build from the current `main` branch and includes all work listed below.'
+            echo
+            echo '## Build'
+            echo
+            echo "- Commit: \`$BUILD_SHA\`"
+            echo "- Built: $built_at"
+            echo "- Package type: $build_type"
+            echo '- Channel: rolling `nightly` prerelease'
+            echo
+            echo '## APK downloads'
+            echo
+            echo '- **Universal APK** — recommended when you are unsure which ABI your device uses.'
+            echo '- **ARM64 APK** — recommended for most modern Android phones/tablets.'
+            echo '- **x86_64 APK** — intended for compatible emulators/x86_64 devices.'
+            echo '- `SHA256SUMS` — checksums for every APK attached to this release.'
+            echo
+            echo '## Included work'
+            echo
+            echo 'The following `main` commits are included in this APK, newest first. This list covers the current nightly development line from 2026-08-31 through this build:'
+            echo
+            git log --since='2026-08-31T00:00:00Z' --date=short --pretty=format:'- %s (`%h`, %ad)' --no-merges
+            echo
+            echo
+            echo '## Verification and provenance'
+            echo
+            echo '- APK SHA-256 checksums are generated and verified during the build, then attached as `SHA256SUMS`.'
+            echo '- GitHub artifact attestation is published for the APK build provenance.'
+            echo '- The release is rebuilt from the exact commit shown above; the APK and release notes therefore identify the same source revision.'
+            if [ "$SIGNED_BUILD" = "true" ]; then
+              echo '- Repository signing material was available, so this nightly was built using the release signing path.'
+            else
+              echo '- Repository signing material was not available to this workflow run, so the attached APKs are debug builds rather than signed production-release APKs.'
+            fi
+            echo
+            echo '> Development/nightly build: it contains the newest work and may be less stable than a production release.'
+          } > release-notes.md
+
+          printf '\nGenerated release notes with %s shipped commits.\n' "$(git rev-list --count --since='2026-08-31T00:00:00Z' HEAD)"
+          test -s release-notes.md
+          test -s "$APK_DIR/SHA256SUMS"
+
       - name: Publish nightly prerelease
         if: steps.check.outputs.should_build == 'true'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: nightly
-          name: Nightly Build
+          name: ORCHORDS Studio AI — Latest Nightly
           prerelease: true
-          body: |
-            Automated daily build (commit `${{ github.sha }}`).
-
-            SHA-256 checksums are attached in `SHA256SUMS`.
-            Build provenance is published as a GitHub artifact attestation.
-            When repository signing secrets are unavailable, the workflow publishes an unsigned debug APK instead of failing.
-
-            > Development build - may be unstable, for testing only.
+          body_path: release-notes.md
           files: |
             app/build/outputs/apk/*/*.apk
             app/build/outputs/apk/*/SHA256SUMS

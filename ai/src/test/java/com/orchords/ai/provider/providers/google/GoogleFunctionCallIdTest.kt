@@ -13,13 +13,11 @@ import com.orchords.ai.ui.ToolApprovalState
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.metadataAs
-import com.orchords.ai.ui.toMetadata
 import com.orchords.ai.util.json
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,7 +105,8 @@ class GoogleFunctionCallIdTest {
 
         val start = result.chunks.filterIsInstance<StreamChunk.ToolCallStart>().single()
         assertEquals("stream-provider-id", start.id)
-        val metadata = json.decodeFromJsonElement(GoogleThoughtMetadata.serializer(), assertNotNull(start.metadata))
+        val metadataJson = start.metadata ?: error("missing Google tool metadata")
+        val metadata = json.decodeFromJsonElement(GoogleThoughtMetadata.serializer(), metadataJson)
         assertEquals("stream-provider-id", metadata.functionCallId)
         assertEquals("stream-sig", metadata.thoughtSignature)
     }
@@ -125,7 +124,8 @@ class GoogleFunctionCallIdTest {
 
         val start = result.chunks.filterIsInstance<StreamChunk.ToolCallStart>().single()
         assertEquals("response-2:tool-1", start.id)
-        val metadata = json.decodeFromJsonElement(GoogleThoughtMetadata.serializer(), assertNotNull(start.metadata))
+        val metadataJson = start.metadata ?: error("missing Google tool metadata")
+        val metadata = json.decodeFromJsonElement(GoogleThoughtMetadata.serializer(), metadataJson)
         assertNull(metadata.functionCallId)
     }
 

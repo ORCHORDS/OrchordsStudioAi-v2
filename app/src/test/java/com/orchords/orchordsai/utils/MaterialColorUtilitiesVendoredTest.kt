@@ -10,7 +10,10 @@ import java.io.File
  * Locks the contract that `:material3` builds without any submodule bootstrap.
  *
  * Pins:
- *  - No Git submodule metadata (`.gitmodules`) and no submodule directory.
+ *  - No Git submodule metadata (`.gitmodules`) and no Git-tracked submodule
+ *    path under `material3/material-color-utilities/`. The check is on
+ *    `git ls-files`, not on working-tree presence, so an untracked leftover
+ *    directory on a persistent runner is not a false positive.
  *  - All required `material-color-utilities` Kotlin sources are present under
  *    `material3/src/main/java/<package>/` so the `:material3` Android library
  *    compiles against them as part of its main sourceset.
@@ -32,16 +35,35 @@ class MaterialColorUtilitiesVendoredTest {
     }
 
     @Test
-    fun `no gitmodules and no submodule path`() {
+    fun `no gitmodules and no tracked submodule path`() {
+        // The semantic contract is that the Git tree no longer wires
+        // `material-color-utilities` in as a submodule. Asserting against
+        // `git ls-files` (rather than a directory's on-disk presence) keeps the
+        // check correct on persistent self-hosted runners whose workspaces may
+        // still hold an untracked directory from a prior `actions/checkout`
+        // run with `clean: false`. A fresh `git clone` will not see that
+        // directory at all.
         val root = repoRoot()
         assertFalse(
             "Repository must not declare a .gitmodules file (vendoring replaces the submodule). " +
                 "Found at ${root.resolve(".gitmodules")}",
             root.resolve(".gitmodules").isFile,
         )
+        val lsFiles = runCatching {
+            val proc = ProcessBuilder("git", "ls-files")
+                .directory(root)
+                .redirectErrorStream(true)
+                .start()
+            proc.waitFor()
+            if (proc.exitValue() != 0) error("git ls-files exited ${proc.exitValue()}")
+            proc.inputStream.bufferedReader().readText()
+        }.getOrDefault("")
         assertFalse(
-            "Submodule directory material3/material-color-utilities must not exist.",
-            root.resolve("material3/material-color-utilities").exists(),
+            "Git tree must not track material3/material-color-utilities as a submodule. " +
+                "Found entries:\n" + lsFiles.lineSequence()
+                .filter { it.startsWith("material3/material-color-utilities") }
+                .joinToString("\n").ifEmpty { "(none)" },
+            lsFiles.lineSequence().any { it.startsWith("material3/material-color-utilities") },
         )
     }
 

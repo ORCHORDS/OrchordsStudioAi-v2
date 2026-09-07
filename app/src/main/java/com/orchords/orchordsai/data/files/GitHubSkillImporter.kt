@@ -190,7 +190,10 @@ internal class GitHubSkillImporter(
 
 /** Git's object identity is an integrity check, not a signature or a trust grant. */
 internal fun gitBlobId(bytes: ByteArray): String {
-    val digest = MessageDigest.getInstance("SHA-1")
+    // Git's legacy object-id format is SHA-1 by protocol definition; this is
+    // checked only against GitHub's returned blob id and is never used as a
+    // cryptographic signature or trust decision.
+    val digest = MessageDigest.getInstance("SHA-1") // nosemgrep: kotlin.lang.security.use-of-sha1.use-of-sha1
     digest.update("blob ${bytes.size}\u0000".toByteArray(Charsets.US_ASCII))
     return digest.digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
 }

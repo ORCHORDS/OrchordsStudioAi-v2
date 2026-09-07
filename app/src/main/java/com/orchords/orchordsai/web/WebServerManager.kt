@@ -21,8 +21,56 @@ import com.orchords.orchordsai.web.startWebServer
 import java.net.ServerSocket
 
 private const val TAG = "WebServerManager"
-private const val HOST_ALL_INTERFACES = "0.0.0.0"
-private const val HOST_LOOPBACK = "127.0.0.1"
+internal const val HOST_ALL_INTERFACES = "0.0.0.0"
+internal const val HOST_LOOPBACK = "127.0.0.1"
+
+/**
+ * Pure address-selection policy used by [WebServerManager] when populating
+ * [WebServerState.address]. Returns the literal address that the embedded
+ * server should advertise to the UI as its LAN/host address:
+ *
+ *  * loopback (`127.0.0.1`) when the user asked for localhost-only;
+ *  * the first non-loopback, up, non-virtual IPv4 interface when available;
+ *  * the all-interfaces sentinel (`0.0.0.0`) when no LAN interface is reachable.
+ *
+ * The function never throws and never returns `null`, so the UI can render the
+ * URL string unconditionally while the embedded Ktor listener binds to the
+ * corresponding `host` parameter.
+ */
+internal fun selectWebServerAddress(
+    localhostOnly: Boolean,
+    networkInterfaces: List<NetworkInterfaceSnapshot> = currentNetworkInterfaces()
+): String {
+    if (localhostOnly) return HOST_LOOPBACK
+    val lan = networkInterfaces.firstOrNull { iface ->
+        !iface.isLoopback && iface.isUp && !iface.isVirtual && iface.ipv4 != null
+    }
+    return lan?.ipv4 ?: HOST_ALL_INTERFACES
+}
+
+internal data class NetworkInterfaceSnapshot(
+    val name: String,
+    val isLoopback: Boolean,
+    val isUp: Boolean,
+    val isVirtual: Boolean,
+    val ipv4: String?
+)
+
+private fun currentNetworkInterfaces(): List<NetworkInterfaceSnapshot> {
+    val found = runCatching { java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList() }
+    return found.getOrDefault(emptyList()).map { nic ->
+        val ipv4 = nic.inetAddresses?.toList()?.firstOrNull { addr ->
+            addr is java.net.Inet4Address && !addr.isAnyLocalAddress
+        }?.hostAddress
+        NetworkInterfaceSnapshot(
+            name = nic.name ?: "",
+            isLoopback = runCatching { nic.isLoopback }.getOrDefault(false),
+            isUp = runCatching { nic.isUp }.getOrDefault(false),
+            isVirtual = runCatching { nic.isVirtual }.getOrDefault(false),
+            ipv4 = ipv4,
+        )
+    }
+}
 
 data class WebServerState(
     val isRunning: Boolean = false,
@@ -62,14 +110,16 @@ class WebServerManager(
 
         appScope.launch {
             val host = if (localhostOnly) HOST_LOOPBACK else HOST_ALL_INTERFACES
+            val address = selectWebServerAddress(localhostOnly)
             val baseState = WebServerState(
                 port = port,
                 serviceName = serviceName,
-                localhostOnly = localhostOnly
+                localhostOnly = localhostOnly,
+                address = address,
             )
             try {
                 _state.value = _state.value.copy(isLoading = true)
-                Log.i(TAG, "Starting web server on $host:$port")
+                Log.i(TAG, "Starting web server on $host:$port (address=$address)")
                 if (!isPortAvailable(port)) {
                     Log.w(TAG, "Port $port is already in use")
                     _state.value = baseState.copy(error = "Port $port is already in use")
@@ -86,10 +136,15 @@ class WebServerManager(
                             port = port,
                             serviceName = serviceName,
                             onRegistered = { info ->
+                                val nsdAddress = info.address.hostAddress
                                 _state.value = _state.value.copy(
                                     serviceName = info.serviceName,
                                     hostname = info.hostname,
-                                    address = info.address.hostAddress
+                                    address = if (nsdAddress.isNullOrBlank() || nsdAddress == "0.0.0.0") {
+                                        _state.value.address ?: address
+                                    } else {
+                                        nsdAddress
+                                    }
                                 )
                             }
                         )

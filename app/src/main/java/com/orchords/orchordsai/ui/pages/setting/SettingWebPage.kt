@@ -311,12 +311,25 @@ fun SettingWebPage() {
                     if (serverState.isRunning) {
                         val port = serverState.port
                         if (!serverState.localhostOnly) {
-                            val lanUrl = "http://${serverState.address ?: "localhost"}:$port"
-                            item(
-                                onClick = { copyUrl(lanUrl) },
-                                headlineContent = { Text(stringResource(R.string.setting_page_web_server_lan_address)) },
-                                supportingContent = { Text(lanUrl) },
-                            )
+                            val lanAddress = serverState.address
+                            if (!lanAddress.isNullOrBlank() && lanAddress != "0.0.0.0") {
+                                val lanUrl = "http://$lanAddress:$port"
+                                item(
+                                    onClick = { copyUrl(lanUrl) },
+                                    headlineContent = { Text(stringResource(R.string.setting_page_web_server_lan_address)) },
+                                    supportingContent = { Text(lanUrl) },
+                                )
+                            } else {
+                                item(
+                                    headlineContent = { Text(stringResource(R.string.setting_page_web_server_lan_address)) },
+                                    supportingContent = {
+                                        Text(
+                                            stringResource(R.string.setting_page_web_server_lan_address_unresolved),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    },
+                                )
+                            }
 
                             if (serverState.hostname != null) {
                                 val mdnsUrl = "http://${serverState.hostname}:$port"
@@ -328,7 +341,11 @@ fun SettingWebPage() {
                             }
                         }
 
-                        val localUrl = "http://localhost:$port"
+                        val localUrl = if (serverState.localhostOnly) {
+                            "http://127.0.0.1:$port"
+                        } else {
+                            "http://localhost:$port"
+                        }
                         item(
                             onClick = { copyUrl(localUrl) },
                             headlineContent = { Text(stringResource(R.string.setting_page_web_server_local_address)) },

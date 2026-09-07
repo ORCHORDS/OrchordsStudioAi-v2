@@ -842,9 +842,16 @@ class ChatService(
 
         runCatching {
             val settings = settingsStore.settingsFlow.first()
+            // Title generation needs a model. Prefer the configured fast model; fall back to the
+            // currently-selected chat model so a fresh install without an explicit fast model
+            // (Settings.fastModelId defaults to a random UUID until the user opens Settings)
+            // still auto-names new conversations. If neither resolves, surface an actionable
+            // error rather than silently dropping the title.
             val model = settings.findModelById(settings.fastModelId)
-                ?: return@runCatching
-            val provider = model.findProvider(settings.providers) ?: return@runCatching
+                ?: settings.getCurrentChatModel()
+                ?: error("No chat model available for title generation")
+            val provider = model.findProvider(settings.providers)
+                ?: error("Configured chat model has no provider for title generation")
 
             val providerHandler = providerManager.getProviderByType(provider)
             val result = providerHandler.generateText(

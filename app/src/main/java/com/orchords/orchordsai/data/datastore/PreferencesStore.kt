@@ -687,7 +687,12 @@ fun List<ProviderSetting>.findModelById(uuid: Uuid): Model? {
 }
 
 fun Settings.getCurrentChatModel(): Model? {
-    return findModelById(this.getCurrentAssistant().chatModelId ?: this.chatModelId)
+    val assistant = try {
+        this.getCurrentAssistant()
+    } catch (_: NoSuchElementException) {
+        null
+    }
+    return findModelById(assistant?.chatModelId ?: this.chatModelId)
 }
 
 fun Settings.getCurrentAssistant(): Assistant {

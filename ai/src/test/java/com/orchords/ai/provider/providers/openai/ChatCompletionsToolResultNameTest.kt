@@ -180,17 +180,20 @@ class ChatCompletionsToolResultNameTest {
             toolResultNameMode = ToolResultNameMode.INCLUDE,
         )
 
-        assertThrows(Exception::class.java) {
-            runBlocking {
-                api.generateText(
-                    providerSetting = setting,
-                    messages = listOf(executedToolMessage("call-once", "tool")),
-                    params = TextGenerationParams(model = model),
-                )
-            }
+        val result = runCatching {
+            api.generateText(
+                providerSetting = setting,
+                messages = listOf(executedToolMessage("call-once", "tool")),
+                params = TextGenerationParams(model = model),
+            )
         }
 
-        assertEquals(1, server.requestCount)
+        assertTrue("HTTP 400 must surface as a failure", result.isFailure)
+        assertTrue(
+            "The failure must preserve the rejected HTTP status",
+            result.exceptionOrNull()?.message.orEmpty().contains("400"),
+        )
+        assertEquals("Compatibility rejection must not trigger a second request", 1, server.requestCount)
     }
 
     private fun executedToolMessage(callId: String, toolName: String): UIMessage = UIMessage(

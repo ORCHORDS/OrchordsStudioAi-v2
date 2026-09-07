@@ -22,7 +22,9 @@ concurrency:
 jobs:
   verify:
     name: Main Verification
-    runs-on: main-verification
+    # Live Lenovo private agent. The heavyweight nightly stays on the separate
+    # main-verification/b2 lane so ordinary feedback can run independently.
+    runs-on: ubuntu-24.04-x64
     timeout-minutes: 8
     steps:
       - name: Checkout repository
@@ -35,8 +37,8 @@ jobs:
       - name: Set up Android and web build toolchain
         uses: ./.github/actions/setup-build
         with:
-          # The dedicated private runner keeps Gradle state locally. Avoid
-          # downloading/restoring the large GitHub Actions Gradle cache.
+          # The private runner keeps Gradle state locally. Avoid downloading
+          # and restoring the large GitHub Actions Gradle cache.
           gradle: false
 
       - name: Fast app, provider and workspace verification

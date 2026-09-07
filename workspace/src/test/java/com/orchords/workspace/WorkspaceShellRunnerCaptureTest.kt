@@ -29,12 +29,15 @@ class WorkspaceShellRunnerCaptureTest {
     }
 
     @Test
-    fun inheritedPipeThatOutlivesShellIsReportedIncomplete() {
-        assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
+    fun inheritedPipeThatOutlivesParentProcessIsReportedIncomplete() {
+        val python = File("/usr/bin/python3")
+        assumeTrue("Inherited-pipe integration fixture requires python3", python.isFile)
         val process = ProcessBuilder(
-            "/bin/sh",
+            python.absolutePath,
             "-c",
-            "printf 'parent'; (sleep 5) &",
+            "import os,sys,time; pid=os.fork(); " +
+                "(time.sleep(5), os._exit(0)) if pid == 0 else " +
+                "(sys.stdout.write('parent'), sys.stdout.flush(), os._exit(0))",
         ).start()
 
         val result = process.readResult(timeoutMillis = 10_000)

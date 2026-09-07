@@ -19,11 +19,14 @@ concurrency:
   queue: single
   cancel-in-progress: true
 
+env:
+  # Isolate StudioAi from shared ~/.gradle init/caches on the persistent host.
+  # The dedicated path survives jobs and becomes a warm repo-local CI cache.
+  GRADLE_USER_HOME: /home/orchords/.gradle-studioai
+
 jobs:
   verify:
     name: Main Verification
-    # Live Lenovo private agent. The heavyweight nightly stays on the separate
-    # main-verification/b2 lane so ordinary feedback can run independently.
     runs-on: ubuntu-24.04-x64
     timeout-minutes: 8
     steps:
@@ -34,18 +37,39 @@ jobs:
           persist-credentials: false
           clean: false
 
-      - name: Set up Android and web build toolchain
-        uses: ./.github/actions/setup-build
-        with:
-          # The private runner keeps Gradle state locally. Avoid downloading
-          # and restoring the large GitHub Actions Gradle cache.
-          gradle: false
+      - name: Verify private Android toolchain and seed Gradle wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          java_bin="$(readlink -f "$(command -v java)")"
+          java_version="$("$java_bin" -version 2>&1 | head -n1)"
+          if ! printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")'; then
+            java_bin="$(find /home/orchords/actions-toolcache/Java_Temurin-Hotspot_jdk -type f -path '*/x64/bin/java' 2>/dev/null | sort -V | tail -1)"
+            test -n "$java_bin"
+            java_version="$("$java_bin" -version 2>&1 | head -n1)"
+            printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")'
+          fi
+          java_home="$(dirname "$(dirname "$java_bin")")"
+          echo "JAVA_HOME=$java_home" >> "$GITHUB_ENV"
+          echo "$java_home/bin" >> "$GITHUB_PATH"
+
+          mkdir -p "$GRADLE_USER_HOME/wrapper/dists"
+          if [ ! -d "$GRADLE_USER_HOME/wrapper/dists/gradle-9.7.1-bin" ] && \
+             [ -d /home/orchords/.gradle/wrapper/dists/gradle-9.7.1-bin ]; then
+            cp -a /home/orchords/.gradle/wrapper/dists/gradle-9.7.1-bin \
+              "$GRADLE_USER_HOME/wrapper/dists/"
+          fi
+
+          printf 'Java: %s\n' "$java_version"
+          printf 'Gradle home: %s\n' "$GRADLE_USER_HOME"
 
       - name: Fast app, provider and workspace verification
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          # Keep ordinary main feedback focused on compile + unit-test correctness.
-          # Full Android lint and APK/release packaging run in the scheduled Daily Build lane.
-          ./gradlew -PciVerify :app:testDebugUnitTest :ai:test :workspace:test
+          ./gradlew --no-daemon --stacktrace -PciVerify \
+            :app:testDebugUnitTest \
+            :ai:test \
+            :workspace:test

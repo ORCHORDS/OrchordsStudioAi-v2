@@ -81,25 +81,23 @@ jobs:
           submodules: recursive
           persist-credentials: false
           clean: false
-      - name: Install Semgrep in isolated environment
+      - name: Run Semgrep in pinned container
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
-          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --disable-pip-version-check "semgrep==${SEMGREP_VERSION}"
-      - name: Run Kotlin/Java/JS security rules
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan \
-            --config p/auto \
-            --config p/owasp-top-ten \
-            --error \
-            --metrics=off \
-            --exclude 'material3/material-color-utilities/**' \
-            --exclude '**/build/**' \
-            --exclude 'web-ui/node_modules/**' \
-            .
+          docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            "semgrep/semgrep:${SEMGREP_VERSION}" \
+            semgrep scan \
+              --config p/auto \
+              --config p/owasp-top-ten \
+              --error \
+              --metrics=off \
+              --exclude 'material3/material-color-utilities/**' \
+              --exclude '**/build/**' \
+              --exclude 'web-ui/node_modules/**' \
+              .
 
   dependencies:
     name: Trivy Vulnerabilities

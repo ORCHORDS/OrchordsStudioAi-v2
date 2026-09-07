@@ -19,6 +19,20 @@ We welcome focused fixes, tests, documentation improvements, and discussed enhan
 
 ## Build and verify
 
+Clone with submodules so `material3/material-color-utilities` is populated:
+
+```bash
+git clone --recurse-submodules https://github.com/ORCHORDS/OrchordsStudioAi.git
+```
+
+If you already cloned without `--recurse-submodules`, run:
+
+```bash
+git submodule update --init --recursive
+```
+
+Skipping this step causes `material3:compileDebugKotlin` to fail with unresolved references to `dynamiccolor.*`. The `:material3` build script guards configuration with a clear message in that case.
+
 Use the repository Gradle wrapper and the documented toolchain. See [Building ORCHORDS AI](docs/BUILDING.md) for the current build and verification commands.
 
 Do not bypass required security, dependency, build, test, lint, or release-integrity checks.

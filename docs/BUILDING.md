@@ -14,7 +14,20 @@ Use JDK 17, Android SDK, Git submodules, Node.js 22, and pnpm 11.
 
 ## Setup
 
-Initialize Git submodules recursively. In `web-ui`, install JavaScript dependencies with:
+Clone or initialize Git submodules recursively. The `material3/material-color-utilities`
+submodule is required for `:material3` to compile. Recommended clone:
+
+```bash
+git clone --recurse-submodules https://github.com/ORCHORDS/OrchordsStudioAi.git
+```
+
+If you already cloned, run from the repo root:
+
+```bash
+git submodule update --init --recursive
+```
+
+In `web-ui`, install JavaScript dependencies with:
 
 ```bash
 pnpm install --frozen-lockfile

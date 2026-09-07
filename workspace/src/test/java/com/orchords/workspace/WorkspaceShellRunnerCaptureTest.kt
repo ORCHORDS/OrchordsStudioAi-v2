@@ -29,12 +29,15 @@ class WorkspaceShellRunnerCaptureTest {
     }
 
     @Test
-    fun inheritedPipeThatOutlivesShellIsReportedIncomplete() {
-        assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
+    fun inheritedPipeThatOutlivesParentProcessIsReportedIncomplete() {
+        val python = File("/usr/bin/python3")
+        assumeTrue("Inherited-pipe integration fixture requires python3", python.isFile)
         val process = ProcessBuilder(
-            "/bin/sh",
+            python.absolutePath,
             "-c",
-            "printf 'parent'; (sleep 5) &",
+            "import os,sys,time; pid=os.fork(); " +
+                "(time.sleep(5), os._exit(0)) if pid == 0 else " +
+                "(sys.stdout.write('parent'), sys.stdout.flush(), os._exit(0))",
         ).start()
 
         val result = process.readResult(timeoutMillis = 10_000)
@@ -45,6 +48,26 @@ class WorkspaceShellRunnerCaptureTest {
         // Legacy consumers already reject truncated output; keep them fail-closed until
         // every caller handles outputIncomplete explicitly.
         assertTrue(result.truncated)
+    }
+
+    @Test
+    fun outputAtAndBelowCapIsCompleteAndNotTruncated() {
+        assumeTrue("Host shell integration requires a POSIX shell", File("/bin/sh").isFile)
+
+        for (size in listOf(MAX_OUTPUT_CHARS - 1, MAX_OUTPUT_CHARS)) {
+            val process = ProcessBuilder(
+                "/bin/sh",
+                "-c",
+                "awk 'BEGIN { for (i = 0; i < $size; i++) printf \"a\" }'",
+            ).start()
+
+            val result = process.readResult(timeoutMillis = 10_000)
+
+            assertEquals(0, result.exitCode)
+            assertEquals(size, result.stdout.length)
+            assertFalse("size=$size must not be truncated", result.truncated)
+            assertFalse("size=$size must be fully captured", result.outputIncomplete)
+        }
     }
 
     @Test

@@ -1,9 +1,15 @@
 name: Daily Build
 
+# Full APK packaging, checksums, provenance attestation and rolling prerelease
+# publication are heavyweight release work. Keep them scheduled/manual rather
+# than rebuilding and republishing after every individual main commit.
+# The workflow-file-only push trigger below is temporary verification for the
+# nightly publication repair and will be removed after one green end-to-end run.
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - '.github/workflows/daily-build.yml'
   schedule:
     - cron: '0 9,18 * * *'
   workflow_dispatch:
@@ -16,7 +22,9 @@ concurrency:
 
 jobs:
   nightly:
-    runs-on: ubuntu-24.04
+    # The dedicated verification runner is the last proven-good nightly
+    # publication environment. Keep release work isolated from ordinary CI.
+    runs-on: main-verification
     timeout-minutes: 45
     permissions:
       contents: write
@@ -61,10 +69,23 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           persist-credentials: false
+          clean: false
 
-      - name: Set up Android and web build toolchain
+      - name: Verify dedicated Android toolchain
         if: steps.check.outputs.should_build == 'true'
-        uses: ./.github/actions/setup-build
+        shell: bash
+        run: |
+          set -euo pipefail
+          java_bin="$(readlink -f "$(command -v java)")"
+          java_version="$("$java_bin" -version 2>&1 | head -n1)"
+          printf '%s\n' "$java_version"
+          printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")' || {
+            echo "::error::Java 21 is required on the dedicated nightly runner"
+            exit 1
+          }
+          java_home="$(dirname "$(dirname "$java_bin")")"
+          echo "JAVA_HOME=$java_home" >> "$GITHUB_ENV"
+          echo "$java_home/bin" >> "$GITHUB_PATH"
 
       - name: Select build mode
         if: steps.check.outputs.should_build == 'true'
@@ -201,18 +222,7 @@ jobs:
           test -s release-notes.md
           test -s "$APK_DIR/SHA256SUMS"
 
-      - name: Remove previous rolling nightly release
-        if: steps.check.outputs.should_build == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
-          fi
-
-      - name: Publish nightly prerelease
+      - name: Publish or update nightly prerelease
         if: steps.check.outputs.should_build == 'true'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:

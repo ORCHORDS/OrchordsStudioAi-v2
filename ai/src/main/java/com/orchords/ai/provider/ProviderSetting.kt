@@ -106,6 +106,7 @@ sealed class ProviderSetting {
         var includeHistoryReasoning: Boolean = true,
         var streamingUsageMode: StreamingUsageMode = StreamingUsageMode.AUTO,
         var instructionRoleMode: InstructionRoleMode = InstructionRoleMode.AUTO,
+        var toolResultNameMode: ToolResultNameMode = ToolResultNameMode.AUTO,
         // null → defer to the ModelRegistry denylist; non-null → force the choice.
         var supportsTemperature: Boolean? = null,
         var supportsTopP: Boolean? = null,

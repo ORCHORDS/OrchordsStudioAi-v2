@@ -54,7 +54,6 @@ enum class ServerToolProtocol {
 }
 
 /**
- *
  */
 @Serializable
 data class ServerToolMetadata(
@@ -78,11 +77,12 @@ data class OpenRouterReasoningMetadata(
     val reasoningDetails: JsonArray? = null,
 ) : PartMetadata
 
-/**
- */
+/** Google GenerateContent part metadata kept separately from local action identity. */
 @Serializable
 data class GoogleThoughtMetadata(
     val thoughtSignature: String? = null,
+    @SerialName("google_function_call_id")
+    val functionCallId: String? = null,
 ) : PartMetadata
 
 /**

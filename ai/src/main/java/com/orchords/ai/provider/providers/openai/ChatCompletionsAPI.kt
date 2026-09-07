@@ -46,6 +46,7 @@ import com.orchords.ai.provider.providers.PartGroup
 import com.orchords.ai.provider.providers.groupPartsByToolBoundary
 import com.orchords.ai.registry.ModelRegistry
 import com.orchords.ai.ui.StreamChunk
+import com.orchords.ai.ui.OpenAIRefusalMetadata
 import com.orchords.ai.ui.OpenRouterReasoningMetadata
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessageAnnotation
@@ -812,6 +813,7 @@ class ChatCompletionsAPI(
         )
 
         val content = jsonObject["content"]?.jsonPrimitiveOrNull?.contentOrNull ?: ""
+        val refusal = jsonObject["refusal"]?.jsonPrimitiveOrNull?.contentOrNull
         val reasoning = jsonObject["reasoning_content"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: jsonObject["reasoning"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: jsonObject["content"]?.takeIf { it is JsonArray }?.let { arr ->
@@ -856,6 +858,14 @@ class ChatCompletionsAPI(
                     )
                 }
                 if (content.isNotEmpty()) add(UIMessagePart.Text(content))
+                if (!refusal.isNullOrEmpty()) {
+                    add(
+                        UIMessagePart.Text(
+                            text = refusal,
+                            metadata = OpenAIRefusalMetadata().toMetadata(),
+                        )
+                    )
+                }
                 images.forEach { image ->
                     val imageObject = image.jsonObjectOrNull ?: return@forEach
                     val type = imageObject["type"]?.jsonPrimitive?.contentOrNull ?: return@forEach

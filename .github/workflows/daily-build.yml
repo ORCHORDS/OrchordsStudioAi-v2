@@ -1,9 +1,9 @@
 name: Daily Build
 
+# Full APK packaging, checksums, provenance attestation and rolling prerelease
+# publication are heavyweight release work. Keep them scheduled/manual rather
+# than rebuilding and republishing after every individual main commit.
 on:
-  push:
-    branches:
-      - main
   schedule:
     - cron: '0 9,18 * * *'
   workflow_dispatch:

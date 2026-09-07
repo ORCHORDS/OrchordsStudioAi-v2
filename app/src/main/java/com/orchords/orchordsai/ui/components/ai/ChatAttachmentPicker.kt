@@ -11,7 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.dokar.sonner.ToastType
 import com.orchords.ai.ui.UIMessagePart
@@ -19,6 +18,8 @@ import com.orchords.common.android.appTempFolder
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.files.FilesManager
+import com.orchords.orchordsai.data.files.StagedShareRoot
+import com.orchords.orchordsai.data.files.createStagedShareUri
 import com.orchords.orchordsai.ui.components.ui.permission.PermissionCamera
 import com.orchords.orchordsai.ui.components.ui.permission.PermissionManager
 import com.orchords.orchordsai.ui.components.ui.permission.rememberPermissionState
@@ -84,9 +85,13 @@ internal fun rememberChatAttachmentPickerActions(
     val onTakePicture: () -> Unit = {
         if (cameraPermission.allRequiredPermissionsGranted) {
             val cameraDir = File(context.cacheDir, "camera").apply { mkdirs() }
-            cameraOutputFile = File(cameraDir, "camera_${Uuid.random()}.jpg")
-            cameraOutputUri = FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", cameraOutputFile!!
+            cameraOutputFile = File(cameraDir, "camera_${Uuid.random()}.jpg").also {
+                if (!it.exists()) it.createNewFile()
+            }
+            cameraOutputUri = createStagedShareUri(
+                context,
+                cameraOutputFile!!,
+                StagedShareRoot.CAMERA,
             )
             cameraLauncher.launch(cameraOutputUri!!)
         } else {

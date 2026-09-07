@@ -32,6 +32,13 @@ data class OpenAIReasoningMetadata(
     val encryptedContent: String? = null,
 ) : PartMetadata
 
+/** Marks user-visible text that came from the OpenAI Chat Completions refusal channel. */
+@Serializable
+data class OpenAIRefusalMetadata(
+    @SerialName("openai_refusal")
+    val refusal: Boolean = true,
+) : PartMetadata
+
 /**
  */
 @Serializable

@@ -31,10 +31,8 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Android build toolchain
+      - name: Set up Android and web build toolchain
         uses: ./.github/actions/setup-build
-        with:
-          web: false
 
       - name: Verify app, providers, lint and debug APK
         shell: bash

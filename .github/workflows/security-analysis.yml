@@ -43,6 +43,7 @@ env:
   TRIVY_VERSION: 0.74.0
   OSV_VERSION: 2.5.1
   SEMGREP_VERSION: 1.174.0
+  UV_VERSION: 0.12.10
 
 jobs:
   secrets:
@@ -81,32 +82,45 @@ jobs:
           submodules: recursive
           persist-credentials: false
           clean: false
-      - name: Install pinned Semgrep in private tool cache
+      - name: Install pinned uv and Semgrep in private tool cache
         shell: bash
         run: |
           set -euo pipefail
-          root="/home/orchords/actions-toolcache/Semgrep/${SEMGREP_VERSION}"
-          site="$root/site"
-          mkdir -p /home/orchords/actions-toolcache/Semgrep
+          uv_root="/home/orchords/actions-toolcache/uv/${UV_VERSION}"
+          uv_bin="$uv_root/uv"
+          tool_root="/home/orchords/actions-toolcache/Semgrep/${SEMGREP_VERSION}"
+          tool_bin="$tool_root/bin"
+          mkdir -p /home/orchords/actions-toolcache/uv /home/orchords/actions-toolcache/Semgrep "$tool_bin"
           exec 9>/home/orchords/actions-toolcache/Semgrep/.install.lock
           flock 9
-          if [ ! -f "$root/.complete" ]; then
-            staging="${root}.staging-$$"
+
+          if [ ! -x "$uv_bin" ]; then
+            staging="${uv_root}.staging-$$"
             rm -rf "$staging"
-            mkdir -p "$staging/site"
-            python3 -m pip install --disable-pip-version-check --no-input --target "$staging/site" "semgrep==${SEMGREP_VERSION}"
-            PYTHONPATH="$staging/site" python3 -m semgrep --version | grep -Fx "$SEMGREP_VERSION"
-            touch "$staging/.complete"
-            rm -rf "$root"
-            mv "$staging" "$root"
+            mkdir -p "$staging"
+            curl --proto '=https' --tlsv1.2 -LsSf \
+              "https://releases.astral.sh/github/uv/releases/download/${UV_VERSION}/uv-installer.sh" \
+              | env UV_UNMANAGED_INSTALL="$staging" sh
+            "$staging/uv" --version | grep -Fx "uv ${UV_VERSION}"
+            rm -rf "$uv_root"
+            mv "$staging" "$uv_root"
           fi
-          PYTHONPATH="$site" python3 -m semgrep --version | grep -Fx "$SEMGREP_VERSION"
-          echo "SEMGREP_SITE=$site" >> "$GITHUB_ENV"
+
+          export UV_TOOL_DIR="$tool_root/tools"
+          export UV_TOOL_BIN_DIR="$tool_bin"
+          export UV_CACHE_DIR="/home/orchords/actions-toolcache/uv/cache"
+          if [ ! -x "$tool_bin/semgrep" ] || ! "$tool_bin/semgrep" --version | grep -Fx "$SEMGREP_VERSION" >/dev/null; then
+            rm -rf "$UV_TOOL_DIR" "$tool_bin"
+            mkdir -p "$tool_bin"
+            "$uv_bin" tool install --python "$(command -v python3)" --force "semgrep==${SEMGREP_VERSION}"
+          fi
+          "$tool_bin/semgrep" --version | grep -Fx "$SEMGREP_VERSION"
+          echo "SEMGREP_BIN=$tool_bin/semgrep" >> "$GITHUB_ENV"
       - name: Run pinned Semgrep
         shell: bash
         run: |
           set -euo pipefail
-          PYTHONPATH="$SEMGREP_SITE" python3 -m semgrep scan \
+          "$SEMGREP_BIN" scan \
             --config p/auto \
             --config p/owasp-top-ten \
             --error \

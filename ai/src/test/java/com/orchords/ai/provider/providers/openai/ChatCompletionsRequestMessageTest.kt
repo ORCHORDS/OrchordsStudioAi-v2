@@ -286,11 +286,12 @@ class ChatCompletionsRequestMessageTest {
 
         assertTrue("Should find assistant with tool_calls", assistantIndex >= 0)
 
-        // The next message should be the tool result
+        // The next message should be the tool result. The generic serializer overload omits the
+        // optional name; route-specific tests cover providers that require it.
         val nextMsg = result[assistantIndex + 1].jsonObject
         assertEquals("tool", nextMsg["role"]?.jsonPrimitive?.content)
         assertEquals("call_abc", nextMsg["tool_call_id"]?.jsonPrimitive?.content)
-        assertEquals("my_tool", nextMsg["name"]?.jsonPrimitive?.content)
+        assertFalse(nextMsg.containsKey("name"))
     }
 
     @Test

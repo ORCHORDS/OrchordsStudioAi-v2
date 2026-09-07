@@ -15,6 +15,7 @@ import com.orchords.ai.provider.stream.DecodeResult
 import com.orchords.ai.provider.stream.SseEvent
 import com.orchords.ai.provider.stream.StreamChunkDecoder
 import com.orchords.ai.ui.StreamChunk
+import com.orchords.ai.ui.OpenAIRefusalMetadata
 import com.orchords.ai.ui.OpenRouterReasoningMetadata
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessageAnnotation
@@ -96,6 +97,7 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
             payload["role"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "ASSISTANT"
         )
         val content = payload["content"]?.jsonPrimitiveOrNull?.contentOrNull ?: ""
+        val refusal = payload["refusal"]?.jsonPrimitiveOrNull?.contentOrNull
         val reasoning = payload["reasoning_content"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: payload["reasoning"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: payload["content"]?.takeIf { it is JsonArray }?.let { array ->
@@ -118,6 +120,14 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
                     ))
                 }
                 if (content.isNotEmpty()) add(UIMessagePart.Text(content))
+                if (!refusal.isNullOrEmpty()) {
+                    add(
+                        UIMessagePart.Text(
+                            text = refusal,
+                            metadata = OpenAIRefusalMetadata().toMetadata(),
+                        )
+                    )
+                }
                 images.forEach { image ->
                     val imageObject = image.jsonObjectOrNull ?: return@forEach
                     if (imageObject["type"]?.jsonPrimitive?.contentOrNull != "image_url") return@forEach
@@ -186,6 +196,7 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
     private class ChatCompletionsStreamState {
         private var sequence = 0
         private var textId: String? = null
+        private var textMetadata: JsonObject? = null
         private var reasoningId: String? = null
         private var imageId: String? = null
         private val openToolIds = linkedSetOf<String>()
@@ -196,10 +207,15 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
                 when (part) {
                     is UIMessagePart.Text -> if (part.text.isNotEmpty()) {
                         addAll(closeReasoning()); addAll(closeImage()); addAll(closeTools())
-                        val id = textId ?: nextId(sourceId, "text").also {
-                            textId = it; add(StreamChunk.TextStart(it))
+                        if (textId != null && textMetadata != part.metadata) {
+                            addAll(closeText())
                         }
-                        add(StreamChunk.TextDelta(id, part.text))
+                        val id = textId ?: nextId(sourceId, "text").also {
+                            textId = it
+                            textMetadata = part.metadata
+                            add(StreamChunk.TextStart(it, part.metadata))
+                        }
+                        add(StreamChunk.TextDelta(id, part.text, part.metadata))
                     }
                     is UIMessagePart.Reasoning -> if (part.reasoning.isNotEmpty() || part.metadata != null) {
                         addAll(closeText()); addAll(closeImage()); addAll(closeTools())
@@ -239,7 +255,11 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
             add(StreamChunk.Finish(reason, responseId, model))
         }
 
-        private fun closeText() = textId?.let { textId = null; listOf(StreamChunk.TextEnd(it)) }.orEmpty()
+        private fun closeText() = textId?.let {
+            textId = null
+            textMetadata = null
+            listOf(StreamChunk.TextEnd(it))
+        }.orEmpty()
         private fun closeReasoning() = reasoningId?.let {
             reasoningId = null; listOf(StreamChunk.ReasoningEnd(it))
         }.orEmpty()

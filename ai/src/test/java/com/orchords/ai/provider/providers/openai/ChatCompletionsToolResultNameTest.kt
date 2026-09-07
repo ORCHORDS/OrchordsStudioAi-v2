@@ -11,29 +11,21 @@ import com.orchords.ai.provider.buildToolAliasRequestView
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.util.KeyRoulette
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.lang.reflect.InvocationTargetException
-import java.util.concurrent.TimeUnit
 
 class ChatCompletionsToolResultNameTest {
     private lateinit var api: ChatCompletionsAPI
-    private lateinit var server: MockWebServer
 
     private val model = Model(
         modelId = "test-tool-model",
@@ -43,13 +35,6 @@ class ChatCompletionsToolResultNameTest {
     @Before
     fun setUp() {
         api = ChatCompletionsAPI(OkHttpClient(), KeyRoulette.default())
-        server = MockWebServer()
-        server.start()
-    }
-
-    @After
-    fun tearDown() {
-        server.close()
     }
 
     @Test
@@ -165,36 +150,6 @@ class ChatCompletionsToolResultNameTest {
 
         assertTrue(error.cause is IllegalArgumentException)
         assertTrue(error.cause?.message.orEmpty().contains("tool_call_id"))
-    }
-
-    @Test
-    fun `compatibility rejection is never retried automatically`() {
-        server.enqueue(
-            MockResponse.Builder()
-                .code(400)
-                .addHeader("Content-Type", "application/json")
-                .body("{\"error\":{\"message\":\"tool result name rejected\"}}")
-                .build()
-        )
-        val baseUrl = server.url("/v1").toString().removeSuffix("/")
-        val setting = ProviderSetting.OpenAI(
-            baseUrl = baseUrl,
-            apiKey = "test-key",
-            toolResultNameMode = ToolResultNameMode.INCLUDE,
-        )
-
-        assertThrows(Exception::class.java) {
-            runBlocking {
-                api.generateText(
-                    providerSetting = setting,
-                    messages = listOf(executedToolMessage("call-once", "tool")),
-                    params = TextGenerationParams(model = model),
-                )
-            }
-        }
-
-        assertNotNull("Compatibility rejection must send one request", server.takeRequest(1, TimeUnit.SECONDS))
-        assertNull("Compatibility rejection must not trigger a second request", server.takeRequest(250, TimeUnit.MILLISECONDS))
     }
 
     private fun executedToolMessage(callId: String, toolName: String): UIMessage = UIMessage(

@@ -12,12 +12,18 @@ import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 class SkillsToolsTest {
     @get:Rule val tempFolder = TemporaryFolder()
+    private fun canCreateSymlinks(): Boolean = runCatching {
+        val probe = tempFolder.newFile().apply { delete() }
+        Files.createSymbolicLink(probe.toPath(), tempFolder.newFolder().toPath()).let { Files.delete(it) }
+        true
+    }.getOrDefault(false)
 
     private fun skill(name: String, manual: Boolean = false, description: String = "Test skill"): SkillMetadata {
         val directory = tempFolder.newFolder()
@@ -127,6 +133,7 @@ class SkillsToolsTest {
             tool.execute(buildJsonObject { put("name", auto.name); put("path", "../outside.txt") })
         }.isFailure)
         assertTrue(auto.skillFile.delete())
+        Assume.assumeTrue("Host must allow symlink creation to exercise anti-following behavior", canCreateSymlinks())
         Files.createSymbolicLink(auto.skillFile.toPath(), outside.toPath())
         assertTrue(runCatching { tool.execute(buildJsonObject { put("name", auto.name) }) }.isFailure)
     }

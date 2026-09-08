@@ -4,6 +4,7 @@ import com.orchords.orchordsai.data.extensions.BuiltInLibrary
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.*
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -11,6 +12,11 @@ import org.junit.rules.TemporaryFolder
 class SkillPackageStoreTest {
     @get:Rule val temp = TemporaryFolder()
     private fun root() = temp.newFolder()
+    private fun canCreateSymlinks(): Boolean = runCatching {
+        val probe = temp.newFile().apply { delete() }
+        Files.createSymbolicLink(probe.toPath(), temp.newFolder().toPath()).let { Files.delete(it) }
+        true
+    }.getOrDefault(false)
     private fun manifest(body: String = "original") =
         "---\nname: example\ndescription: A useful example\n---\n$body".toByteArray()
     private fun snapshot(root: File): Map<String, List<Byte>> = root.walkTopDown()
@@ -82,6 +88,7 @@ class SkillPackageStoreTest {
     }
 
     @Test fun `symlink targets and existing symlink resources are not followed`() {
+        Assume.assumeTrue("Host must allow symlink creation to exercise anti-following behavior", canCreateSymlinks())
         val root = root()
         val outside = temp.newFolder()
         outside.resolve("sentinel").writeText("keep")

@@ -22,7 +22,7 @@ import com.orchords.orchordsai.ui.theme.LocalDarkMode
 import com.orchords.orchordsai.utils.computeAIIconByName
 import com.orchords.orchordsai.utils.toCssHex
 
-private const val LEGACY_ORCHORDS_ICON_ASSET = "orchordsai.svg"
+private const val ORCHORDS_ICON_ASSET = "orchordsai.png"
 
 @Composable
 private fun AIIcon(
@@ -90,7 +90,7 @@ fun AutoAIIcon(
         TextAvatar(text = name, modifier = modifier, loading = loading, color = color)
         return
     }
-    if (path == LEGACY_ORCHORDS_ICON_ASSET) {
+    if (path == ORCHORDS_ICON_ASSET) {
         OrchordsAIIcon(
             name = name,
             modifier = modifier,

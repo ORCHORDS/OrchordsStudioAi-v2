@@ -1,13 +1,8 @@
 name: Daily Build
 
-# Full APK packaging, checksums, provenance attestation and rolling prerelease
-# publication are heavyweight release work. Keep them scheduled/manual rather
-# than rebuilding and republishing after every individual main commit.
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/daily-build.yml'
   schedule:
     - cron: '0 9,18 * * *'
   workflow_dispatch:
@@ -15,23 +10,19 @@ on:
 permissions: {}
 
 concurrency:
-  group: nightly-${{ github.ref }}
-  cancel-in-progress: true
+  group: daily-build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  nightly:
-    # The dedicated verification runner is the last proven-good nightly
-    # publication environment. Keep release work isolated from ordinary CI.
+  release:
+    name: Daily Build
     runs-on: main-verification
     timeout-minutes: 45
     permissions:
       contents: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
     steps:
-      - name: Check for recent commits
-        id: check
+      - name: Decide whether scheduled build is needed
+        id: gate
         env:
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
@@ -39,10 +30,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" != "schedule" ]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
           since="$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')"
           response="$(curl --fail-with-body --silent --show-error \
             --get \
@@ -57,23 +49,19 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "No commits in the past 24 hours, skipping build"
+            echo "No main commits in the last 24 hours; scheduled build skipped."
           fi
 
       - name: Checkout repository
-        if: steps.check.outputs.should_build == 'true'
+        if: steps.gate.outputs.should_build == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-          # Persistent self-hosted runners must not retain deleted paths from
-          # previous revisions (for example, the former material-color-utilities
-          # submodule). A clean checkout preserves caches outside the workspace
-          # while guaranteeing the source tree matches the exact commit.
           clean: true
 
-      - name: Verify dedicated Android toolchain
-        if: steps.check.outputs.should_build == 'true'
+      - name: Verify Java 21 toolchain
+        if: steps.gate.outputs.should_build == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -81,7 +69,7 @@ jobs:
           java_version="$("$java_bin" -version 2>&1 | head -n1)"
           printf '%s\n' "$java_version"
           printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")' || {
-            echo "::error::Java 21 is required on the dedicated nightly runner"
+            echo "::error::Java 21 is required on the release runner"
             exit 1
           }
           java_home="$(dirname "$(dirname "$java_bin")")"
@@ -89,7 +77,7 @@ jobs:
           echo "$java_home/bin" >> "$GITHUB_PATH"
 
       - name: Select build mode
-        if: steps.check.outputs.should_build == 'true'
+        if: steps.gate.outputs.should_build == 'true'
         id: build_mode
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
@@ -101,15 +89,36 @@ jobs:
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "gradle_task=assembleRelease" >> "$GITHUB_OUTPUT"
             echo "apk_dir=app/build/outputs/apk/release" >> "$GITHUB_OUTPUT"
+            echo "variant=release" >> "$GITHUB_OUTPUT"
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "gradle_task=assembleDebug" >> "$GITHUB_OUTPUT"
             echo "apk_dir=app/build/outputs/apk/debug" >> "$GITHUB_OUTPUT"
-            echo "Signing secrets are unavailable; producing an unsigned debug nightly artifact instead."
+            echo "variant=debug" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets unavailable; publishing installable debug APKs."
           fi
 
+      - name: Read app version metadata
+        if: steps.gate.outputs.should_build == 'true'
+        id: app_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import pathlib
+          import re
+
+          text = pathlib.Path("app/build.gradle.kts").read_text(encoding="utf-8")
+          name = re.search(r'versionName\s*=\s*"([^"]+)"', text)
+          code = re.search(r'versionCode\s*=\s*(\d+)', text)
+          if not name or not code:
+              raise SystemExit("Unable to resolve Android versionName/versionCode")
+          print(f"version_name={name.group(1)}")
+          print(f"version_code={code.group(1)}")
+          PY
+
       - name: Prepare signing files
-        if: steps.check.outputs.should_build == 'true' && steps.build_mode.outputs.signed == 'true'
+        if: steps.gate.outputs.should_build == 'true' && steps.build_mode.outputs.signed == 'true'
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
           SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
@@ -120,56 +129,87 @@ jobs:
           printf '%s' "$KEY_BASE64" | base64 --decode > app/app.key
           printf '%s' "$SIGNING_CONFIG" > local.properties
 
-      - name: Full verification and Gradle Build
-        if: steps.check.outputs.should_build == 'true'
+      - name: Verify and build all APKs
+        if: steps.gate.outputs.should_build == 'true'
         env:
           GRADLE_TASK: ${{ steps.build_mode.outputs.gradle_task }}
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          # Heavy verification belongs here, not on every main push.
-          ./gradlew -PciVerify :app:testDebugUnitTest :ai:test :workspace:test :app:lintDebug "$GRADLE_TASK"
+          # Do not use -PciVerify here: app/build.gradle.kts disables ABI
+          # splits under ciVerify, while Releases require the full APK matrix.
+          ./gradlew --stacktrace \
+            :app:testDebugUnitTest \
+            :ai:test \
+            :workspace:test \
+            :app:lintDebug \
+            "$GRADLE_TASK"
 
       - name: Remove signing files
-        if: always() && steps.check.outputs.should_build == 'true'
+        if: always() && steps.gate.outputs.should_build == 'true'
         shell: bash
         run: rm -f app/app.key local.properties
 
-      - name: Generate APK checksums
-        if: steps.check.outputs.should_build == 'true'
+      - name: Verify complete APK matrix
+        if: steps.gate.outputs.should_build == 'true'
         env:
           APK_DIR: ${{ steps.build_mode.outputs.apk_dir }}
+          VARIANT: ${{ steps.build_mode.outputs.variant }}
         shell: bash
         run: |
           set -euo pipefail
-          cd "$APK_DIR"
+          expected=(
+            "$APK_DIR/app-universal-$VARIANT.apk"
+            "$APK_DIR/app-arm64-v8a-$VARIANT.apk"
+            "$APK_DIR/app-x86_64-$VARIANT.apk"
+          )
+          for apk in "${expected[@]}"; do
+            test -s "$apk" || {
+              echo "::error::Expected APK missing or empty: $apk"
+              exit 1
+            }
+          done
+          actual_count="$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')"
+          test "$actual_count" -eq 3 || {
+            echo "::error::Expected exactly 3 APK outputs, found $actual_count"
+            find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' -print
+            exit 1
+          }
+
+          rm -rf release-assets
+          mkdir -p release-assets
+          cp "$APK_DIR/app-universal-$VARIANT.apk" release-assets/orchords-studio-ai-universal.apk
+          cp "$APK_DIR/app-arm64-v8a-$VARIANT.apk" release-assets/orchords-studio-ai-arm64-v8a.apk
+          cp "$APK_DIR/app-x86_64-$VARIANT.apk" release-assets/orchords-studio-ai-x86_64.apk
+
+      - name: Generate and verify SHA-256 checksums
+        if: steps.gate.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
           sha256sum -- *.apk > SHA256SUMS
           sha256sum --check SHA256SUMS
 
-      - name: Stage APK artifact
-        if: steps.check.outputs.should_build == 'true'
+      - name: Upload exact APK artifact bundle
+        if: steps.gate.outputs.should_build == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: nightly-apks
+          name: latest-apks
           path: |
-            ${{ steps.build_mode.outputs.apk_dir }}/*.apk
-            ${{ steps.build_mode.outputs.apk_dir }}/SHA256SUMS
+            release-assets/*.apk
+            release-assets/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
 
-      - name: Attest APK build provenance
-        if: steps.check.outputs.should_build == 'true'
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: 'app/build/outputs/apk/*/*.apk'
-
-      - name: Generate complete release notes
-        if: steps.check.outputs.should_build == 'true'
+      - name: Generate release notes
+        if: steps.gate.outputs.should_build == 'true'
         env:
-          APK_DIR: ${{ steps.build_mode.outputs.apk_dir }}
           SIGNED_BUILD: ${{ steps.build_mode.outputs.signed }}
           BUILD_SHA: ${{ github.sha }}
+          APP_VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
+          APP_VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
         shell: bash
         run: |
           set -euo pipefail
@@ -177,62 +217,147 @@ jobs:
           if [ "$SIGNED_BUILD" = "true" ]; then
             build_type="signed release APK"
           else
-            build_type="unsigned debug APK"
+            build_type="debug APK"
           fi
-
           {
-            echo '# ORCHORDS Studio AI — Latest Nightly'
+            echo '# ORCHORDS Studio AI — Latest Android Build'
             echo
-            echo 'This is the newest installable Android build from the current `main` branch and includes all work listed below.'
-            echo
-            echo '## Build'
-            echo
+            echo "- App version: \`$APP_VERSION_NAME\`"
+            echo "- Version code: \`$APP_VERSION_CODE\`"
             echo "- Commit: \`$BUILD_SHA\`"
             echo "- Built: $built_at"
             echo "- Package type: $build_type"
-            echo '- Channel: rolling `nightly` prerelease'
             echo
             echo '## APK downloads'
+            echo '- `orchords-studio-ai-universal.apk`'
+            echo '- `orchords-studio-ai-arm64-v8a.apk`'
+            echo '- `orchords-studio-ai-x86_64.apk`'
+            echo '- `SHA256SUMS`'
             echo
-            echo '- **Universal APK** — recommended when you are unsure which ABI your device uses.'
-            echo '- **ARM64 APK** — recommended for most modern Android phones/tablets.'
-            echo '- **x86_64 APK** — intended for compatible emulators/x86_64 devices.'
-            echo '- `SHA256SUMS` — checksums for every APK attached to this release.'
+            echo '## Verification'
+            echo '- Unit tests and Android lint passed in this release workflow.'
+            echo '- The workflow verified exactly the configured universal, arm64-v8a and x86_64 APK outputs.'
+            echo '- SHA-256 checksums were generated and verified before upload.'
             echo
-            echo '## Included work'
-            echo
-            echo 'The following `main` commits are included in this APK, newest first. This list covers the current nightly development line from 2026-08-31 through this build:'
-            echo
-            git log --since='2026-08-31T00:00:00Z' --date=short --pretty=format:'- %s (`%h`, %ad)' --no-merges
-            echo
-            echo
-            echo '## Verification and provenance'
-            echo
-            echo '- APK SHA-256 checksums are generated and verified during the build, then attached as `SHA256SUMS`.'
-            echo '- GitHub artifact attestation is published for the APK build provenance.'
-            echo '- The release is rebuilt from the exact commit shown above; the APK and release notes therefore identify the same source revision.'
-            if [ "$SIGNED_BUILD" = "true" ]; then
-              echo '- Repository signing material was available, so this nightly was built using the release signing path.'
-            else
-              echo '- Repository signing material was not available to this workflow run, so the attached APKs are debug builds rather than signed production-release APKs.'
-            fi
-            echo
-            echo '> Development/nightly build: it contains the newest work and may be less stable than a production release.'
+            echo 'GitHub artifact attestations are intentionally not used here because this is a private user-owned repository and that GitHub feature is unavailable for this repository type.'
           } > release-notes.md
-
-          printf '\nGenerated release notes with %s shipped commits.\n' "$(git rev-list --count --since='2026-08-31T00:00:00Z' HEAD)"
           test -s release-notes.md
-          test -s "$APK_DIR/SHA256SUMS"
 
-      - name: Publish or update nightly prerelease
-        if: steps.check.outputs.should_build == 'true'
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+      - name: Point latest tag at exact build commit
+        if: steps.gate.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BUILD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          get_url="https://api.github.com/repos/$REPOSITORY/git/ref/tags/latest"
+          patch_url="https://api.github.com/repos/$REPOSITORY/git/refs/tags/latest"
+          headers=(
+            --header "Accept: application/vnd.github+json"
+            --header "Authorization: Bearer $GH_TOKEN"
+            --header "X-GitHub-Api-Version: 2022-11-28"
+          )
+          status="$(curl --silent --show-error -o /tmp/latest-ref.json -w '%{http_code}' "${headers[@]}" "$get_url")"
+          if [ "$status" = "200" ]; then
+            payload="$(BUILD_SHA="$BUILD_SHA" python3 -c 'import json,os; print(json.dumps({"sha": os.environ["BUILD_SHA"], "force": True}))')"
+            curl --fail-with-body --silent --show-error -X PATCH "${headers[@]}" --data "$payload" "$patch_url" >/dev/null
+          elif [ "$status" = "404" ]; then
+            payload="$(BUILD_SHA="$BUILD_SHA" python3 -c 'import json,os; print(json.dumps({"ref": "refs/tags/latest", "sha": os.environ["BUILD_SHA"]}))')"
+            curl --fail-with-body --silent --show-error -X POST "${headers[@]}" --data "$payload" "https://api.github.com/repos/$REPOSITORY/git/refs" >/dev/null
+          else
+            cat /tmp/latest-ref.json
+            echo "::error::Unable to inspect latest tag (HTTP $status)"
+            exit 1
+          fi
+
+      - name: Remove stale APK assets from rolling latest release
+        if: steps.gate.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error -o /tmp/latest-release-before.json -w '%{http_code}' \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPOSITORY/releases/tags/latest")"
+          if [ "$status" = "404" ]; then
+            exit 0
+          fi
+          if [ "$status" != "200" ]; then
+            cat /tmp/latest-release-before.json
+            echo "::error::Unable to inspect existing latest release (HTTP $status)"
+            exit 1
+          fi
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1], encoding="utf-8")); [print(a["id"]) for a in r.get("assets", []) if a.get("name", "").endswith(".apk") or a.get("name") == "SHA256SUMS"]' /tmp/latest-release-before.json > /tmp/old-asset-ids.txt
+          while read -r asset_id; do
+            [ -n "$asset_id" ] || continue
+            curl --fail-with-body --silent --show-error -X DELETE \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$REPOSITORY/releases/assets/$asset_id"
+          done < /tmp/old-asset-ids.txt
+
+      - name: Publish GitHub Latest APK release
+        if: steps.gate.outputs.should_build == 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          tag_name: nightly
+          tag_name: latest
           target_commitish: ${{ github.sha }}
-          name: ORCHORDS Studio AI — Latest Nightly
-          prerelease: true
+          name: ORCHORDS Studio AI v${{ steps.app_version.outputs.version_name }} — Latest APK
+          prerelease: false
+          make_latest: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
           body_path: release-notes.md
           files: |
-            app/build/outputs/apk/*/*.apk
-            app/build/outputs/apk/*/SHA256SUMS
+            release-assets/*.apk
+            release-assets/SHA256SUMS
+
+      - name: Verify live GitHub Latest release
+        if: steps.gate.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BUILD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers=(
+            --header "Accept: application/vnd.github+json"
+            --header "Authorization: Bearer $GH_TOKEN"
+            --header "X-GitHub-Api-Version: 2022-11-28"
+          )
+          curl --fail-with-body --silent --show-error "${headers[@]}" \
+            "https://api.github.com/repos/$REPOSITORY/releases/latest" > /tmp/latest-release.json
+          curl --fail-with-body --silent --show-error "${headers[@]}" \
+            "https://api.github.com/repos/$REPOSITORY/git/ref/tags/latest" > /tmp/latest-ref.json
+          BUILD_SHA="$BUILD_SHA" python3 - <<'PY'
+          import json
+          import os
+
+          release = json.load(open('/tmp/latest-release.json', encoding='utf-8'))
+          ref = json.load(open('/tmp/latest-ref.json', encoding='utf-8'))
+          expected = {
+              'orchords-studio-ai-universal.apk',
+              'orchords-studio-ai-arm64-v8a.apk',
+              'orchords-studio-ai-x86_64.apk',
+          }
+          apk_names = {
+              a['name'] for a in release.get('assets', [])
+              if a.get('name', '').endswith('.apk')
+          }
+          asset_names = {a['name'] for a in release.get('assets', [])}
+          assert release.get('tag_name') == 'latest', release.get('tag_name')
+          assert release.get('draft') is False, 'Latest release is draft'
+          assert release.get('prerelease') is False, 'Latest release is prerelease'
+          assert apk_names == expected, (apk_names, expected)
+          assert 'SHA256SUMS' in asset_names, asset_names
+          assert ref.get('object', {}).get('sha') == os.environ['BUILD_SHA'], ref
+          print('Latest release verified: exact SHA and complete 3-APK matrix')
+          PY

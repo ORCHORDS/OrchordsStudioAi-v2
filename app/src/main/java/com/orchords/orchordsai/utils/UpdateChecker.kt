@@ -22,7 +22,23 @@ import com.orchords.orchordsai.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-private const val API_URL = "https://api.github.com/repos/ORCHORDS/OrchordsAI/releases/latest"
+internal const val LATEST_RELEASE_API_URL =
+    "https://api.github.com/repos/ORCHORDS/OrchordsStudioAi/releases/latest"
+
+private val RELEASE_VERSION_PATTERN =
+    Regex("(?i)v?\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?")
+
+internal fun resolveReleaseVersion(tagName: String, releaseName: String): String {
+    val normalizedTag = tagName.removePrefix("v").trim()
+    if (RELEASE_VERSION_PATTERN.matches(normalizedTag)) {
+        return normalizedTag
+    }
+
+    return RELEASE_VERSION_PATTERN.find(releaseName)
+        ?.value
+        ?.removePrefix("v")
+        ?: normalizedTag
+}
 
 class UpdateChecker(
     private val client: OkHttpClient,
@@ -43,7 +59,7 @@ class UpdateChecker(
                 data = try {
                     val response = client.newCall(
                         Request.Builder()
-                            .url(API_URL)
+                            .url(LATEST_RELEASE_API_URL)
                             .get()
                             .addHeader("Accept", "application/vnd.github+json")
                             .addHeader(
@@ -55,7 +71,7 @@ class UpdateChecker(
                     if (response.isSuccessful) {
                         val release = json.decodeFromString<GitHubRelease>(response.body.string())
                         UpdateInfo(
-                            version = release.tagName.removePrefix("v"),
+                            version = resolveReleaseVersion(release.tagName, release.name),
                             publishedAt = release.publishedAt,
                             changelog = release.body,
                             downloads = release.assets
@@ -117,6 +133,7 @@ data class UpdateInfo(
 @Serializable
 private data class GitHubRelease(
     @SerialName("tag_name") val tagName: String,
+    @SerialName("name") val name: String = "",
     @SerialName("published_at") val publishedAt: String,
     @SerialName("body") val body: String = "",
     @SerialName("assets") val assets: List<GitHubAsset> = emptyList(),

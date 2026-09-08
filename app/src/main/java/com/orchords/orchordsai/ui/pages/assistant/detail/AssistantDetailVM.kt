@@ -106,7 +106,7 @@ class AssistantDetailVM(
         viewModelScope.launch {
             val settings = settings.value
             settingsStore.update(
-                settings = settings.copy(
+                newSettings = settings.copy(
                     assistantTags = tags
                 )
             )
@@ -147,7 +147,7 @@ class AssistantDetailVM(
 
             if (needUpdateAssistants || needUpdateTags) {
                 settingsStore.update(
-                    settings = settings.copy(
+                    newSettings = settings.copy(
                         assistants = cleanedAssistants,
                         assistantTags = cleanedTags
                     )
@@ -160,7 +160,7 @@ class AssistantDetailVM(
         viewModelScope.launch {
             val settings = settings.value
             settingsStore.update(
-                settings = settings.copy(
+                newSettings = settings.copy(
                     assistants = settings.assistants.map {
                         if (it.id == assistant.id) {
                             checkAvatarDelete(old = it, new = assistant)

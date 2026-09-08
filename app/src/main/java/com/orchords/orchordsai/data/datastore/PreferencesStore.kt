@@ -273,6 +273,7 @@ class SettingsStore(
                 ttsProviders = ttsProviders,
             )
         }
+        .map { settings -> settings.enforceFirstPartyModelPolicy() }
         .map { settings ->
             val validMcpServerIds = settings.mcpServers.map { it.id }.toSet()
             val validModeInjectionIds = settings.modeInjections.map { it.id }.toSet()
@@ -355,11 +356,12 @@ class SettingsStore(
         updateLorebooks(dataStore) { lorebooks }
     }
 
-    suspend fun update(settings: Settings) {
-        if(settings.init) {
+    suspend fun update(newSettings: Settings) {
+        if(newSettings.init) {
             Log.w(TAG, "Cannot update dummy settings")
             return
         }
+        val settings = newSettings.enforceFirstPartyModelPolicy()
         settingsFlow.value = settings
         dataStore.edit { preferences ->
             preferences[DYNAMIC_COLOR] = settings.dynamicColor

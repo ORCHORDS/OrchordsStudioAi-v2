@@ -96,7 +96,10 @@ class ResponseAPI(
             .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
-        Log.i(TAG, "generateText: ${json.encodeToString(requestBody)}")
+        Log.i(
+            TAG,
+            "generateText: model=${params.model.modelId} messages=${messages.size} tools=${params.tools.size}",
+        )
 
         val response = client.newCall(request).await()
         if (!response.isSuccessful) {
@@ -104,7 +107,7 @@ class ResponseAPI(
         }
 
         val bodyStr = response.body?.string() ?: ""
-        Log.i(TAG, "generateText: $bodyStr")
+        Log.i(TAG, "generateText: responseBytes=${bodyStr.length}")
         val bodyJson = json.parseToJsonElement(bodyStr).jsonObject
         val output = parseResponseOutput(bodyJson)
 
@@ -133,14 +136,17 @@ class ResponseAPI(
             .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
+        Log.i(
+            TAG,
+            "streamText: model=${params.model.modelId} messages=${messages.size} tools=${params.tools.size}",
+        )
 
         val decoder = ResponseApiStreamDecoder()
 
         fun sendChunks(chunks: Iterable<StreamChunk>) {
             chunks.forEach { chunk ->
                 trySend(chunk).onFailure { e ->
-                    Log.w(TAG, "onEvent: chunk dropped (${e?.message})")
+                    Log.w(TAG, "onEvent: chunk dropped type=${e?.javaClass?.simpleName ?: "Unknown"}")
                 }
             }
         }
@@ -152,7 +158,7 @@ class ResponseAPI(
                 type: String?,
                 data: String
             ) {
-                Log.d(TAG, "onEvent: $id/$type $data")
+                Log.d(TAG, "streamEvent: type=${type ?: "message"} bytes=${data.length}")
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)
@@ -164,21 +170,22 @@ class ResponseAPI(
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
                 var exception = t
-
-                t?.printStackTrace()
-                println("[onFailure] error: ${t?.javaClass?.name} ${t?.message} / $response")
-
                 val bodyRaw = response?.body?.stringSafe()
                 try {
                     if (!bodyRaw.isNullOrBlank()) {
                         val bodyElement = Json.parseToJsonElement(bodyRaw)
-                        println(bodyElement)
                         exception = bodyElement.parseErrorDetail()
-                        Log.i(TAG, "onFailure: $exception")
                     }
+                    Log.w(
+                        TAG,
+                        "streamFailure: status=${response?.code ?: 0} type=${exception?.javaClass?.simpleName ?: "Unknown"}",
+                    )
                 } catch (e: Throwable) {
-                    Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
-                    e.printStackTrace()
+                    Log.w(
+                        TAG,
+                        "streamFailure: status=${response?.code ?: 0} parseType=${e.javaClass.simpleName}",
+                    )
+                    exception = e
                 } finally {
                     close(exception)
                 }
@@ -194,7 +201,6 @@ class ResponseAPI(
             .newEventSource(request, listener)
 
         awaitClose {
-            println("[awaitClose] close eventSource ")
             eventSource.cancel()
         }
     }.buffer(Channel.UNLIMITED)
@@ -426,7 +432,7 @@ class ResponseAPI(
                                                     put("type", "input_image")
                                                     put("image_url", encoded.base64)
                                                 }.onFailure {
-                                                    it.printStackTrace()
+                                                    Log.w(TAG, "encode response image failed type=${it.javaClass.simpleName}")
                                                     put("type", "input_text")
                                                     put("text", "Error: Failed to encode image to base64")
                                                 }
@@ -513,7 +519,7 @@ class ResponseAPI(
                                         put("type", "input_image")
                                         put("image_url", encodedImage.base64)
                                     }.onFailure {
-                                        it.printStackTrace()
+                                        Log.w(TAG, "encode response image failed type=${it.javaClass.simpleName}")
                                         put("type", "input_text")
                                         put("text", "Error: Failed to encode image to base64")
                                     }
@@ -529,7 +535,6 @@ class ResponseAPI(
     }
 
     internal fun parseResponseOutput(jsonObject: JsonObject): TextGenerationResult {
-        println(jsonObject)
         val outputs = jsonObject["output"]?.jsonArray ?: error("output not found")
         val parts = arrayListOf<UIMessagePart>()
 

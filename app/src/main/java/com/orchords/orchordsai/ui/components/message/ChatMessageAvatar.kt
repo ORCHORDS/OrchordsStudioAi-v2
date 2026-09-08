@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.orchords.ai.core.MessageRole
 import com.orchords.ai.provider.Model
@@ -18,9 +17,13 @@ import com.orchords.ai.ui.isEmptyUIMessage
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.model.Avatar
-import com.orchords.orchordsai.ui.components.ui.AutoAIIcon
 import com.orchords.orchordsai.ui.components.ui.UIAvatar
 import com.orchords.orchordsai.ui.context.LocalSettings
+
+internal fun shouldShowAssistantIdentityRow(
+    role: MessageRole,
+    useAssistantAvatar: Boolean,
+): Boolean = role == MessageRole.ASSISTANT && useAssistantAvatar
 
 @Composable
 fun ChatMessageUserAvatar(
@@ -51,6 +54,16 @@ fun ChatMessageUserAvatar(
     }
 }
 
+/**
+ * Show an assistant identity row only when the user explicitly configured an
+ * Assistant profile avatar/name. The ordinary model identity is already known
+ * from the conversation/model controls and repeating the same model icon/name
+ * above every response adds noise without adding speaker information.
+ *
+ * [model] remains in the signature for call-site compatibility; it is
+ * intentionally not rendered here.
+ */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun ChatMessageAssistantAvatar(
     message: UIMessage,
@@ -60,60 +73,38 @@ fun ChatMessageAssistantAvatar(
     modifier: Modifier = Modifier,
 ) {
     val settings = LocalSettings.current
-    val showIcon = settings.displaySetting.showModelIcon
     val useAssistantAvatar = assistant?.useAssistantAvatar == true
-    if (message.role == MessageRole.ASSISTANT && (model != null || useAssistantAvatar)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = modifier
-        ) {
-            if (useAssistantAvatar) {
-                if (showIcon) {
-                    UIAvatar(
-                        name = assistant.name,
-                        modifier = Modifier.size(28.dp),
-                        value = assistant.avatar,
-                        loading = loading,
-                        useDefaultAssistantBranding = assistant.name.isBlank(),
-                    )
-                }
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (settings.displaySetting.showModelName) {
-                        Text(
-                            text = assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
-                            style = MaterialTheme.typography.labelLargeEmphasized,
-                            maxLines = 1,
-                        )
-                    }
-                }
-            } else if (model != null) {
-                if (showIcon) {
-                    AutoAIIcon(
-                        name = model.modelId,
-                        modifier = Modifier.size(28.dp),
-                        loading = loading
-                    )
-                }
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (settings.displaySetting.showModelName) {
-                        Text(
-                            text = model.displayName,
-                            style = MaterialTheme.typography.labelLargeEmphasized,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
+
+    if (!shouldShowAssistantIdentityRow(message.role, useAssistantAvatar) || assistant == null) {
+        return
+    }
+
+    val showIcon = settings.displaySetting.showModelIcon
+    val showName = settings.displaySetting.showModelName
+    if (!showIcon && !showName) {
+        return
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier,
+    ) {
+        if (showIcon) {
+            UIAvatar(
+                name = assistant.name,
+                modifier = Modifier.size(28.dp),
+                value = assistant.avatar,
+                loading = loading,
+                useDefaultAssistantBranding = assistant.name.isBlank(),
+            )
+        }
+        if (showName) {
+            Text(
+                text = assistant.name.ifEmpty { stringResource(R.string.assistant_page_default_assistant) },
+                style = MaterialTheme.typography.labelLargeEmphasized,
+                maxLines = 1,
+            )
         }
     }
 }

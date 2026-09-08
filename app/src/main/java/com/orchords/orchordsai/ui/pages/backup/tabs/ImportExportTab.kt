@@ -76,7 +76,12 @@ fun ImportExportTab(
                     withContext(Dispatchers.IO) {
                         LocalBackupExporter.deliverOrThrow(
                             source = staged,
-                            openSink = { context.contentResolver.openOutputStream(targetUri) },
+                            openSink = {
+                                // Issue #366 — request explicit truncate so a destination that
+                                // already holds a longer archive from a previous backup cannot
+                                // silently retain trailing bytes past the end of the new ZIP.
+                                context.contentResolver.openOutputStream(targetUri, "wt")
+                            },
                         )
                     }
                     vm.recordDeliveredBackupTime()

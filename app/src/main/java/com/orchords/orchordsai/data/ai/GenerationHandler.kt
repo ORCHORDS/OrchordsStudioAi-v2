@@ -101,7 +101,7 @@ class GenerationHandler(
             Log.i(TAG, "streamText: start step #$stepIndex (${model.id})")
 
             val toolsInternal = buildList {
-                Log.i(TAG, "generateInternal: build tools($assistant)")
+                Log.i(TAG, "generateInternal: build tools count=${tools.size} memoryEnabled=${assistant.enableMemory}")
                 if (assistant?.enableMemory == true) {
                     val memoryAssistantId = if (assistant.useGlobalMemory) {
                         MemoryRepository.GLOBAL_MEMORY_ID
@@ -292,7 +292,7 @@ class GenerationHandler(
                             }.getOrElse {
                                 error("Invalid tool arguments JSON for ${tool.toolName}: ${it.message}")
                             }
-                            Log.i(TAG, "generateText: executing tool ${toolDef.name} with args: $args")
+                            Log.i(TAG, "generateText: executing tool ${toolDef.name}")
                             val result = toolDef.execute(args)
                             val hasShellAccess = toolsInternal.any { it.name == "workspace_shell" }
                             executedTools += tool.copy(
@@ -300,7 +300,7 @@ class GenerationHandler(
                             )
                         }.onFailure {
                             if (it is CancellationException) throw it
-                            it.printStackTrace()
+                            Log.w(TAG, "generateText: tool execution failed type=${it.javaClass.simpleName}")
                             executedTools += tool.copy(
                                 output = listOf(
                                     UIMessagePart.Text(
@@ -537,9 +537,8 @@ class GenerationHandler(
         )
         Log.w(
             TAG,
-            "Provider connection failed, retrying in ${retryDelay}ms " +
+            "Provider connection failed type=${error.javaClass.simpleName}, retrying in ${retryDelay}ms " +
                     "($nextRetryCount/$MAX_PROVIDER_NETWORK_RETRIES)",
-            error,
         )
         delay(retryDelay)
         return nextRetryCount

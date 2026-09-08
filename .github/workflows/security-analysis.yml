@@ -34,9 +34,11 @@ on:
 permissions:
   contents: read
 
+# Give every commit its own security-analysis group. Rapid direct-to-main
+# pushes must never cancel or replace analysis for another SHA.
 concurrency:
-  group: security-analysis-${{ github.ref }}
-  cancel-in-progress: true
+  group: security-analysis-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   GITLEAKS_VERSION: 8.30.1

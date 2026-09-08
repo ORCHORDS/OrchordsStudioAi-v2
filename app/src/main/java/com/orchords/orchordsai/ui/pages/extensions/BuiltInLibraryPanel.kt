@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.orchords.ai.provider.ModelAbility
-import com.orchords.orchordsai.data.datastore.DEFAULT_AUTO_MODEL_ID
 import com.orchords.orchordsai.data.datastore.findModelById
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.Screen
@@ -55,7 +54,6 @@ fun BuiltInLibraryPanel(modifier: Modifier = Modifier) {
     }
     val modelStatus = when {
         settings.init -> R.string.tool_setup_initializing
-        selectedModelId == DEFAULT_AUTO_MODEL_ID -> R.string.tool_setup_automatic
         model == null -> R.string.tool_setup_no_model
         ModelAbility.TOOL !in model.abilities -> R.string.tool_setup_not_marked
         else -> R.string.tool_setup_marked

@@ -44,27 +44,9 @@ interface SearchService<T : SearchServiceOptions> {
     companion object {
         @Suppress("UNCHECKED_CAST")
         fun <T : SearchServiceOptions> getService(options: T): SearchService<T> {
-            return when (options) {
-                is SearchServiceOptions.TavilyOptions -> TavilySearchService
-                is SearchServiceOptions.ExaOptions -> ExaSearchService
-                is SearchServiceOptions.ZhipuOptions -> ZhipuSearchService
-                is SearchServiceOptions.DoubaoOptions -> DoubaoSearchService
-                is SearchServiceOptions.BingLocalOptions -> BingSearchService
-                is SearchServiceOptions.SearXNGOptions -> SearXNGService
-                is SearchServiceOptions.LinkUpOptions -> LinkUpService
-                is SearchServiceOptions.BraveOptions -> BraveSearchService
-                is SearchServiceOptions.MetasoOptions -> MetasoSearchService
-                is SearchServiceOptions.OllamaOptions -> OllamaSearchService
-                is SearchServiceOptions.PerplexityOptions -> PerplexitySearchService
-                is SearchServiceOptions.FirecrawlOptions -> FirecrawlSearchService
-                is SearchServiceOptions.JinaOptions -> JinaSearchService
-                is SearchServiceOptions.BochaOptions -> BochaSearchService
-                is SearchServiceOptions.OrchordsAIOptions -> OrchordsAISearchService
-                is SearchServiceOptions.GrokOptions -> GrokSearchService
-                is SearchServiceOptions.TinyfishOptions -> TinyfishSearchService
-                is SearchServiceOptions.SerperOptions -> SerperSearchService
-                is SearchServiceOptions.CustomJsOptions -> CustomJsSearchService
-            } as SearchService<T>
+            // OrchordsAI is the only search backend. Any legacy option stored by
+            // older installs is silently routed to OrchordsAISearchService.
+            return OrchordsAISearchService as SearchService<T>
         }
 
         @Volatile
@@ -138,7 +120,7 @@ sealed class SearchServiceOptions {
         get() = TYPES[this::class] ?: "Unknown"
 
     companion object {
-        val DEFAULT = BingLocalOptions()
+        val DEFAULT = OrchordsAIOptions()
 
         val TYPES = mapOf(
             BingLocalOptions::class to "Bing",

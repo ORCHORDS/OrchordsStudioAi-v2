@@ -86,14 +86,8 @@ fun SettingSearchPage(vm: SettingVM = koinViewModel()) {
                     BackButton()
                 },
                 actions = {
-                    IconButton(
-                        onClick = { showAddDialog = true }
-                    ) {
-                        Icon(
-                            imageVector = HugeIcons.Add01,
-                            contentDescription = stringResource(R.string.setting_page_search_add_provider)
-                        )
-                    }
+                    // Search providers are locked to OrchordsAI; the Add action is
+                    // intentionally hidden.
                 },
                 scrollBehavior = scrollBehavior,
                 colors = CustomColors.topBarColors

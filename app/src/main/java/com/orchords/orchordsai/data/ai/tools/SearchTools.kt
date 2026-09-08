@@ -16,6 +16,20 @@ import com.orchords.search.SearchServiceOptions
 import java.time.LocalDate
 import kotlin.uuid.Uuid
 
+/**
+ * Returns the search options configured for the user, ensuring the
+ * OrchordsAIOptions shares the OrchordsAI provider's API key so the user
+ * only has to set one key.
+ */
+private fun Settings.activeSearchOptions(): SearchServiceOptions {
+    val raw = searchServices.getOrElse(searchServiceSelected) { SearchServiceOptions.DEFAULT }
+    val providerKey = providers
+        .firstOrNull { it is com.orchords.ai.provider.ProviderSetting.OpenAI && it.baseUrl == "https://api.orchords.com/v1" }
+        ?.let { (it as com.orchords.ai.provider.ProviderSetting.OpenAI).apiKey }
+        .orEmpty()
+    return SearchServiceOptions.OrchordsAIOptions(apiKey = providerKey)
+}
+
 fun createSearchTools(settings: Settings): Set<Tool> {
     return buildSet {
         add(
@@ -46,16 +60,12 @@ fun createSearchTools(settings: Settings): Set<Tool> {
                     The population is about 2.1 million. [citation,example.com](abc123) [citation,example2.com](def456)
                     """.trimIndent(),
                 parameters = {
-                    val options = settings.searchServices.getOrElse(
-                        index = settings.searchServiceSelected,
-                        defaultValue = { SearchServiceOptions.DEFAULT })
+                    val options = settings.activeSearchOptions()
                     val service = SearchService.getService(options)
                     service.parameters(options)
                 },
                 execute = {
-                    val options = settings.searchServices.getOrElse(
-                        index = settings.searchServiceSelected,
-                        defaultValue = { SearchServiceOptions.DEFAULT })
+                    val options = settings.activeSearchOptions()
                     val service = SearchService.getService(options)
                     val result = service.search(
                         params = it.jsonObject,
@@ -79,9 +89,7 @@ fun createSearchTools(settings: Settings): Set<Tool> {
             )
         )
 
-        val options = settings.searchServices.getOrElse(
-            index = settings.searchServiceSelected,
-            defaultValue = { SearchServiceOptions.DEFAULT })
+        val options = settings.activeSearchOptions()
         val service = SearchService.getService(options)
         if (service.scrapingParameters(options) != null) {
             add(
@@ -93,16 +101,12 @@ fun createSearchTools(settings: Settings): Set<Tool> {
                         Avoid using it for common questions unless the user asks.
                         """.trimIndent(),
                     parameters = {
-                        val options = settings.searchServices.getOrElse(
-                            index = settings.searchServiceSelected,
-                            defaultValue = { SearchServiceOptions.DEFAULT })
+                        val options = settings.activeSearchOptions()
                         val service = SearchService.getService(options)
                         service.scrapingParameters(options)
                     },
                     execute = {
-                        val options = settings.searchServices.getOrElse(
-                            index = settings.searchServiceSelected,
-                            defaultValue = { SearchServiceOptions.DEFAULT })
+                        val options = settings.activeSearchOptions()
                         val service = SearchService.getService(options)
                         val result = service.scrape(
                             params = it.jsonObject,

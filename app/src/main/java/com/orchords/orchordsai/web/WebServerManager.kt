@@ -20,7 +20,10 @@ import com.orchords.orchordsai.data.repository.ConversationRepository
 import com.orchords.orchordsai.data.repository.FolderRepository
 import com.orchords.orchordsai.service.ChatService
 import com.orchords.orchordsai.web.startWebServer
+import java.net.BindException
+import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.SocketException
 
 private const val TAG = "WebServerManager"
 internal const val HOST_ALL_INTERFACES = "0.0.0.0"
@@ -133,9 +136,10 @@ class WebServerManager(
             try {
                 _state.value = _state.value.copy(isLoading = true)
                 Log.i(TAG, "Starting web server on $host:$port (address=$address)")
-                if (!isPortAvailable(port)) {
-                    Log.w(TAG, "Port $port is already in use")
-                    _state.value = baseState.copy(error = "Port $port is already in use")
+                val bindFailure = isAddressAvailable(host = host, port = port)
+                if (bindFailure != null) {
+                    Log.w(TAG, "Cannot bind $host:$port: $bindFailure")
+                    _state.value = baseState.copy(error = "Cannot bind $host:$port: $bindFailure")
                     return@launch
                 }
                 server = startWebServer(port = port, host = host) {
@@ -267,11 +271,27 @@ class WebServerManager(
         start(port, serviceName, localhostOnly)
     }
 
-    private fun isPortAvailable(port: Int): Boolean {
-        return try {
-            ServerSocket(port).use { true }
-        } catch (e: Exception) {
-            false
-        }
-    }
+    /**
+     * Probe whether [host]:[port] is bindable by attempting to bind a
+     * throwaway `ServerSocket` on the *exact* address Ktor will use. Returns
+     * `null` on success or a human-readable failure reason on bind failure.
+     *
+     * Unlike a wildcard probe, this checks the requested interface. This is
+     * advisory only: closing the probe releases the port, so another listener
+     * may bind before Ktor does. Only the real listener's bind can establish
+     * readiness; this probe does not eliminate that check-then-bind race.
+     */
+    private fun isAddressAvailable(host: String, port: Int): String? = runCatching {
+        val address = InetAddress.getByName(host)
+        ServerSocket(port, 50, address).use { null }
+    }.fold(
+        onSuccess = { null },
+        onFailure = { t ->
+            when (t) {
+                is BindException -> "${t.message ?: "address in use"}"
+                is SocketException -> "${t.message ?: t.javaClass.simpleName}"
+                else -> "address probe failed: ${t.message ?: t.javaClass.simpleName}"
+            }
+        },
+    )
 }

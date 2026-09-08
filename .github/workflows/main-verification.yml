@@ -14,12 +14,11 @@ on:
 permissions:
   contents: read
 
-# Do not cancel an older main SHA when a newer commit lands. This repository
-# develops directly on main and rapid pushes otherwise leave valid commits with
-# red/cancelled checks. The private runner queues work instead and each SHA gets
-# a terminal verification result.
+# Give every commit its own concurrency group. Rapid direct-to-main pushes must
+# never cancel or replace verification for another SHA; the private runner fleet
+# can queue each commit until it receives a terminal result.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: false
 
 env:
@@ -31,9 +30,9 @@ jobs:
   verify:
     name: Main Verification
     runs-on: ubuntu-24.04-x64
-    # This is a failure guard, not a resource throttle. Keep enough headroom
-    # for a cold Android graph while normal warm runs should finish far sooner.
-    timeout-minutes: 20
+    # Safety guard only, not a resource throttle. Cold Android graphs have more
+    # time to finish while normal warm Lenovo runs should complete far sooner.
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -102,7 +102,10 @@ class ChatCompletionsAPI(
             .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
-        Log.i(TAG, "generateText: ${json.encodeToString(requestBody)}")
+        Log.i(
+            TAG,
+            "generateText: model=${params.model.modelId} messages=${messages.size} tools=${params.tools.size}",
+        )
 
         val response = client.newCall(request).await()
         if (!response.isSuccessful) {
@@ -153,17 +156,17 @@ class ChatCompletionsAPI(
             .configureReferHeaders(providerSetting.baseUrl)
             .build()
 
-        Log.i(TAG, "streamText: ${json.encodeToString(requestBody)}")
-
-        // just for debugging response body
-        // println(client.newCall(request).await().body?.string())
+        Log.i(
+            TAG,
+            "streamText: model=${params.model.modelId} messages=${messages.size} tools=${params.tools.size}",
+        )
 
         val decoder = ChatCompletionsStreamDecoder()
 
         fun sendChunks(chunks: Iterable<StreamChunk>) {
             chunks.forEach { chunk ->
                 trySend(chunk).onFailure { e ->
-                    Log.w(TAG, "onEvent: chunk dropped (${e?.message})")
+                    Log.w(TAG, "onEvent: chunk dropped type=${e?.javaClass?.simpleName ?: "Unknown"}")
                 }
             }
         }
@@ -175,7 +178,7 @@ class ChatCompletionsAPI(
                 type: String?,
                 data: String
             ) {
-                Log.d(TAG, "onEvent: $data")
+                Log.d(TAG, "streamEvent: type=${type ?: "message"} bytes=${data.length}")
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)
@@ -187,21 +190,21 @@ class ChatCompletionsAPI(
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
                 var exception = t
-
-                t?.printStackTrace()
-                println("[onFailure] error: ${t?.javaClass?.name} ${t?.message} / $response")
-
                 val bodyRaw = response?.body?.stringSafe()
                 try {
                     if (!bodyRaw.isNullOrBlank()) {
                         val bodyElement = Json.parseToJsonElement(bodyRaw)
-                        println(bodyElement)
                         exception = bodyElement.parseErrorDetail()
-                        Log.i(TAG, "onFailure: $exception")
                     }
+                    Log.w(
+                        TAG,
+                        "streamFailure: status=${response?.code ?: 0} type=${exception?.javaClass?.simpleName ?: "Unknown"}",
+                    )
                 } catch (e: Throwable) {
-                    Log.w(TAG, "onFailure: failed to parse from $bodyRaw")
-                    e.printStackTrace()
+                    Log.w(
+                        TAG,
+                        "streamFailure: status=${response?.code ?: 0} parseType=${e.javaClass.simpleName}",
+                    )
                     exception = e
                 } finally {
                     close(exception)
@@ -217,7 +220,6 @@ class ChatCompletionsAPI(
         val eventSource = EventSources.createFactory(client).newEventSource(request, listener)
 
         awaitClose {
-            println("[awaitClose] close eventSource ")
             eventSource.cancel()
         }
     }.buffer(Channel.UNLIMITED)
@@ -675,7 +677,7 @@ class ChatCompletionsAPI(
                                             put("url", encodedImage.base64)
                                         })
                                     }.onFailure {
-                                        it.printStackTrace()
+                                        Log.w(TAG, "encode message image failed type=${it.javaClass.simpleName}")
                                         put("type", "text")
                                         put("text", "")
                                     }
@@ -746,7 +748,7 @@ class ChatCompletionsAPI(
                                             put("url", encodedImage.base64)
                                         })
                                     }.onFailure {
-                                        it.printStackTrace()
+                                        Log.w(TAG, "encode message image failed type=${it.javaClass.simpleName}")
                                         put("type", "text")
                                         put("text", "")
                                     }
@@ -793,7 +795,7 @@ class ChatCompletionsAPI(
                                         put("url", encodedImage.base64)
                                     })
                                 }.onFailure {
-                                    Log.w(TAG, "encode tool result image failed: ${part.url}", it)
+                                    Log.w(TAG, "encode tool result image failed type=${it.javaClass.simpleName}")
                                     put("type", "text")
                                     put("text", "Error: Failed to encode image to base64")
                                 }

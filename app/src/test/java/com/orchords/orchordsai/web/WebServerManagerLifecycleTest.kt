@@ -57,26 +57,36 @@ class WebServerManagerLifecycleTest {
     @Test
     fun `concurrent stop calls observe the gate contract without leaking state`() = runTest {
         val gate = ShutdownGate()
-        val winners = AtomicInteger(0)
-        val losers = AtomicInteger(0)
 
-        val jobs = List(100) {
-            async(Dispatchers.IO) {
-                if (gate.enter()) {
-                    winners.incrementAndGet()
-                    // Simulate the Ktor internal runBlocking up to grace+timeout.
-                    delay(5)
-                    gate.exit()
-                } else {
-                    losers.incrementAndGet()
-                }
-            }
-        }
-        jobs.awaitAll()
-        advanceUntilIdle()
-        assertEquals(1, winners.get())
-        assertEquals(99, losers.get())
-        assertFalse("gate must be idle after all callers exit", gate.isInFlight())
+        // Hold the shutdown gate before scheduling duplicate callers. This
+        // proves the actual contract deterministically: while one shutdown is
+        // in flight every overlapping stop must be rejected. The previous test
+        // released the gate after 5 ms, allowing late-scheduled callers to
+        // legitimately become a later sequential owner and making the exact
+        // one-winner assertion scheduler-dependent.
+        assertTrue("first stop must own the shutdown gate", gate.enter())
+
+        val duplicateResults = List(99) {
+            async(Dispatchers.IO) { gate.enter() }
+        }.awaitAll()
+
+        assertTrue(
+            "all duplicate stop calls must be rejected while shutdown is in flight",
+            duplicateResults.all { entered -> !entered },
+        )
+        assertTrue(gate.isInFlight())
+
+        gate.exit()
+        assertFalse("gate must be idle after the owner exits", gate.isInFlight())
+
+        // The gate is reusable: a later, non-overlapping shutdown must be able
+        // to become the next owner after the previous shutdown completes.
+        assertTrue(
+            "a later shutdown must be allowed after the previous one completes",
+            gate.enter(),
+        )
+        gate.exit()
+        assertFalse(gate.isInFlight())
     }
 
     @Test

@@ -14,10 +14,13 @@ on:
 permissions:
   contents: read
 
+# Do not cancel an older main SHA when a newer commit lands. This repository
+# develops directly on main and rapid pushes otherwise leave valid commits with
+# red/cancelled checks. The private runner queues work instead and each SHA gets
+# a terminal verification result.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  queue: single
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   # Isolate StudioAi from shared ~/.gradle init/caches on the persistent host.

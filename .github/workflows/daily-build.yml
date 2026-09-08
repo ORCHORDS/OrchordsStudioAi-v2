@@ -62,7 +62,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          clean: false
+          # Persistent self-hosted runners must not retain deleted paths from
+          # previous revisions (for example, the former material-color-utilities
+          # submodule). A clean checkout preserves caches outside the workspace
+          # while guaranteeing the source tree matches the exact commit.
+          clean: true
 
       - name: Verify dedicated Android toolchain
         if: steps.check.outputs.should_build == 'true'

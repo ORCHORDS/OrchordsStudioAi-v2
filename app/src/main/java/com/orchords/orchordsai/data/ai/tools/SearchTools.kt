@@ -7,7 +7,9 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import com.orchords.ai.core.Tool
+import com.orchords.ai.provider.ProviderSetting
 import com.orchords.ai.ui.UIMessagePart
+import com.orchords.orchordsai.data.datastore.ORCHORDS_GATEWAY_BASE_URL
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.utils.JsonInstantPretty
 import com.orchords.orchordsai.utils.toLocalString
@@ -17,17 +19,30 @@ import java.time.LocalDate
 import kotlin.uuid.Uuid
 
 /**
- * Returns the search options configured for the user, ensuring the
- * OrchordsAIOptions shares the OrchordsAI provider's API key so the user
- * only has to set one key.
+ * Resolve the one supported external-search configuration.
+ *
+ * Legacy search-provider records remain readable for migration, but they are
+ * never routed at runtime. A configured Orchords Search endpoint/depth is
+ * preserved, while the first-party gateway credential is reused when present.
+ * The legacy search credential is only a compatibility fallback for an
+ * existing Orchords Search record whose gateway credential has not yet been
+ * configured.
  */
-private fun Settings.activeSearchOptions(): SearchServiceOptions {
-    val raw = searchServices.getOrElse(searchServiceSelected) { SearchServiceOptions.DEFAULT }
-    val providerKey = providers
-        .firstOrNull { it is com.orchords.ai.provider.ProviderSetting.OpenAI && it.baseUrl == "https://api.orchords.com/v1" }
-        ?.let { (it as com.orchords.ai.provider.ProviderSetting.OpenAI).apiKey }
+internal fun Settings.activeSearchOptions(): SearchServiceOptions.OrchordsAIOptions {
+    val configured = searchServices
+        .filterIsInstance<SearchServiceOptions.OrchordsAIOptions>()
+        .firstOrNull()
+        ?: SearchServiceOptions.DEFAULT as SearchServiceOptions.OrchordsAIOptions
+
+    val gatewayKey = providers
+        .filterIsInstance<ProviderSetting.OpenAI>()
+        .firstOrNull { it.baseUrl.trimEnd('/') == ORCHORDS_GATEWAY_BASE_URL }
+        ?.apiKey
         .orEmpty()
-    return SearchServiceOptions.OrchordsAIOptions(apiKey = providerKey)
+
+    return configured.copy(
+        apiKey = gatewayKey.ifBlank { configured.apiKey },
+    )
 }
 
 fun createSearchTools(settings: Settings): Set<Tool> {
@@ -36,29 +51,27 @@ fun createSearchTools(settings: Settings): Set<Tool> {
             Tool(
                 name = "search_web",
                 description = """
-                    Search the web for up-to-date or specific information.
-                    Use this when the user asks for the latest news, current facts, or needs verification.
-                    Generate focused keywords and run multiple searches if needed.
-                    Today is ${LocalDate.now().toLocalString(true)}.
+                    Search the live web and return source-grounded information for the user's answer.
+                    Use this for current, time-sensitive, niche, externally verifiable, or explicitly requested web information.
+                    Rewrite the user's request into a focused search query. If the first result is weak, ambiguous, incomplete, or off-topic, run another more targeted search before answering. Today is ${LocalDate.now().toLocalString(true)}.
 
                     Response format:
-                    - items[].id (short id), title, url, text
-                    - images[]: image urls related to the query (may be empty)
+                    - answer: a search-provider sourced answer when available
+                    - items[].id, title, url, text: supporting web sources/snippets
+
+                    Answering contract:
+                    - Search is retrieval, not the final response. After searching, answer the user's original question directly in natural language.
+                    - When `answer` is non-blank, use it as a sourced synthesis candidate and check it against the returned items.
+                    - When `answer` or at least one usable item exists, do not claim that search is unavailable, that no information was found, or refuse merely because one field is empty. Synthesize the best supported answer from what was returned.
+                    - If the evidence is partial, say what is known and what remains uncertain; do not invent missing facts.
+                    - Only say the search produced no usable information after a reasonable targeted refinement and both `answer` and usable `items` are empty.
+                    - Never fabricate a source, URL, citation id, quote, or fact.
 
                     Citations:
-                    - After using results, add `[citation,domain](id)` after the sentence.
-                    - Multiple citations are allowed.
-                    - If no results are cited, omit citations.
-
-                    Images:
-                    - When images help the user understand the answer, embed relevant ones using Markdown: `![](url)`.
-                    - Embed 2 to 4 images, and only use urls from `images[]` (never fabricate or alter urls).
-                    - Usually place the images at the very beginning of your reply; skip them entirely if none are relevant.
-
-                    Example:
-                    The capital of France is Paris. [citation,example.com](abc123)
-                    The population is about 2.1 million. [citation,example.com](abc123) [citation,example2.com](def456)
-                    """.trimIndent(),
+                    - Cite source-dependent claims with `[citation,domain](id)` using only ids returned in `items[]`.
+                    - Prefer authoritative/original sources when the returned evidence allows it.
+                    - Multiple citations are allowed when needed.
+                """.trimIndent(),
                 parameters = {
                     val options = settings.activeSearchOptions()
                     val service = SearchService.getService(options)
@@ -96,27 +109,27 @@ fun createSearchTools(settings: Settings): Set<Tool> {
                 Tool(
                     name = "scrape_web",
                     description = """
-                        Scrape a URL for detailed page content.
-                        Use this when the user requests content from a specific page or when search snippets are insufficient.
-                        Avoid using it for common questions unless the user asks.
-                        """.trimIndent(),
+                        Read a specific URL for detailed page content after search has identified it.
+                        Use this when a source snippet is insufficient or the user explicitly asks about a page.
+                        Do not invent content when the page cannot be read.
+                    """.trimIndent(),
                     parameters = {
-                        val options = settings.activeSearchOptions()
-                        val service = SearchService.getService(options)
-                        service.scrapingParameters(options)
+                        val scrapeOptions = settings.activeSearchOptions()
+                        SearchService.getService(scrapeOptions).scrapingParameters(scrapeOptions)
                     },
                     execute = {
-                        val options = settings.activeSearchOptions()
-                        val service = SearchService.getService(options)
-                        val result = service.scrape(
+                        val scrapeOptions = settings.activeSearchOptions()
+                        val scrapeService = SearchService.getService(scrapeOptions)
+                        val result = scrapeService.scrape(
                             params = it.jsonObject,
                             commonOptions = settings.searchCommonOptions,
-                            serviceOptions = options,
+                            serviceOptions = scrapeOptions,
                         )
                         val payload = JsonInstantPretty.encodeToJsonElement(result.getOrThrow()).jsonObject
                         listOf(UIMessagePart.Text(payload.toString()))
                     }
-                ))
+                )
+            )
         }
     }
 }

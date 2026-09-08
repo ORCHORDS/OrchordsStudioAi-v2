@@ -1,6 +1,8 @@
 package com.orchords.orchordsai.data.datastore
 
+import com.orchords.ai.provider.BuiltInTools
 import com.orchords.ai.provider.Model
+import com.orchords.ai.provider.ModelAbility
 import com.orchords.ai.provider.ProviderSetting
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,19 +17,21 @@ class DefaultProvidersTest {
         assertTrue(provider is ProviderSetting.OpenAI)
         provider as ProviderSetting.OpenAI
         assertEquals("OrchordsAI", provider.name)
-        assertEquals("https://api.orchords.com/v1", provider.baseUrl)
+        assertEquals(ORCHORDS_GATEWAY_BASE_URL, provider.baseUrl)
         assertEquals("", provider.apiKey)
         assertTrue(provider.builtIn)
         assertTrue(provider.enabled)
     }
 
     @Test
-    fun `OrchordsAI provider exposes only the oai-1_0 model`() {
+    fun `OrchordsAI provider exposes only tool-capable oai-1_0`() {
         val provider = DEFAULT_PROVIDERS.single() as ProviderSetting.OpenAI
         assertEquals(1, provider.models.size)
         val model = provider.models.single()
-        assertEquals("oai-1.0", model.modelId)
+        assertEquals(ORCHORDS_MODEL_ID, model.modelId)
         assertEquals("Orchords oai-1.0", model.displayName)
+        assertEquals(listOf(ModelAbility.TOOL), model.abilities)
+        assertFalse(BuiltInTools.Search in model.tools)
     }
 
     @Test
@@ -37,7 +41,6 @@ class DefaultProvidersTest {
 
     @Test
     fun `default providers do not embed an api key`() {
-        // Production builds must never ship a secret in source.
         val provider = DEFAULT_PROVIDERS.single() as ProviderSetting.OpenAI
         assertFalse(provider.apiKey.isNotEmpty())
     }
@@ -63,8 +66,8 @@ class DefaultProvidersTest {
 
     @Test
     fun `Model record keeps the Orchords identifier`() {
-        val model = Model(modelId = "oai-1.0", displayName = "Orchords oai-1.0")
-        assertEquals("oai-1.0", model.modelId)
+        val model = Model(modelId = ORCHORDS_MODEL_ID, displayName = "Orchords oai-1.0")
+        assertEquals(ORCHORDS_MODEL_ID, model.modelId)
         assertEquals("Orchords oai-1.0", model.displayName)
     }
 }

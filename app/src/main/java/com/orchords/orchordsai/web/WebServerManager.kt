@@ -7,6 +7,8 @@ import io.ktor.server.engine.EmbeddedServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -95,6 +97,17 @@ class WebServerManager(
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     private val nsdRegistrar = NsdServiceRegistrar(context)
 
+    /**
+     * Guard for [stop]. When the foreground service that owns this server is
+     * destroyed through any path other than the explicit `ACTION_STOP` we still
+     * need to tear down the Ktor listener and NSD registration. But a second
+     * stop call before the first finishes must not flip state, must not relaunch
+     * the listener, and must not surface a stale "stopping" UI for an already-idle
+     * server — `restart()` chains `stop() -> start()` and a redundant stop after
+     * `start()` would have to be a no-op as well.
+     */
+    private val shutdownGate = ShutdownGate()
+
     private val _state = MutableStateFlow(WebServerState())
     val state: StateFlow<WebServerState> = _state.asStateFlow()
 
@@ -165,9 +178,18 @@ class WebServerManager(
     }
 
     fun stop() {
+        // Idempotent: an already-idle server (or a shutdown already in flight from
+        // a previous stop call) returns immediately so the WebServerService.onDestroy()
+        // path cannot leave the UI in a stale "stopping" state.
+        if (server == null && !shutdownGate.isInFlight()) return
+        if (!shutdownGate.enter()) return
         _state.value =
             _state.value.copy(isRunning = false, isLoading = true, hostname = null, address = null, error = null)
-        appScope.launch {
+        // Ktor's CIO EmbeddedServer.stop() calls runBlocking internally for up to
+        // gracePeriodMillis + timeoutMillis. Run it on Dispatchers.IO so neither
+        // the foreground-service destruction path nor any UI-thread caller pays
+        // that blocking cost on the main thread.
+        appScope.launch(Dispatchers.IO) {
             try {
                 Log.i(TAG, "Stopping web server")
                 server?.stop(1000, 2000)
@@ -182,7 +204,51 @@ class WebServerManager(
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to stop web server", e)
                 _state.value = _state.value.copy(isLoading = false, error = e.message)
+            } finally {
+                shutdownGate.exit()
             }
+        }
+    }
+
+    /**
+     * Synchronously stop the server. Used by restart() to fence start() behind
+     * the previous listener being fully torn down. Returns true if the server
+     * is fully stopped by the time this method returns.
+     */
+    private fun stopBlocking(): Boolean {
+        // Idempotent: an already-idle server returns true immediately.
+        if (server == null && !shutdownGate.isInFlight()) return true
+        if (!shutdownGate.enter()) {
+            // Another caller already owns the shutdown. Wait for it.
+            return runBlocking(Dispatchers.IO) {
+                while (shutdownGate.isInFlight()) {
+                    kotlinx.coroutines.delay(10)
+                }
+                server == null
+            }
+        }
+        _state.value =
+            _state.value.copy(isRunning = false, isLoading = true, hostname = null, address = null, error = null)
+        return try {
+            runBlocking(Dispatchers.IO) {
+                Log.i(TAG, "Stopping web server (synchronous)")
+                server?.stop(1000, 2000)
+                server = null
+                runCatching {
+                    nsdRegistrar.unregister()
+                }.onFailure {
+                    Log.w(TAG, "NSD unregister failed", it)
+                }
+                _state.value = _state.value.copy(isLoading = false)
+                Log.i(TAG, "Web server stopped (synchronous)")
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop web server (synchronous)", e)
+            _state.value = _state.value.copy(isLoading = false, error = e.message)
+            false
+        } finally {
+            shutdownGate.exit()
         }
     }
 
@@ -191,7 +257,13 @@ class WebServerManager(
         serviceName: String = _state.value.serviceName,
         localhostOnly: Boolean = _state.value.localhostOnly
     ) {
-        stop()
+        // Restart must serialize stop() -> start(); otherwise the new server's
+        // port-availability probe runs while the previous Ktor listener still
+        // owns the socket, so port-restart appears to "do nothing".
+        if (!stopBlocking()) {
+            Log.w(TAG, "Restart aborted: previous shutdown failed")
+            return
+        }
         start(port, serviceName, localhostOnly)
     }
 

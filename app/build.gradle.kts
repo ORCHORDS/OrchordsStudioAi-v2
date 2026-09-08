@@ -98,6 +98,10 @@ android {
     }
     testOptions {
         unitTests {
+            // The lifecycle controller logs via android.util.Log; we want
+            // those calls to no-op in unit tests rather than throw
+            // `Method ... not mocked`.
+            isReturnDefaultValues = true
             // CI runners expose 4 vCPUs; forked test JVMs are isolated
             // processes, so static state cannot leak between forks.
             all { test ->
@@ -318,6 +322,7 @@ dependencies {
 
     // tests
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

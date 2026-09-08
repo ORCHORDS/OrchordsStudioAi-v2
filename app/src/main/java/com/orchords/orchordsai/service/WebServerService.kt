@@ -87,6 +87,14 @@ class WebServerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Stop the Ktor listener and unregister NSD before tearing down the service
+        // scope. The WebServerManager lives in application scope, so serviceScope
+        // cancellation does not reach it; relying on it would let the listener and
+        // NSD registration outlive this foreground service. stop() is idempotent
+        // for the ACTION_STOP -> onDestroy() happy path and any duplicate call.
+        stateObserverJob?.cancel()
+        stateObserverJob = null
+        webServerManager.stop()
         serviceScope.cancel()
     }
 

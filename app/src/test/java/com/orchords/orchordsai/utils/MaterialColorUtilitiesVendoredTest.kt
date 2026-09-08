@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Locks the contract that `:material3` builds without any submodule bootstrap.
@@ -54,9 +55,21 @@ class MaterialColorUtilitiesVendoredTest {
                 .directory(root)
                 .redirectErrorStream(true)
                 .start()
-            proc.waitFor()
-            if (proc.exitValue() != 0) error("git ls-files exited ${proc.exitValue()}")
-            proc.inputStream.bufferedReader().readText()
+            val output = StringBuilder()
+            val reader = Thread {
+                proc.inputStream.bufferedReader().useLines { lines ->
+                    lines.forEach { output.append(it).append('\n') }
+                }
+            }.apply { start() }
+            try {
+                check(proc.waitFor(30, TimeUnit.SECONDS)) { "git ls-files timed out" }
+                reader.join(5_000)
+                check(proc.exitValue() == 0) { "git ls-files exited ${proc.exitValue()}" }
+                output.toString()
+            } finally {
+                if (proc.isAlive) proc.destroyForcibly()
+                reader.join(5_000)
+            }
         }.getOrDefault("")
         assertFalse(
             "Git tree must not track material3/material-color-utilities as a submodule. " +

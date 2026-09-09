@@ -60,21 +60,24 @@ jobs:
           persist-credentials: false
           clean: true
 
-      - name: Verify Java 21 toolchain
+      - name: Install private Android toolchain
+        if: steps.gate.outputs.should_build == 'true'
+        uses: ./.github/actions/setup-private-android-toolchain
+
+      - name: Verify release toolchain
         if: steps.gate.outputs.should_build == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          java_bin="$(readlink -f "$(command -v java)")"
-          java_version="$("$java_bin" -version 2>&1 | head -n1)"
+          java_version="$(java -version 2>&1 | head -n1)"
           printf '%s\n' "$java_version"
-          printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")' || {
-            echo "::error::Java 21 is required on the release runner"
-            exit 1
-          }
-          java_home="$(dirname "$(dirname "$java_bin")")"
-          echo "JAVA_HOME=$java_home" >> "$GITHUB_ENV"
-          echo "$java_home/bin" >> "$GITHUB_PATH"
+          printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")'
+          node --version | grep -Eq '^v22([.]|$)'
+          pnpm --version | grep -Eq '^11([.]|$)'
+          test -d "$ANDROID_HOME/platforms/android-37"
+          test -d "$ANDROID_HOME/build-tools/36.0.0"
+          test -d "$ANDROID_HOME/ndk/28.2.13676358"
+          test -d "$ANDROID_HOME/cmake/3.22.1"
 
       - name: Select build mode
         if: steps.gate.outputs.should_build == 'true'

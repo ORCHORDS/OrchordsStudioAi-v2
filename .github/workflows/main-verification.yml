@@ -21,11 +21,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: false
 
-env:
-  # Isolate StudioAi from shared ~/.gradle init/caches on the persistent host.
-  # The dedicated path survives jobs and becomes a warm repo-local CI cache.
-  GRADLE_USER_HOME: /home/orchords/.gradle-studioai
-
 jobs:
   verify:
     name: Main Verification
@@ -40,32 +35,24 @@ jobs:
           persist-credentials: false
           clean: false
 
-      - name: Verify private Android toolchain and seed Gradle wrapper
+      - name: Install private Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
+
+      - name: Verify private Android toolchain
         shell: bash
         run: |
           set -euo pipefail
-
-          java_bin="$(readlink -f "$(command -v java)")"
-          java_version="$("$java_bin" -version 2>&1 | head -n1)"
-          if ! printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")'; then
-            java_bin="$(find /home/orchords/actions-toolcache/Java_Temurin-Hotspot_jdk -type f -path '*/x64/bin/java' 2>/dev/null | sort -V | tail -1)"
-            test -n "$java_bin"
-            java_version="$("$java_bin" -version 2>&1 | head -n1)"
-            printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")'
-          fi
-          java_home="$(dirname "$(dirname "$java_bin")")"
-          echo "JAVA_HOME=$java_home" >> "$GITHUB_ENV"
-          echo "$java_home/bin" >> "$GITHUB_PATH"
-
-          mkdir -p "$GRADLE_USER_HOME/wrapper/dists"
-          if [ ! -d "$GRADLE_USER_HOME/wrapper/dists/gradle-9.7.1-bin" ] && \
-             [ -d /home/orchords/.gradle/wrapper/dists/gradle-9.7.1-bin ]; then
-            cp -a /home/orchords/.gradle/wrapper/dists/gradle-9.7.1-bin \
-              "$GRADLE_USER_HOME/wrapper/dists/"
-          fi
-
-          printf 'Java: %s\n' "$java_version"
+          java_version="$(java -version 2>&1 | head -n1)"
+          printf '%s\n' "$java_version"
+          printf '%s\n' "$java_version" | grep -Eq 'version "21([.]|\")'
+          node --version | grep -Eq '^v22([.]|$)'
+          pnpm --version | grep -Eq '^11([.]|$)'
+          test -d "$ANDROID_HOME/platforms/android-37"
+          test -d "$ANDROID_HOME/build-tools/36.0.0"
+          test -d "$ANDROID_HOME/ndk/28.2.13676358"
+          test -d "$ANDROID_HOME/cmake/3.22.1"
           printf 'Gradle home: %s\n' "$GRADLE_USER_HOME"
+          printf 'Android home: %s\n' "$ANDROID_HOME"
           printf 'Logical CPUs: %s\n' "$(nproc)"
           printf 'Memory: %s\n' "$(free -h | awk '/^Mem:/ {print $2}')"
 
@@ -74,7 +61,6 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x gradlew
-          # Keep the isolated daemon warm on the persistent Lenovo runner.
           # No --max-workers is set: Gradle may use every CPU visible to the job.
           ./gradlew --stacktrace -PciVerify \
             :app:testDebugUnitTest \

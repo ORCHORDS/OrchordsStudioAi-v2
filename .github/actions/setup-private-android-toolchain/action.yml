@@ -1,0 +1,87 @@
+name: Set up private Android toolchain
+description: Install the reproducible Android/JDK/Node toolchain required by StudioAi self-hosted runners.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 21
+      uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Set up Node 22
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '22'
+
+    - name: Set up pnpm 11 and Android SDK
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        runner_slug="$(printf '%s' "$RUNNER_NAME" | tr -cs 'A-Za-z0-9_.-' '-')"
+        tool_root="${RUNNER_TOOL_CACHE:-$RUNNER_TEMP}"
+        sdk_root="$tool_root/android-sdk-$runner_slug"
+        gradle_home="$tool_root/gradle-studioai-$runner_slug"
+        pnpm_root="$tool_root/pnpm-11-$runner_slug"
+
+        mkdir -p "$sdk_root" "$gradle_home" "$pnpm_root"
+
+        if ! command -v pnpm >/dev/null 2>&1 || ! pnpm --version | grep -Eq '^11([.]|$)'; then
+          npm install --global --prefix "$pnpm_root" pnpm@11
+          echo "$pnpm_root/bin" >> "$GITHUB_PATH"
+          export PATH="$pnpm_root/bin:$PATH"
+        fi
+        pnpm --version | grep -Eq '^11([.]|$)'
+
+        cmdline_version='14742923'
+        cmdline_sha256='48833c34b761c10cb20bcd16582129395d121b27'
+        sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+
+        if [ ! -x "$sdkmanager" ]; then
+          archive="$RUNNER_TEMP/commandlinetools-linux-${cmdline_version}_latest.zip"
+          unpack_dir="$RUNNER_TEMP/android-commandlinetools-$runner_slug"
+          rm -rf "$unpack_dir" "$sdk_root/cmdline-tools/latest"
+          mkdir -p "$unpack_dir" "$sdk_root/cmdline-tools/latest"
+          curl --fail --location --silent --show-error \
+            "https://dl.google.com/android/repository/commandlinetools-linux-${cmdline_version}_latest.zip" \
+            --output "$archive"
+          printf '%s  %s\n' "$cmdline_sha256" "$archive" | sha256sum --check --strict
+          python3 -m zipfile -e "$archive" "$unpack_dir"
+          cp -a "$unpack_dir/cmdline-tools/." "$sdk_root/cmdline-tools/latest/"
+          rm -rf "$unpack_dir" "$archive"
+        fi
+
+        export ANDROID_HOME="$sdk_root"
+        export ANDROID_SDK_ROOT="$sdk_root"
+
+        set +o pipefail
+        yes | "$sdkmanager" --sdk_root="$sdk_root" --licenses >/dev/null
+        license_rc=$?
+        set -o pipefail
+        test "$license_rc" -eq 0
+
+        "$sdkmanager" --sdk_root="$sdk_root" --install \
+          'platform-tools' \
+          'platforms;android-36' \
+          'platforms;android-37' \
+          'build-tools;36.0.0' \
+          'ndk;28.2.13676358' \
+          'cmake;3.22.1'
+
+        echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+        echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_HOME=$sdk_root/ndk/28.2.13676358" >> "$GITHUB_ENV"
+        echo "GRADLE_USER_HOME=$gradle_home" >> "$GITHUB_ENV"
+        echo "$sdk_root/platform-tools" >> "$GITHUB_PATH"
+        echo "$sdk_root/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+        echo "$sdk_root/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
+        java -version
+        node --version | grep -Eq '^v22([.]|$)'
+        pnpm --version | grep -Eq '^11([.]|$)'
+        test -d "$sdk_root/platforms/android-37"
+        test -d "$sdk_root/build-tools/36.0.0"
+        test -d "$sdk_root/ndk/28.2.13676358"
+        test -d "$sdk_root/cmake/3.22.1"

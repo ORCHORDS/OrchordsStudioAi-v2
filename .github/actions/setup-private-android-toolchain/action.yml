@@ -28,15 +28,19 @@ runs:
 
         mkdir -p "$sdk_root" "$gradle_home" "$pnpm_root"
 
-        if ! command -v pnpm >/dev/null 2>&1 || ! pnpm --version | grep -Eq '^11([.]|$)'; then
+        pnpm_version=''
+        if command -v pnpm >/dev/null 2>&1; then
+          pnpm_version="$(pnpm --version 2>/dev/null || true)"
+        fi
+        if ! printf '%s\n' "$pnpm_version" | grep -Eq '^11([.]|$)'; then
           npm install --global --prefix "$pnpm_root" pnpm@11
           echo "$pnpm_root/bin" >> "$GITHUB_PATH"
           export PATH="$pnpm_root/bin:$PATH"
         fi
         pnpm --version | grep -Eq '^11([.]|$)'
 
-        cmdline_version='14742923'
-        cmdline_sha256='48833c34b761c10cb20bcd16582129395d121b27'
+        cmdline_version='15859902'
+        cmdline_sha256='4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583'
         sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
 
         if [ ! -x "$sdkmanager" ]; then

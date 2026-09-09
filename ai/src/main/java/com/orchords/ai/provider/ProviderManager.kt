@@ -13,6 +13,7 @@ class ProviderManager(client: OkHttpClient, context: Context) {
     private val providers = mutableMapOf<String, Provider<*>>()
     private val providerClient = client.newBuilder()
         .addInterceptor(ProviderIngressInterceptor())
+        .addInterceptor(OrchordsGatewayErrorInterceptor())
         .build()
 
     init {

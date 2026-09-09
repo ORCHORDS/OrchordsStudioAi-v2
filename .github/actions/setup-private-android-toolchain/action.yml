@@ -62,14 +62,14 @@ runs:
         export ANDROID_HOME="$sdk_root"
         export ANDROID_SDK_ROOT="$sdk_root"
 
-        # Android 17 / API 37 is currently the Cinnamon Bun Preview SDK.
-        # Google's current Android CLI is the supported replacement for the
-        # deprecated sdkmanager and exposes preview packages with --canary.
+        # Android 17 remains the Cinnamon Bun Preview platform. Google's package
+        # metadata exposes it by codename (`android-CinnamonBun`) even though
+        # Gradle's compileSdk is the numeric API level 37.
         set +o pipefail
         yes | "$android_cli" --sdk="$sdk_root" sdk install --canary \
           platform-tools \
           platforms/android-36 \
-          platforms/android-37 \
+          platforms/android-CinnamonBun \
           build-tools/36.0.0 \
           ndk/28.2.13676358 \
           cmake/3.22.1
@@ -88,7 +88,7 @@ runs:
         java -version
         node --version | grep -Eq '^v22([.]|$)'
         pnpm --version | grep -Eq '^11([.]|$)'
-        test -d "$sdk_root/platforms/android-37"
+        test -d "$sdk_root/platforms/android-CinnamonBun"
         test -d "$sdk_root/build-tools/36.0.0"
         test -d "$sdk_root/ndk/28.2.13676358"
         test -d "$sdk_root/cmake/3.22.1"

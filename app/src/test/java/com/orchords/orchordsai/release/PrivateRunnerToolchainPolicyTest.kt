@@ -28,7 +28,7 @@ class PrivateRunnerToolchainPolicyTest {
         assertTrue(action.contains("cmdline_version='15859902'"))
         assertTrue(action.contains("android_cli=\"${'$'}sdk_root/cmdline-tools/latest/bin/android\""))
         assertTrue(action.contains("sdk install --canary"))
-        assertTrue(action.contains("platforms/android-CinnamonBun"))
+        assertTrue(action.contains("platforms/android-37.0"))
         assertTrue(action.contains("build-tools/36.0.0"))
         assertTrue(action.contains("ndk/28.2.13676358"))
         assertTrue(action.contains("cmake/3.22.1"))

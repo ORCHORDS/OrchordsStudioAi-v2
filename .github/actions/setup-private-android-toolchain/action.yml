@@ -68,7 +68,10 @@ runs:
         set -o pipefail
         test "$license_rc" -eq 0
 
-        "$sdkmanager" --sdk_root="$sdk_root" --install \
+        # Android 17 / API 37 is currently a Preview SDK. The documented
+        # sdkmanager channel 3 includes stable + beta + dev + canary packages,
+        # while still allowing the stable AGP-default Build Tools/NDK/CMake.
+        "$sdkmanager" --sdk_root="$sdk_root" --channel=3 --install \
           'platform-tools' \
           'platforms;android-36' \
           'platforms;android-37' \

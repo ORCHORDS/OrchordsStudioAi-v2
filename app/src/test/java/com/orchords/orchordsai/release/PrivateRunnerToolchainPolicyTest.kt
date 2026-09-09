@@ -26,6 +26,7 @@ class PrivateRunnerToolchainPolicyTest {
         assertTrue(action.contains("node-version: '22'"))
         assertTrue(action.contains("pnpm@11"))
         assertTrue(action.contains("cmdline_version='15859902'"))
+        assertTrue(action.contains("--channel=3 --install"))
         assertTrue(action.contains("'platforms;android-37'"))
         assertTrue(action.contains("'build-tools;36.0.0'"))
         assertTrue(action.contains("'ndk;28.2.13676358'"))

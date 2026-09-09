@@ -41,9 +41,9 @@ runs:
 
         cmdline_version='15859902'
         cmdline_sha256='4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583'
-        sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+        android_cli="$sdk_root/cmdline-tools/latest/bin/android"
 
-        if [ ! -x "$sdkmanager" ]; then
+        if [ ! -x "$android_cli" ]; then
           archive="$RUNNER_TEMP/commandlinetools-linux-${cmdline_version}_latest.zip"
           unpack_dir="$RUNNER_TEMP/android-commandlinetools-$runner_slug"
           rm -rf "$unpack_dir" "$sdk_root/cmdline-tools/latest"
@@ -58,26 +58,24 @@ runs:
           rm -rf "$unpack_dir" "$archive"
         fi
 
-        test -x "$sdkmanager"
+        test -x "$android_cli"
         export ANDROID_HOME="$sdk_root"
         export ANDROID_SDK_ROOT="$sdk_root"
 
+        # Android 17 / API 37 is currently the Cinnamon Bun Preview SDK.
+        # Google's current Android CLI is the supported replacement for the
+        # deprecated sdkmanager and exposes preview packages with --canary.
         set +o pipefail
-        yes | "$sdkmanager" --sdk_root="$sdk_root" --licenses >/dev/null
-        license_rc=$?
+        yes | "$android_cli" --sdk="$sdk_root" sdk install --canary \
+          platform-tools \
+          platforms/android-36 \
+          platforms/android-37 \
+          build-tools/36.0.0 \
+          ndk/28.2.13676358 \
+          cmake/3.22.1
+        install_rc=$?
         set -o pipefail
-        test "$license_rc" -eq 0
-
-        # Android 17 / API 37 is currently a Preview SDK. The documented
-        # sdkmanager channel 3 includes stable + beta + dev + canary packages,
-        # while still allowing the stable AGP-default Build Tools/NDK/CMake.
-        "$sdkmanager" --sdk_root="$sdk_root" --channel=3 --install \
-          'platform-tools' \
-          'platforms;android-36' \
-          'platforms;android-37' \
-          'build-tools;36.0.0' \
-          'ndk;28.2.13676358' \
-          'cmake;3.22.1'
+        test "$install_rc" -eq 0
 
         echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
         echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"

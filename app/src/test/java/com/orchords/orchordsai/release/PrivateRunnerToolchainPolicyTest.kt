@@ -31,5 +31,7 @@ class PrivateRunnerToolchainPolicyTest {
         assertTrue(action.contains("'ndk;28.2.13676358'"))
         assertTrue(action.contains("'cmake;3.22.1'"))
         assertTrue(action.contains("4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583"))
+        assertTrue(action.contains("chmod 0755 \"${'$'}sdk_root/cmdline-tools/latest/bin/\"*"))
+        assertTrue(action.contains("test -x \"${'$'}sdkmanager\""))
     }
 }

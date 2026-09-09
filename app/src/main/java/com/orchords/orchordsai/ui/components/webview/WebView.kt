@@ -41,7 +41,7 @@ internal class MyWebChromeClient(private val state: WebViewState) : WebChromeCli
         if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR || consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.WARNING) {
             Log.e(
                 TAG,
-                "onConsoleMessage:  ${consoleMessage.message()}  ${consoleMessage.lineNumber()}  ${consoleMessage.sourceId()}"
+                "onConsoleMessage: level=${consoleMessage.messageLevel()} line=${consoleMessage.lineNumber()}"
             )
         }
         return super.onConsoleMessage(consoleMessage);

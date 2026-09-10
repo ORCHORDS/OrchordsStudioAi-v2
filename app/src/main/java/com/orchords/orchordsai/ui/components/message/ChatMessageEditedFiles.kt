@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -44,6 +43,8 @@ import me.orchid.hugeicons.stroke.File02
 import me.orchid.hugeicons.stroke.FileImport
 import me.orchid.hugeicons.stroke.Share08
 import com.orchords.orchordsai.R
+import com.orchords.orchordsai.data.files.StagedShareRoot
+import com.orchords.orchordsai.data.files.createStagedShareUri
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.repository.WorkspaceRepository
 import com.orchords.workspace.WorkspaceStorageArea
@@ -200,10 +201,10 @@ internal fun EditedFilesList(
                                 file.outputStream().use { output ->
                                     workspaceRepository.exportFile(workspaceId, area, relativePath, output)
                                 }
-                                val uri = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    file,
+                                val uri = createStagedShareUri(
+                                    context = context,
+                                    file = file,
+                                    root = StagedShareRoot.WORKSPACE_SHARE,
                                 )
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     type = "application/octet-stream"

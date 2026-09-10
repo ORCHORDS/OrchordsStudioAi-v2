@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -55,11 +56,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
-import androidx.core.content.FileProvider
 import androidx.core.net.toFile
 import androidx.core.net.toUri
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
 import com.orchords.ai.core.MessageRole
 import com.orchords.ai.provider.Model
 import com.orchords.ai.ui.UIMessage
@@ -72,6 +73,8 @@ import me.orchid.hugeicons.stroke.MusicNote03
 import me.orchid.hugeicons.stroke.Video01
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.Screen
+import com.orchords.orchordsai.data.files.FilesManager
+import com.orchords.orchordsai.data.files.createManagedUploadShareUri
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.model.AssistantAffectScope
 import com.orchords.orchordsai.data.model.MessageNode
@@ -90,6 +93,7 @@ import com.orchords.orchordsai.ui.theme.rememberChatFontFamily
 import com.orchords.orchordsai.ui.theme.extendColors
 import com.orchords.orchordsai.utils.openUrl
 import com.orchords.orchordsai.utils.urlDecode
+import org.koin.compose.koinInject
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -271,7 +275,26 @@ private fun MessagePartsBlock(
     onUserMessageClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val shareScope = rememberCoroutineScope()
+    val filesManager: FilesManager = koinInject()
     val contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+
+    val openManagedFile: (String) -> Unit = { url ->
+        shareScope.launch {
+            runCatching {
+                filesManager.createManagedUploadShareUri(
+                    context = context,
+                    file = url.toUri().toFile(),
+                )
+            }.onSuccess { uri ->
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    data = uri
+                }
+                context.startActivity(Intent.createChooser(intent, null))
+            }
+        }
+    }
 
     val hapticFeedback = LocalHapticFeedback.current
     val settings = LocalSettings.current
@@ -407,17 +430,7 @@ private fun MessagePartsBlock(
                     is UIMessagePart.Video -> {
                         Surface(
                             tonalElevation = 2.dp,
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW)
-                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                intent.data = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    part.url.toUri().toFile()
-                                )
-                                val chooserIndent = Intent.createChooser(intent, null)
-                                context.startActivity(chooserIndent)
-                            },
+                            onClick = { openManagedFile(part.url) },
                             modifier = Modifier,
                             shape = RoundedCornerShape(8.dp),
                         ) {
@@ -430,17 +443,7 @@ private fun MessagePartsBlock(
                     is UIMessagePart.Audio -> {
                         Surface(
                             tonalElevation = 2.dp,
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW)
-                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                intent.data = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    part.url.toUri().toFile()
-                                )
-                                val chooserIndent = Intent.createChooser(intent, null)
-                                context.startActivity(chooserIndent)
-                            },
+                            onClick = { openManagedFile(part.url) },
                             modifier = Modifier,
                             shape = RoundedCornerShape(50),
                             color = MaterialTheme.colorScheme.secondaryContainer
@@ -486,17 +489,7 @@ private fun MessagePartsBlock(
                     is UIMessagePart.Document -> {
                         Surface(
                             tonalElevation = 2.dp,
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW)
-                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                intent.data = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    part.url.toUri().toFile()
-                                )
-                                val chooserIndent = Intent.createChooser(intent, null)
-                                context.startActivity(chooserIndent)
-                            },
+                            onClick = { openManagedFile(part.url) },
                             modifier = Modifier,
                             shape = RoundedCornerShape(50),
                             color = MaterialTheme.colorScheme.tertiaryContainer

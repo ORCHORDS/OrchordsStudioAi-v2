@@ -58,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.navigation3.runtime.NavKey
 import com.orchords.orchordsai.Screen
@@ -83,6 +82,8 @@ import com.orchords.common.android.appTempFolder
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.findModelById
+import com.orchords.orchordsai.data.files.StagedShareRoot
+import com.orchords.orchordsai.data.files.createStagedShareUri
 import com.orchords.orchordsai.data.model.Conversation
 import com.orchords.orchordsai.ui.components.message.MessagePartBlock
 import com.orchords.orchordsai.ui.components.message.ThinkingStep
@@ -364,11 +365,11 @@ private fun exportToMarkdown(
             it.write(sb.toString().toByteArray())
         }
 
-        // Share the file
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
+        // Share only from the dedicated temp staging root.
+        val uri = createStagedShareUri(
+            context = context,
+            file = file,
+            root = StagedShareRoot.TEMP,
         )
         shareFile(context, uri, "text/markdown")
 
@@ -428,11 +429,11 @@ private suspend fun exportToImage(
         // Save to gallery
         context.exportImage(activity, bitmap, filename)
 
-        // Share the file
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
+        // Share only from the dedicated temp staging root.
+        val uri = createStagedShareUri(
+            context = context,
+            file = file,
+            root = StagedShareRoot.TEMP,
         )
         shareFile(context, uri, "image/png")
     } catch (e: Exception) {

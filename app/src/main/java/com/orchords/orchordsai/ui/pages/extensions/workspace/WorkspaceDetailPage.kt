@@ -50,9 +50,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.orchid.hugeicons.HugeIcons
@@ -70,7 +70,8 @@ import me.orchid.hugeicons.stroke.Share08
 import com.orchords.orchordsai.Screen
 import com.orchords.orchordsai.data.ai.tools.resolveWorkspaceToolApproval
 import com.orchords.orchordsai.data.db.entity.WorkspaceEntity
-import androidx.compose.ui.res.stringResource
+import com.orchords.orchordsai.data.files.StagedShareRoot
+import com.orchords.orchordsai.data.files.createStagedShareUri
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.ImagePreviewDialog
@@ -210,10 +211,10 @@ fun WorkspaceDetailPage(id: String) {
                                 }
 
                                 WorkspaceFileType.OTHER -> vm.exportToCacheFile(entry, context.cacheDir) { file ->
-                                    val uri = FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file,
+                                    val uri = createStagedShareUri(
+                                        context = context,
+                                        file = file,
+                                        root = StagedShareRoot.WORKSPACE_SHARE,
                                     )
                                     val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(
                                         file.extension.lowercase()
@@ -236,10 +237,10 @@ fun WorkspaceDetailPage(id: String) {
                     },
                     onShare = { entry ->
                         vm.exportToCacheFile(entry, context.cacheDir) { file ->
-                            val uri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                file,
+                            val uri = createStagedShareUri(
+                                context = context,
+                                file = file,
+                                root = StagedShareRoot.WORKSPACE_SHARE,
                             )
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "application/octet-stream"

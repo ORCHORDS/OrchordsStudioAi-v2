@@ -3,6 +3,8 @@ package com.orchords.orchordsai.ui.pages.extensions
 import me.orchid.hugeicons.HugeIcons
 import me.orchid.hugeicons.stroke.Book01
 import me.orchid.hugeicons.stroke.ArrowDown01
+import me.orchid.hugeicons.stroke.ArrowUp01
+import me.orchid.hugeicons.stroke.DragDropVertical
 import me.orchid.hugeicons.stroke.Download01
 import me.orchid.hugeicons.stroke.FileDownload
 import me.orchid.hugeicons.stroke.FileImport
@@ -65,6 +67,7 @@ import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -100,8 +103,10 @@ import com.orchords.orchordsai.ui.components.ui.TagType
 import com.orchords.orchordsai.ui.context.LocalToaster
 import com.orchords.orchordsai.ui.hooks.useEditState
 import com.orchords.orchordsai.ui.theme.CustomColors
+import com.orchords.orchordsai.utils.moveListItem
 import com.orchords.orchordsai.utils.plus
 import org.koin.androidx.compose.koinViewModel
+import sh.calvin.reorderable.ReorderableColumn
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -906,14 +911,57 @@ private fun LorebookEditSheet(
                     }
                 }
 
-                book.entries.forEach { entry ->
-                    RegexInjectionEntryCard(
-                        entry = entry,
-                        onEdit = { entryEditState.open(entry) },
-                        onDelete = {
-                            onEdit(book.copy(entries = book.entries - entry))
+                ReorderableColumn(
+                    list = book.entries,
+                    onSettle = { fromIndex, toIndex ->
+                        onEdit(
+                            book.copy(
+                                entries = moveListItem(book.entries, fromIndex, toIndex)
+                            )
+                        )
+                    },
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) { index, entry, isDragging ->
+                    key(entry.id) {
+                        ReorderableItem(modifier = Modifier.fillMaxWidth()) {
+                            RegexInjectionEntryCard(
+                                entry = entry,
+                                index = index,
+                                entryCount = book.entries.size,
+                                modifier = Modifier.graphicsLayer {
+                                    if (isDragging) {
+                                        scaleX = 0.98f
+                                        scaleY = 0.98f
+                                    }
+                                },
+                                dragHandleModifier = Modifier
+                                    .size(48.dp)
+                                    .longPressDraggableHandle(enabled = book.entries.size > 1),
+                                onMoveUp = {
+                                    if (index > 0) {
+                                        onEdit(
+                                            book.copy(
+                                                entries = moveListItem(book.entries, index, index - 1)
+                                            )
+                                        )
+                                    }
+                                },
+                                onMoveDown = {
+                                    if (index < book.entries.lastIndex) {
+                                        onEdit(
+                                            book.copy(
+                                                entries = moveListItem(book.entries, index, index + 1)
+                                            )
+                                        )
+                                    }
+                                },
+                                onEdit = { entryEditState.open(entry) },
+                                onDelete = {
+                                    onEdit(book.copy(entries = book.entries - entry))
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
 
@@ -946,10 +994,17 @@ private fun LorebookEditSheet(
 @Composable
 private fun RegexInjectionEntryCard(
     entry: PromptInjection.RegexInjection,
+    index: Int,
+    entryCount: Int,
+    modifier: Modifier = Modifier,
+    dragHandleModifier: Modifier = Modifier,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val entryLabel = entry.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_entry) }
+    Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -957,12 +1012,21 @@ private fun RegexInjectionEntryCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = dragHandleModifier,
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    HugeIcons.DragDropVertical,
+                    stringResource(R.string.prompt_page_reorder_entry, entryLabel),
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = entry.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_entry) },
+                    text = entryLabel,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 if (entry.keywords.isNotEmpty()) {
@@ -982,6 +1046,20 @@ private fun RegexInjectionEntryCard(
                             Text(stringResource(R.string.prompt_page_disabled))
                         }
                     }
+                }
+            }
+            Column {
+                IconButton(onClick = onMoveUp, enabled = index > 0) {
+                    Icon(
+                        HugeIcons.ArrowUp01,
+                        stringResource(R.string.prompt_page_move_entry_up, entryLabel, index),
+                    )
+                }
+                IconButton(onClick = onMoveDown, enabled = index < entryCount - 1) {
+                    Icon(
+                        HugeIcons.ArrowDown01,
+                        stringResource(R.string.prompt_page_move_entry_down, entryLabel, index + 2),
+                    )
                 }
             }
             IconButton(onClick = onEdit) {

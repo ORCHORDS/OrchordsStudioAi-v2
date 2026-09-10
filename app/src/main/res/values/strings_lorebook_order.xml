@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="prompt_page_reorder_entry">Reorder %1$s</string>
+    <string name="prompt_page_move_entry_up">Move %1$s to position %2$d</string>
+    <string name="prompt_page_move_entry_down">Move %1$s to position %2$d</string>
+</resources>

@@ -26,7 +26,7 @@ concurrency:
 jobs:
   managed-device:
     # Dedicated runner: bare-metal KVM and persistent SDK/AVD state.
-    runs-on: ubuntu-24.04-x64
+runs-on: Node_Runner
     timeout-minutes: 60
     steps:
       - name: Checkout repository

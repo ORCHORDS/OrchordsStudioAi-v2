@@ -30,6 +30,9 @@ jobs:
           persist-credentials: false
           clean: false
 
+      - name: Install private Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
+
       - name: Verify JDK 21 on private runner
         shell: bash
         run: |

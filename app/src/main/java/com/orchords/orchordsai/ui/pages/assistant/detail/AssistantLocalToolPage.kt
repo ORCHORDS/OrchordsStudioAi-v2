@@ -158,20 +158,6 @@ private fun AssistantLocalToolContent(
             )
             item(
                 headlineContent = {
-                    Text(stringResource(R.string.assistant_page_local_tools_weather_title))
-                },
-                supportingContent = {
-                    Text(stringResource(R.string.assistant_page_local_tools_weather_desc))
-                },
-                trailingContent = {
-                    Switch(
-                        checked = assistant.localTools.contains(LocalToolOption.Weather),
-                        onCheckedChange = { toggleLocalTool(LocalToolOption.Weather, it) }
-                    )
-                }
-            )
-            item(
-                headlineContent = {
                     Text(stringResource(R.string.assistant_page_local_tools_clipboard_title))
                 },
                 supportingContent = {

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="assistant_page_local_tools_weather_title">Weather</string>
-    <string name="assistant_page_local_tools_weather_desc">Get current and near-term weather from MET Norway for a place you provide</string>
-</resources>

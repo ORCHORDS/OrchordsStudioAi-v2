@@ -8,20 +8,16 @@ import com.orchords.orchordsai.data.files.AgentSkillInstallCoordinator
 import com.orchords.orchordsai.data.files.SkillManager
 import com.orchords.orchordsai.data.files.createSkillInstallService
 import com.orchords.tts.provider.TTSManager
-import okhttp3.OkHttpClient
 
 class LocalTools(
     private val context: Context,
     private val eventBus: AppEventBus,
     private val ttsManager: TTSManager,
     private val settingsStore: SettingsStore,
-    private val httpClient: OkHttpClient,
 ) {
     val javascriptTool by lazy { buildJavascriptTool() }
 
     val timeTool by lazy { buildTimeInfoTool() }
-
-    val weatherTool by lazy { buildWeatherTool(context, httpClient) }
 
     val clipboardTool by lazy { buildClipboardTool(context) }
 
@@ -49,9 +45,6 @@ class LocalTools(
         }
         if (options.contains(LocalToolOption.TimeInfo)) {
             tools.add(timeTool)
-        }
-        if (options.contains(LocalToolOption.Weather)) {
-            tools.add(weatherTool)
         }
         if (options.contains(LocalToolOption.Clipboard)) {
             tools.add(clipboardTool)

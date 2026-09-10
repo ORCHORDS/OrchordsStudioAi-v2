@@ -14,10 +14,6 @@ sealed class LocalToolOption {
     data object TimeInfo : LocalToolOption()
 
     @Serializable
-    @SerialName("weather")
-    data object Weather : LocalToolOption()
-
-    @Serializable
     @SerialName("clipboard")
     data object Clipboard : LocalToolOption()
 

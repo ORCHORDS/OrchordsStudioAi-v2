@@ -30,9 +30,8 @@ object SettingsJsonMigrator {
             }
 
             root["assistants"]?.let { element ->
-                val (quickMessageMigratedAssistants, extractedQuickMessages) =
+                val (migratedAssistants, extractedQuickMessages) =
                     migrateAssistantsQuickMessages(JsonInstant.encodeToString(element))
-                val migratedAssistants = migrateDefaultAssistantWeather(quickMessageMigratedAssistants)
                 root["assistants"] = JsonInstant.parseToJsonElement(migratedAssistants)
 
                 if (extractedQuickMessages.isNotEmpty()) {

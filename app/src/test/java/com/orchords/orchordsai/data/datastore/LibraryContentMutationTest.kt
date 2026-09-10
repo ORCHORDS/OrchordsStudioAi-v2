@@ -103,4 +103,38 @@ class LibraryContentMutationTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun `lorebook entry reorder persists exact list order`() = runBlocking {
+        val root = Files.createTempDirectory("lorebook-entry-order-test").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val store = PreferenceDataStoreFactory.create(scope = scope) {
+            root.resolve("settings.preferences_pb")
+        }
+        try {
+            val lorebook = BuiltInLibrary.catalog.lorebooks.first().toLorebook()
+            require(lorebook.entries.size > 1) { "Test fixture must contain multiple lorebook entries" }
+            val reorderedEntries = lorebook.entries.reversed()
+            store.edit {
+                it[SettingsStore.LOREBOOKS] = JsonInstant.encodeToString(listOf(lorebook))
+            }
+
+            updateLorebooks(store) { current ->
+                current.map { book ->
+                    if (book.id == lorebook.id) book.copy(entries = reorderedEntries) else book
+                }
+            }
+
+            val persisted = store.data.first()
+            val restoredBooks = JsonInstant.decodeFromString<List<Lorebook>>(
+                requireNotNull(persisted[SettingsStore.LOREBOOKS])
+            )
+            val restored = restoredBooks.single()
+            assertEquals(reorderedEntries, restored.entries)
+            assertEquals(reorderedEntries.map { it.id }, restored.entries.map { it.id })
+        } finally {
+            scope.cancel()
+            root.deleteRecursively()
+        }
+    }
 }

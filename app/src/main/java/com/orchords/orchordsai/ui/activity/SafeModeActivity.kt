@@ -33,11 +33,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,19 +47,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.orchords.orchordsai.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
+import com.dokar.sonner.Toaster
+import com.dokar.sonner.rememberToasterState
+import com.orchords.orchordsai.OrchordsAiActivity
+import com.orchords.orchordsai.R
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.SettingsStore
 import com.orchords.orchordsai.data.datastore.getCurrentAssistant
 import com.orchords.orchordsai.ui.components.ui.UIAvatar
+import com.orchords.orchordsai.ui.context.LocalToaster
 import com.orchords.orchordsai.ui.hooks.writeStringPreference
 import com.orchords.orchordsai.ui.theme.OrchordsAITheme
-import com.orchords.orchordsai.OrchordsAiActivity
 import com.orchords.orchordsai.utils.CrashHandler
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import kotlin.uuid.Uuid
 
@@ -73,106 +77,111 @@ class SafeModeActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             OrchordsAITheme {
-                val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
-                var showAssistantPicker by remember { mutableStateOf(false) }
-                val scope = rememberCoroutineScope()
-                val context = LocalContext.current
+                val toastState = rememberToasterState()
+                CompositionLocalProvider(LocalToaster provides toastState) {
+                    val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
+                    var showAssistantPicker by remember { mutableStateOf(false) }
+                    val scope = rememberCoroutineScope()
+                    val context = LocalContext.current
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(title = { Text(stringResource(R.string.safe_mode_title)) })
-                    }
-                ) { innerPadding ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.safe_mode_description),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Text(
-                            text = stringResource(
-                                R.string.safe_mode_current_assistant,
-                                settings.getCurrentAssistant().name.ifEmpty { stringResource(R.string.safe_mode_default_assistant) }),
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-
-                        Button(
-                            onClick = { showAssistantPicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.safe_mode_switch_assistant))
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            TopAppBar(title = { Text(stringResource(R.string.safe_mode_title)) })
                         }
-
-                        OutlinedButton(
-                            onClick = {
-                                startActivity(Intent(this@SafeModeActivity, OrchordsAiActivity::class.java))
-                                finish()
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                    ) { innerPadding ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(stringResource(R.string.safe_mode_enter_app))
-                        }
+                            Text(
+                                text = stringResource(R.string.safe_mode_description),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
 
-                        if (stackTrace != null) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Text(
+                                text = stringResource(
+                                    R.string.safe_mode_current_assistant,
+                                    settings.getCurrentAssistant().name.ifEmpty { stringResource(R.string.safe_mode_default_assistant) }),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+
+                            Button(
+                                onClick = { showAssistantPicker = true },
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    text = stringResource(R.string.safe_mode_crash_report),
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
-                                OutlinedButton(
-                                    onClick = {
-                                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        cm.setPrimaryClip(ClipData.newPlainText("crash", stackTrace))
-                                    }
+                                Text(stringResource(R.string.safe_mode_switch_assistant))
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    startActivity(Intent(this@SafeModeActivity, OrchordsAiActivity::class.java))
+                                    finish()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.safe_mode_enter_app))
+                            }
+
+                            if (stackTrace != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(stringResource(R.string.safe_mode_copy))
+                                    Text(
+                                        text = stringResource(R.string.safe_mode_crash_report),
+                                        style = MaterialTheme.typography.titleSmall,
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            cm.setPrimaryClip(ClipData.newPlainText("crash", stackTrace))
+                                        }
+                                    ) {
+                                        Text(stringResource(R.string.safe_mode_copy))
+                                    }
+                                }
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    val vScroll = rememberScrollState()
+                                    val hScroll = rememberScrollState()
+                                    Text(
+                                        text = stackTrace,
+                                        modifier = Modifier
+                                            .padding(12.dp)
+                                            .verticalScroll(vScroll)
+                                            .horizontalScroll(hScroll),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = FontFamily.Monospace,
+                                    )
                                 }
                             }
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            ) {
-                                val vScroll = rememberScrollState()
-                                val hScroll = rememberScrollState()
-                                Text(
-                                    text = stackTrace,
-                                    modifier = Modifier
-                                        .padding(12.dp)
-                                        .verticalScroll(vScroll)
-                                        .horizontalScroll(hScroll),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                            }
                         }
                     }
-                }
 
-                if (showAssistantPicker) {
-                    AssistantPickerSheet(
-                        settings = settings,
-                        onAssistantSelected = { assistantId ->
-                            scope.launch { settingsStore.updateAssistant(assistantId) }
-                            context.writeStringPreference("lastConversationId", null)
-                            showAssistantPicker = false
-                        },
-                        onDismiss = { showAssistantPicker = false }
-                    )
+                    if (showAssistantPicker) {
+                        AssistantPickerSheet(
+                            settings = settings,
+                            onAssistantSelected = { assistantId ->
+                                scope.launch { settingsStore.updateAssistant(assistantId) }
+                                context.writeStringPreference("lastConversationId", null)
+                                showAssistantPicker = false
+                            },
+                            onDismiss = { showAssistantPicker = false }
+                        )
+                    }
+
+                    Toaster(state = toastState)
                 }
             }
         }

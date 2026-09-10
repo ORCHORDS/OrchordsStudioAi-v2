@@ -35,7 +35,7 @@ data class Assistant(
     val customHeaders: List<CustomHeader> = emptyList(),
     val customBodies: List<CustomBody> = emptyList(),
     val mcpServers: Set<Uuid> = emptySet(),
-    val localTools: List<LocalToolOption> = listOf(LocalToolOption.TimeInfo),
+    val localTools: List<LocalToolOption> = listOf(LocalToolOption.TimeInfo, LocalToolOption.Weather),
     val enableWebSearch: Boolean = false,
     val workspaceId: Uuid? = null,
     val background: String? = null,

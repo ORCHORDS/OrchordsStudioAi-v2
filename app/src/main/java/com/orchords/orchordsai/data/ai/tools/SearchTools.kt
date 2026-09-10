@@ -36,19 +36,22 @@ internal fun String.canReceiveOrchordsGatewayCredential(): Boolean {
 }
 
 /**
- * Resolve the one supported external-search configuration.
+ * Resolve the selected executable external-search profile.
  *
- * Legacy search-provider records remain readable for migration, but they are
- * never routed at runtime. A configured Orchords Search endpoint/depth is
- * preserved. The first-party gateway credential is reused only when the Search
- * endpoint is on the exact canonical Orchords gateway origin; otherwise the
- * Search profile keeps only its own existing credential.
+ * Search services are tools/infrastructure, not alternate chat-model routes.
+ * Legacy serialized search records remain readable, but an unsupported record
+ * cannot silently execute as another provider. If the selected record is no
+ * longer executable, use the first configured runtime-supported profile, then
+ * the inert Orchords Search default.
  */
-internal fun Settings.activeSearchOptions(): SearchServiceOptions.OrchordsAIOptions {
-    val configured = searchServices
-        .filterIsInstance<SearchServiceOptions.OrchordsAIOptions>()
-        .firstOrNull()
-        ?: SearchServiceOptions.DEFAULT as SearchServiceOptions.OrchordsAIOptions
+internal fun Settings.activeSearchOptions(): SearchServiceOptions {
+    val selected = searchServices.getOrNull(searchServiceSelected)
+        ?.takeIf(SearchService::isRuntimeSupported)
+    val configured = selected
+        ?: searchServices.firstOrNull(SearchService::isRuntimeSupported)
+        ?: SearchServiceOptions.DEFAULT
+
+    if (configured !is SearchServiceOptions.OrchordsAIOptions) return configured
 
     val gatewayKey = providers
         .filterIsInstance<ProviderSetting.OpenAI>()
@@ -94,8 +97,7 @@ fun createSearchTools(settings: Settings): Set<Tool> {
                 """.trimIndent(),
                 parameters = {
                     val options = settings.activeSearchOptions()
-                    val service = SearchService.getService(options)
-                    service.parameters(options)
+                    SearchService.getService(options).parameters(options)
                 },
                 execute = {
                     val options = settings.activeSearchOptions()

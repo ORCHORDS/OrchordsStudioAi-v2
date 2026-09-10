@@ -1,31 +1,43 @@
 package com.orchords.search
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchServiceOrchordsAILockTest {
     @Test
-    fun `default search service options are OrchordsAI`() {
+    fun `default search service remains OrchordsAI`() {
         assertEquals("Orchords Search", SearchServiceOptions.DEFAULT.displayName)
-        org.junit.Assert.assertTrue(SearchServiceOptions.DEFAULT is SearchServiceOptions.OrchordsAIOptions)
+        assertTrue(SearchServiceOptions.DEFAULT is SearchServiceOptions.OrchordsAIOptions)
+        assertSame(OrchordsAISearchService, SearchService.getService(SearchServiceOptions.DEFAULT))
     }
 
     @Test
-    fun `getService returns OrchordsAISearchService for the default options`() {
-        val service = SearchService.getService(SearchServiceOptions.DEFAULT)
-        assertSame(OrchordsAISearchService, service)
+    fun `Brave is an explicit supported external search tool`() {
+        val options = SearchServiceOptions.BraveOptions(apiKey = "search-key")
+        assertTrue(SearchService.isRuntimeSupported(options))
+        assertSame(BraveSearchService, SearchService.getService(options))
+        assertTrue(SearchServiceOptions.BraveOptions::class in SearchServiceOptions.RUNTIME_TYPES)
     }
 
     @Test
-    fun `getService ignores legacy option types and always returns OrchordsAISearchService`() {
-        // Stored options from older installs must still resolve to OrchordsAI.
+    fun `retired Bing record remains readable but cannot execute as Orchords Search`() {
         val legacy = SearchServiceOptions.BingLocalOptions()
-        assertSame(OrchordsAISearchService, SearchService.getService(legacy))
+        assertEquals("Bing", legacy.displayName)
+        assertFalse(SearchService.isRuntimeSupported(legacy))
+        assertSame(UnsupportedSearchService, SearchService.getService(legacy))
     }
 
     @Test
-    fun `displayName registry only exposes Orchords Search for OrchordsAIOptions`() {
-        assertEquals("Orchords Search", SearchServiceOptions.TYPES[SearchServiceOptions.OrchordsAIOptions::class])
+    fun `runtime type list exposes only verified search adapters`() {
+        assertEquals(
+            listOf(
+                SearchServiceOptions.OrchordsAIOptions::class,
+                SearchServiceOptions.BraveOptions::class,
+            ),
+            SearchServiceOptions.RUNTIME_TYPES,
+        )
     }
 }

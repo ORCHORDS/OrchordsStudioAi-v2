@@ -16,9 +16,12 @@ import com.orchords.ai.core.InputSchema
 import com.orchords.search.SearchResult.SearchResultItem
 import com.orchords.search.SearchService.Companion.httpClient
 import com.orchords.search.SearchService.Companion.json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-private const val TAG = "BraveSearchService"
+private const val MAX_BRAVE_QUERY_CHARS = 600
+private const val MAX_BRAVE_QUERY_WORDS = 75
+private const val MAX_BRAVE_RESULTS = 20
 
 object BraveSearchService : SearchService<SearchServiceOptions.BraveOptions> {
     override val name: String = "Brave"
@@ -40,7 +43,7 @@ object BraveSearchService : SearchService<SearchServiceOptions.BraveOptions> {
             properties = buildJsonObject {
                 put("query", buildJsonObject {
                     put("type", "string")
-                    put("description", "search keyword")
+                    put("description", "Focused web search query, up to 600 characters and 75 words.")
                 })
             },
             required = listOf("query")
@@ -54,38 +57,19 @@ object BraveSearchService : SearchService<SearchServiceOptions.BraveOptions> {
         serviceOptions: SearchServiceOptions.BraveOptions
     ): Result<SearchResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val query = params["query"]?.jsonPrimitive?.content ?: error("query is required")
-            val url = "https://api.search.brave.com/res/v1/web/search" +
-                    "?q=${java.net.URLEncoder.encode(query, "UTF-8")}" +
-                    "&count=${commonOptions.resultSize}"
+            val query = params["query"]?.jsonPrimitive?.content
+                ?: throw IllegalArgumentException("query is required")
+            val request = buildBraveSearchRequest(
+                query = query,
+                resultSize = commonOptions.resultSize,
+                apiKey = serviceOptions.apiKey,
+            )
 
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("Accept", "application/json")
-                .addHeader("X-Subscription-Token", serviceOptions.apiKey)
-                .build()
-
-            val response = httpClient.newCall(request).await()
-            if (response.isSuccessful) {
-                val responseBody = response.body.string()
-                val searchResponse = json.decodeFromString<BraveSearchResponse>(responseBody)
-
-                val items = searchResponse.web?.results?.map { result ->
-                    SearchResultItem(
-                        title = result.title,
-                        url = result.url,
-                        text = result.description ?: ""
-                    )
-                } ?: emptyList()
-
-                return@withContext Result.success(
-                    SearchResult(
-                        answer = null,
-                        items = items
-                    )
-                )
-            } else {
-                error("Brave search failed with code ${response.code}: ${response.message}")
+            httpClient.newCall(request).await().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("Brave search failed with HTTP ${response.code}")
+                }
+                parseBraveSearchResponse(response.readBoundedSearchBody())
             }
         }
     }
@@ -94,27 +78,67 @@ object BraveSearchService : SearchService<SearchServiceOptions.BraveOptions> {
         params: JsonObject,
         commonOptions: SearchCommonOptions,
         serviceOptions: SearchServiceOptions.BraveOptions
-    ): Result<ScrapedResult> {
-        return Result.failure(Exception("Scraping is not supported for Brave"))
-    }
-
-    @Serializable
-    data class BraveSearchResponse(
-        val type: String? = null,
-        val web: WebResults? = null,
-    )
-
-    @Serializable
-    data class WebResults(
-        val type: String? = null,
-        val results: List<WebResult>? = null,
-    )
-
-    @Serializable
-    data class WebResult(
-        val type: String,
-        val title: String,
-        val url: String,
-        val description: String? = null,
+    ): Result<ScrapedResult> = Result.failure(
+        UnsupportedOperationException("Scraping is not supported for Brave Search")
     )
 }
+
+internal fun buildBraveSearchRequest(
+    query: String,
+    resultSize: Int,
+    apiKey: String,
+): Request {
+    val normalizedQuery = query.trim()
+    require(normalizedQuery.isNotEmpty()) { "query is required" }
+    require(normalizedQuery.length <= MAX_BRAVE_QUERY_CHARS) {
+        "query must not exceed $MAX_BRAVE_QUERY_CHARS characters"
+    }
+    require(normalizedQuery.split(Regex("\\s+")).size <= MAX_BRAVE_QUERY_WORDS) {
+        "query must not exceed $MAX_BRAVE_QUERY_WORDS words"
+    }
+    require(apiKey.isNotBlank()) { "Brave Search API key is required" }
+
+    val url = "https://api.search.brave.com/res/v1/web/search".toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("q", normalizedQuery)
+        .addQueryParameter("count", resultSize.coerceIn(1, MAX_BRAVE_RESULTS).toString())
+        .build()
+
+    return Request.Builder()
+        .url(url)
+        .header("Accept", "application/json")
+        .header("X-Subscription-Token", apiKey)
+        .build()
+}
+
+internal fun parseBraveSearchResponse(raw: String): SearchResult {
+    val searchResponse = SearchService.json.decodeFromString<BraveSearchResponse>(raw)
+    val items = searchResponse.web?.results.orEmpty().take(MAX_BRAVE_RESULTS).map { result ->
+        SearchResultItem(
+            title = result.title,
+            url = result.url,
+            text = result.description ?: "",
+        )
+    }
+    return SearchResult(answer = null, items = items)
+}
+
+@Serializable
+internal data class BraveSearchResponse(
+    val type: String? = null,
+    val web: BraveWebResults? = null,
+)
+
+@Serializable
+internal data class BraveWebResults(
+    val type: String? = null,
+    val results: List<BraveWebResult>? = null,
+)
+
+@Serializable
+internal data class BraveWebResult(
+    val type: String,
+    val title: String,
+    val url: String,
+    val description: String? = null,
+)

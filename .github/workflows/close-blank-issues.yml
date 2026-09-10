@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   close-blank-issues:
-runs-on: Node_Runner
+    runs-on: Node_Runner
     timeout-minutes: 5
     permissions:
       issues: write

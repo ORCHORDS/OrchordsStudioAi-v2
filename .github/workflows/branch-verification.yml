@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   verify:
-runs-on: Node_Runner
+    runs-on: Node_Runner
     timeout-minutes: 20
     steps:
       - name: Checkout repository

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   maintain:
-runs-on: Node_Runner
+    runs-on: Node_Runner
     timeout-minutes: 20
     steps:
       - name: Prune shared state

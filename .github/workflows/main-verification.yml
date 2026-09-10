@@ -24,7 +24,7 @@ concurrency:
 jobs:
   verify:
     name: Main Verification
-runs-on: Node_Runner
+    runs-on: Node_Runner
     # Safety guard only, not a resource throttle. Cold Android graphs have more
     # time to finish while normal warm Lenovo runs should complete far sooner.
     timeout-minutes: 45

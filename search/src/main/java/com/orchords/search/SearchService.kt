@@ -1,9 +1,7 @@
 package com.orchords.search
 
 import android.content.Context
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -20,8 +18,6 @@ import okio.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resumeWithException
 import kotlin.uuid.Uuid
-
-private const val MAX_SEARCH_RESPONSE_BYTES = 1024L * 1024L
 
 interface SearchService<T : SearchServiceOptions> {
     val name: String
@@ -46,17 +42,11 @@ interface SearchService<T : SearchServiceOptions> {
     ): Result<ScrapedResult>
 
     companion object {
-        fun isRuntimeSupported(options: SearchServiceOptions): Boolean =
-            options is SearchServiceOptions.OrchordsAIOptions ||
-                options is SearchServiceOptions.BraveOptions
-
         @Suppress("UNCHECKED_CAST")
         fun <T : SearchServiceOptions> getService(options: T): SearchService<T> {
-            return when (options) {
-                is SearchServiceOptions.OrchordsAIOptions -> OrchordsAISearchService
-                is SearchServiceOptions.BraveOptions -> BraveSearchService
-                else -> UnsupportedSearchService
-            } as SearchService<T>
+            // OrchordsAI is the only search backend. Any legacy option stored by
+            // older installs is silently routed to OrchordsAISearchService.
+            return OrchordsAISearchService as SearchService<T>
         }
 
         @Volatile
@@ -82,34 +72,6 @@ interface SearchService<T : SearchServiceOptions> {
             }
         }
     }
-}
-
-internal object UnsupportedSearchService : SearchService<SearchServiceOptions> {
-    override val name: String = "Unsupported"
-
-    override fun parameters(options: SearchServiceOptions): InputSchema? = null
-    override fun scrapingParameters(options: SearchServiceOptions): InputSchema? = null
-
-    @Composable
-    override fun Description() {
-        Text(stringResource(R.string.search_provider_unsupported))
-    }
-
-    override suspend fun search(
-        params: JsonObject,
-        commonOptions: SearchCommonOptions,
-        serviceOptions: SearchServiceOptions,
-    ): Result<SearchResult> = Result.failure(
-        IllegalStateException("Saved search provider is not supported in this build")
-    )
-
-    override suspend fun scrape(
-        params: JsonObject,
-        commonOptions: SearchCommonOptions,
-        serviceOptions: SearchServiceOptions,
-    ): Result<ScrapedResult> = Result.failure(
-        IllegalStateException("Saved search provider is not supported in this build")
-    )
 }
 
 @Serializable
@@ -160,17 +122,6 @@ sealed class SearchServiceOptions {
     companion object {
         val DEFAULT = OrchordsAIOptions()
 
-        /** Search adapters intentionally exposed by the current product. */
-        val RUNTIME_TYPES = listOf(
-            OrchordsAIOptions::class,
-            BraveOptions::class,
-        )
-
-        /**
-         * Full legacy type-name registry retained only so older serialized
-         * settings remain readable and identifiable. Runtime exposure is
-         * governed by [RUNTIME_TYPES]/[SearchService.isRuntimeSupported].
-         */
         val TYPES = mapOf(
             BingLocalOptions::class to "Bing",
             OrchordsAIOptions::class to "Orchords Search",
@@ -407,17 +358,4 @@ internal suspend fun Call.await(): Response {
             }
         })
     }
-}
-
-internal fun Response.readBoundedSearchBody(maxBytes: Long = MAX_SEARCH_RESPONSE_BYTES): String {
-    val responseBody = body
-    val declaredLength = responseBody.contentLength()
-    if (declaredLength > maxBytes) {
-        throw IOException("Search provider response exceeded the allowed size")
-    }
-    val source = responseBody.source()
-    if (source.request(maxBytes + 1L)) {
-        throw IOException("Search provider response exceeded the allowed size")
-    }
-    return source.readUtf8()
 }

@@ -1,10 +1,11 @@
 package com.orchords.orchordsai.web
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,6 +58,7 @@ class WebServerManagerLifecycleTest {
     @Test
     fun `concurrent stop calls observe the gate contract without leaking state`() = runTest {
         val gate = ShutdownGate()
+        val dispatcher = StandardTestDispatcher(testScheduler)
 
         // Hold the shutdown gate before scheduling duplicate callers. This
         // proves the actual contract deterministically: while one shutdown is
@@ -67,7 +69,7 @@ class WebServerManagerLifecycleTest {
         assertTrue("first stop must own the shutdown gate", gate.enter())
 
         val duplicateResults = List(99) {
-            async(Dispatchers.IO) { gate.enter() }
+            async(dispatcher) { gate.enter() }
         }.awaitAll()
 
         assertTrue(
@@ -96,10 +98,11 @@ class WebServerManagerLifecycleTest {
         // observes the port as available. Without the fence, start would race
         // and find the port bound — the bug #346 explicitly reports.
         val gate = ShutdownGate()
+        val dispatcher = StandardTestDispatcher(testScheduler)
         val port = AtomicInteger(0)
         var startIssuedBeforeStopFinished = false
 
-        val stopJob = async(Dispatchers.IO) {
+        val stopJob = async(dispatcher) {
             if (!gate.enter()) return@async
             try {
                 port.set(8080)
@@ -109,10 +112,14 @@ class WebServerManagerLifecycleTest {
                 gate.exit()
             }
         }
+        // Start the simulated shutdown deterministically before scheduling the
+        // waiter. Both jobs share runTest's scheduler, so virtual delays are
+        // controlled by the test instead of depending on Dispatchers.IO timing.
+        runCurrent()
 
         // stopBlocking() must hold until gate exits so the port is released
         // by the time start() probes it.
-        async(Dispatchers.IO) {
+        async(dispatcher) {
             while (gate.isInFlight()) {
                 delay(5)
             }

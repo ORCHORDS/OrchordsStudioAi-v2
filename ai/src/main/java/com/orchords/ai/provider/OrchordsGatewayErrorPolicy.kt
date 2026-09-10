@@ -1,5 +1,6 @@
 package com.orchords.ai.provider
 
+import java.io.IOException
 import okhttp3.Interceptor
 import okhttp3.Response
 
@@ -38,7 +39,7 @@ data class GatewayError(
 
 class OrchordsGatewayException(
     val error: GatewayError,
-) : RuntimeException(error.userMessage)
+) : IOException(error.userMessage)
 
 /**
  * First-party HTTP failure boundary.

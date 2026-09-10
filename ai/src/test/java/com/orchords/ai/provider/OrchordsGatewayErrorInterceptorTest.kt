@@ -1,11 +1,18 @@
 package com.orchords.ai.provider
 
+import java.io.IOException
 import java.net.InetAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -61,6 +68,41 @@ class OrchordsGatewayErrorInterceptorTest {
         assertTrue(error.error.redacted)
         assertFalse(error.message.orEmpty().contains(sentinel))
         assertTrue(error.message.orEmpty().length < 160)
+    }
+
+    @Test
+    fun `auth failure is delivered directly through OkHttp async failure callback`() {
+        server.enqueue(
+            MockResponse.Builder()
+                .code(401)
+                .body("{\"error\":{\"message\":\"SENTINEL_AUTH_BODY\"}}")
+                .build()
+        )
+
+        val latch = CountDownLatch(1)
+        val failure = AtomicReference<IOException?>()
+        val responseCode = AtomicReference<Int?>()
+
+        client.newCall(orchordsRequest()).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                failure.set(e)
+                latch.countDown()
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use { responseCode.set(it.code) }
+                latch.countDown()
+            }
+        })
+
+        assertTrue("callback did not complete", latch.await(5, TimeUnit.SECONDS))
+        assertNull(responseCode.get())
+        val error = failure.get()
+        assertTrue(error is OrchordsGatewayException)
+        error as OrchordsGatewayException
+        assertEquals(GatewayErrorCategory.AUTH, error.error.category)
+        assertEquals(401, error.error.httpStatus)
+        assertFalse(error.message.orEmpty().contains("SENTINEL_AUTH_BODY"))
     }
 
     @Test

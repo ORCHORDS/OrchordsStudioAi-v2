@@ -41,7 +41,6 @@ import com.orchords.search.SearchService
 import com.orchords.orchordsai.data.sync.S3Sync
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.dsl.module
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -242,10 +241,6 @@ val dataSourceModule = module {
             }
             .addNetworkInterceptor(RequestLoggingInterceptor())
             .addInterceptor(AIRequestInterceptor())
-            .addInterceptor(HttpLoggingInterceptor().apply {
-                redactHeader("Proxy-Authorization")
-                level = HttpLoggingInterceptor.Level.HEADERS
-            })
             .build()
         client.also { SearchService.init(it, get()) }
     }

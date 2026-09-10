@@ -16,17 +16,33 @@ import com.orchords.orchordsai.utils.toLocalString
 import com.orchords.search.SearchService
 import com.orchords.search.SearchServiceOptions
 import java.time.LocalDate
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlin.uuid.Uuid
+
+private val ORCHORDS_GATEWAY_ORIGIN = ORCHORDS_GATEWAY_BASE_URL.toHttpUrl()
+
+/**
+ * The first-party gateway bearer is audience-bound to the canonical Orchords
+ * origin. A user-configured Search URL may keep its own Search credential, but
+ * it must never inherit the gateway bearer unless it resolves to that exact
+ * HTTPS origin (scheme, host and port).
+ */
+internal fun String.canReceiveOrchordsGatewayCredential(): Boolean {
+    val endpoint = toHttpUrlOrNull() ?: return false
+    return endpoint.scheme == ORCHORDS_GATEWAY_ORIGIN.scheme &&
+        endpoint.host == ORCHORDS_GATEWAY_ORIGIN.host &&
+        endpoint.port == ORCHORDS_GATEWAY_ORIGIN.port
+}
 
 /**
  * Resolve the one supported external-search configuration.
  *
  * Legacy search-provider records remain readable for migration, but they are
  * never routed at runtime. A configured Orchords Search endpoint/depth is
- * preserved, while the first-party gateway credential is reused when present.
- * The legacy search credential is only a compatibility fallback for an
- * existing Orchords Search record whose gateway credential has not yet been
- * configured.
+ * preserved. The first-party gateway credential is reused only when the Search
+ * endpoint is on the exact canonical Orchords gateway origin; otherwise the
+ * Search profile keeps only its own existing credential.
  */
 internal fun Settings.activeSearchOptions(): SearchServiceOptions.OrchordsAIOptions {
     val configured = searchServices
@@ -40,9 +56,13 @@ internal fun Settings.activeSearchOptions(): SearchServiceOptions.OrchordsAIOpti
         ?.apiKey
         .orEmpty()
 
-    return configured.copy(
-        apiKey = gatewayKey.ifBlank { configured.apiKey },
-    )
+    val effectiveKey = if (configured.baseUrl.canReceiveOrchordsGatewayCredential()) {
+        gatewayKey.ifBlank { configured.apiKey }
+    } else {
+        configured.apiKey
+    }
+
+    return configured.copy(apiKey = effectiveKey)
 }
 
 fun createSearchTools(settings: Settings): Set<Tool> {

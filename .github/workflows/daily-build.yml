@@ -16,7 +16,7 @@ concurrency:
 jobs:
   release:
     name: Daily Build
-    runs-on: main-verification
+runs-on: Node_Runner
     timeout-minutes: 45
     permissions:
       contents: write

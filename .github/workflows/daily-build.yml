@@ -78,6 +78,7 @@ jobs:
           test -d "$ANDROID_HOME/build-tools/36.0.0"
           test -d "$ANDROID_HOME/ndk/28.2.13676358"
           test -d "$ANDROID_HOME/cmake/3.22.1"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
 
       - name: Select build mode
         if: steps.gate.outputs.should_build == 'true'
@@ -101,24 +102,31 @@ jobs:
             echo "Signing secrets unavailable; publishing installable debug APKs."
           fi
 
-      - name: Read app version metadata
+      - name: Resolve monotonically increasing release version
         if: steps.gate.outputs.should_build == 'true'
         id: app_version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import pathlib
-          import re
+          case "$RUN_NUMBER" in
+            ''|*[!0-9]*)
+              echo "::error::github.run_number is not numeric: $RUN_NUMBER"
+              exit 1
+              ;;
+          esac
 
-          text = pathlib.Path("app/build.gradle.kts").read_text(encoding="utf-8")
-          name = re.search(r'versionName\s*=\s*"([^"]+)"', text)
-          code = re.search(r'versionCode\s*=\s*(\d+)', text)
-          if not name or not code:
-              raise SystemExit("Unable to resolve Android versionName/versionCode")
-          print(f"version_name={name.group(1)}")
-          print(f"version_code={code.group(1)}")
-          PY
+          version_name="0.1.${RUN_NUMBER}"
+          version_code=$((1000000 + RUN_NUMBER))
+          if [ "$version_code" -gt 2100000000 ]; then
+            echo "::error::Calculated Android versionCode exceeds supported range: $version_code"
+            exit 1
+          fi
+
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "Publishing Android version $version_name ($version_code)"
 
       - name: Prepare signing files
         if: steps.gate.outputs.should_build == 'true' && steps.build_mode.outputs.signed == 'true'
@@ -136,6 +144,8 @@ jobs:
         if: steps.gate.outputs.should_build == 'true'
         env:
           GRADLE_TASK: ${{ steps.build_mode.outputs.gradle_task }}
+          APP_VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
+          APP_VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
         shell: bash
         run: |
           set -euo pipefail
@@ -143,6 +153,8 @@ jobs:
           # Do not use -PciVerify here: app/build.gradle.kts disables ABI
           # splits under ciVerify, while Releases require the full APK matrix.
           ./gradlew --stacktrace \
+            -PreleaseVersionName="$APP_VERSION_NAME" \
+            -PreleaseVersionCode="$APP_VERSION_CODE" \
             :app:testDebugUnitTest \
             :ai:test \
             :workspace:test \
@@ -154,14 +166,18 @@ jobs:
         shell: bash
         run: rm -f app/app.key local.properties
 
-      - name: Verify complete APK matrix
+      - name: Verify complete APK matrix and embedded version
         if: steps.gate.outputs.should_build == 'true'
         env:
           APK_DIR: ${{ steps.build_mode.outputs.apk_dir }}
           VARIANT: ${{ steps.build_mode.outputs.variant }}
+          APP_VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
+          APP_VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
         shell: bash
         run: |
           set -euo pipefail
+          apkanalyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$apkanalyzer"
           expected=(
             "$APK_DIR/app-universal-$VARIANT.apk"
             "$APK_DIR/app-arm64-v8a-$VARIANT.apk"
@@ -172,6 +188,16 @@ jobs:
               echo "::error::Expected APK missing or empty: $apk"
               exit 1
             }
+            actual_name="$("$apkanalyzer" manifest version-name "$apk" | tr -d '\r\n')"
+            actual_code="$("$apkanalyzer" manifest version-code "$apk" | tr -d '\r\n')"
+            if [ "$actual_name" != "$APP_VERSION_NAME" ]; then
+              echo "::error::APK versionName mismatch for $apk: expected $APP_VERSION_NAME, got $actual_name"
+              exit 1
+            fi
+            if [ "$actual_code" != "$APP_VERSION_CODE" ]; then
+              echo "::error::APK versionCode mismatch for $apk: expected $APP_VERSION_CODE, got $actual_code"
+              exit 1
+            fi
           done
           actual_count="$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')"
           test "$actual_count" -eq 3 || {
@@ -213,6 +239,7 @@ jobs:
           BUILD_SHA: ${{ github.sha }}
           APP_VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
           APP_VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
+          RUN_NUMBER: ${{ github.run_number }}
         shell: bash
         run: |
           set -euo pipefail
@@ -227,6 +254,7 @@ jobs:
             echo
             echo "- App version: \`$APP_VERSION_NAME\`"
             echo "- Version code: \`$APP_VERSION_CODE\`"
+            echo "- Daily Build run: \`#$RUN_NUMBER\`"
             echo "- Commit: \`$BUILD_SHA\`"
             echo "- Built: $built_at"
             echo "- Package type: $build_type"
@@ -240,6 +268,7 @@ jobs:
             echo '## Verification'
             echo '- Unit tests and Android lint passed in this release workflow.'
             echo '- The workflow verified exactly the configured universal, arm64-v8a and x86_64 APK outputs.'
+            echo '- Every APK manifest was verified to embed the exact version name and version code shown above.'
             echo '- SHA-256 checksums were generated and verified before upload.'
             echo
             echo 'GitHub artifact attestations are intentionally not used here because this is a private user-owned repository and that GitHub feature is unavailable for this repository type.'
@@ -328,6 +357,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           BUILD_SHA: ${{ github.sha }}
+          APP_VERSION_NAME: ${{ steps.app_version.outputs.version_name }}
+          APP_VERSION_CODE: ${{ steps.app_version.outputs.version_code }}
         shell: bash
         run: |
           set -euo pipefail
@@ -340,27 +371,33 @@ jobs:
             "https://api.github.com/repos/$REPOSITORY/releases/latest" > /tmp/latest-release.json
           curl --fail-with-body --silent --show-error "${headers[@]}" \
             "https://api.github.com/repos/$REPOSITORY/git/ref/tags/latest" > /tmp/latest-ref.json
-          BUILD_SHA="$BUILD_SHA" python3 - <<'PY'
+          BUILD_SHA="$BUILD_SHA" APP_VERSION_NAME="$APP_VERSION_NAME" APP_VERSION_CODE="$APP_VERSION_CODE" python3 - <<'PY'
           import json
           import os
 
           release = json.load(open('/tmp/latest-release.json', encoding='utf-8'))
           ref = json.load(open('/tmp/latest-ref.json', encoding='utf-8'))
-          expected = {
+          expected_assets = {
               'orchords-studio-ai-universal.apk',
               'orchords-studio-ai-arm64-v8a.apk',
               'orchords-studio-ai-x86_64.apk',
+              'SHA256SUMS',
           }
-          apk_names = {
-              a['name'] for a in release.get('assets', [])
-              if a.get('name', '').endswith('.apk')
-          }
-          asset_names = {a['name'] for a in release.get('assets', [])}
+          assets = release.get('assets', [])
+          asset_names = {a.get('name') for a in assets}
           assert release.get('tag_name') == 'latest', release.get('tag_name')
+          assert release.get('target_commitish') == os.environ['BUILD_SHA'], release.get('target_commitish')
           assert release.get('draft') is False, 'Latest release is draft'
           assert release.get('prerelease') is False, 'Latest release is prerelease'
-          assert apk_names == expected, (apk_names, expected)
-          assert 'SHA256SUMS' in asset_names, asset_names
+          assert asset_names == expected_assets, (asset_names, expected_assets)
+          for asset in assets:
+              assert asset.get('state') == 'uploaded', (asset.get('name'), asset.get('state'))
+              assert int(asset.get('size', 0)) > 0, (asset.get('name'), asset.get('size'))
+          expected_title = f"v{os.environ['APP_VERSION_NAME']}"
+          assert expected_title in release.get('name', ''), release.get('name')
+          body = release.get('body', '')
+          assert f"App version: `{os.environ['APP_VERSION_NAME']}`" in body, 'Release notes version mismatch'
+          assert f"Version code: `{os.environ['APP_VERSION_CODE']}`" in body, 'Release notes versionCode mismatch'
           assert ref.get('object', {}).get('sha') == os.environ['BUILD_SHA'], ref
-          print('Latest release verified: exact SHA and complete 3-APK matrix')
+          print('Latest release verified: exact SHA, embedded build version metadata and complete 3-APK matrix')
           PY

@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.Packaging
+import org.gradle.api.GradleException
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.io.FileInputStream
@@ -12,6 +13,16 @@ plugins {
     alias(libs.plugins.baselineprofile)
 }
 
+val releaseVersionName = providers.gradleProperty("releaseVersionName").orNull?.also { value ->
+    if (!Regex("""\d+\.\d+\.\d+""").matches(value)) {
+        throw GradleException("releaseVersionName must be a numeric semantic version, got '$value'")
+    }
+}
+val releaseVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.let { value ->
+    value.toIntOrNull()?.takeIf { it in 1..2_100_000_000 }
+        ?: throw GradleException("releaseVersionCode must be an integer in 1..2100000000, got '$value'")
+}
+
 android {
     namespace = "com.orchords.orchordsai"
     compileSdk = 37
@@ -20,8 +31,11 @@ android {
         applicationId = "com.orchords.orchordsai"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1000
-        versionName = "0.1.0"
+        // Local builds retain the base development version. Daily Build passes
+        // releaseVersionName/releaseVersionCode so every published APK carries
+        // the exact monotonically-increasing release identity shown on GitHub.
+        versionCode = releaseVersionCode ?: 1000
+        versionName = releaseVersionName ?: "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

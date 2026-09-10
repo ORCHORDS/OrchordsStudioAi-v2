@@ -6,11 +6,18 @@ import org.junit.Test
 import java.io.File
 
 class ReleaseWorkflowPolicyTest {
+    private fun repoRoot(): File = File("..").canonicalFile
+
     private fun workflowSource(): String {
-        val repoRoot = File("..").canonicalFile
-        val workflow = repoRoot.resolve(".github/workflows/daily-build.yml")
+        val workflow = repoRoot().resolve(".github/workflows/daily-build.yml")
         require(workflow.isFile) { "daily-build.yml not found from ${File(".").canonicalPath}" }
         return workflow.readText()
+    }
+
+    private fun appBuildSource(): String {
+        val buildFile = repoRoot().resolve("app/build.gradle.kts")
+        require(buildFile.isFile) { "app/build.gradle.kts not found from ${File(".").canonicalPath}" }
+        return buildFile.readText()
     }
 
     @Test
@@ -34,6 +41,36 @@ class ReleaseWorkflowPolicyTest {
         }
         assertTrue(source.contains("Expected exactly 3 APK outputs"))
         assertTrue(source.contains("SHA256SUMS"))
+    }
+
+    @Test
+    fun `published apk version advances with each new Daily Build run`() {
+        val workflow = workflowSource()
+        val build = appBuildSource()
+
+        assertTrue(workflow.contains("RUN_NUMBER: \${{ github.run_number }}"))
+        assertTrue(workflow.contains("version_name=\"0.1.\${RUN_NUMBER}\""))
+        assertTrue(workflow.contains("version_code=\$((1000000 + RUN_NUMBER))"))
+        assertTrue(workflow.contains("-PreleaseVersionName=\"\$APP_VERSION_NAME\""))
+        assertTrue(workflow.contains("-PreleaseVersionCode=\"\$APP_VERSION_CODE\""))
+
+        assertTrue(build.contains("providers.gradleProperty(\"releaseVersionName\")"))
+        assertTrue(build.contains("providers.gradleProperty(\"releaseVersionCode\")"))
+        assertTrue(build.contains("versionCode = releaseVersionCode ?: 1000"))
+        assertTrue(build.contains("versionName = releaseVersionName ?: \"0.1.0\""))
+    }
+
+    @Test
+    fun `release verifies version embedded in every apk before publishing`() {
+        val source = workflowSource()
+        assertTrue(source.contains("cmdline-tools/latest/bin/apkanalyzer"))
+        assertTrue(source.contains("manifest version-name"))
+        assertTrue(source.contains("manifest version-code"))
+        assertTrue(source.contains("APK versionName mismatch"))
+        assertTrue(source.contains("APK versionCode mismatch"))
+        assertTrue(source.contains("Release notes version mismatch"))
+        assertTrue(source.contains("Release notes versionCode mismatch"))
+        assertTrue(source.contains("asset.get('state') == 'uploaded'"))
     }
 
     @Test

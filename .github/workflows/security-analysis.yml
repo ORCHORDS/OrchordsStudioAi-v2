@@ -119,12 +119,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv_root="/home/orchords/actions-toolcache/uv/${UV_VERSION}"
+          cache_root="${RUNNER_TOOL_CACHE:-$RUNNER_TEMP}/studioai-security"
+          uv_root="$cache_root/uv/${UV_VERSION}"
           uv_bin="$uv_root/uv"
-          tool_root="/home/orchords/actions-toolcache/Semgrep/${SEMGREP_VERSION}"
+          tool_root="$cache_root/Semgrep/${SEMGREP_VERSION}"
           tool_bin="$tool_root/bin"
-          mkdir -p /home/orchords/actions-toolcache/uv /home/orchords/actions-toolcache/Semgrep "$tool_bin"
-          exec 9>/home/orchords/actions-toolcache/Semgrep/.install.lock
+          mkdir -p "$cache_root/uv" "$cache_root/Semgrep" "$tool_bin"
+          exec 9>"$cache_root/Semgrep/.install.lock"
           flock 9
 
           if [ ! -x "$uv_bin" ]; then
@@ -141,7 +142,7 @@ jobs:
 
           export UV_TOOL_DIR="$tool_root/tools"
           export UV_TOOL_BIN_DIR="$tool_bin"
-          export UV_CACHE_DIR="/home/orchords/actions-toolcache/uv/cache"
+          export UV_CACHE_DIR="$cache_root/uv/cache"
           if [ ! -x "$tool_bin/semgrep" ] || ! "$tool_bin/semgrep" --version | grep -Fx "$SEMGREP_VERSION" >/dev/null; then
             rm -rf "$UV_TOOL_DIR" "$tool_bin"
             mkdir -p "$tool_bin"

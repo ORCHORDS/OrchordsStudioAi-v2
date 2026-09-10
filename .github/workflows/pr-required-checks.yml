@@ -16,7 +16,7 @@ concurrency:
 jobs:
   app_tests:
     name: App Unit Tests
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +35,7 @@ jobs:
 
   android_lint:
     name: Android Lint
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,7 +62,7 @@ jobs:
 
   ai_tests:
     name: AI Provider Tests
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,7 +87,7 @@ jobs:
       - app_tests
       - android_lint
       - ai_tests
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 5
     steps:
       - name: Require every verification shard to succeed
@@ -118,7 +118,7 @@ jobs:
 
   build:
     name: Daily Build
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -141,7 +141,7 @@ jobs:
 
   citations:
     name: Citation Integrity Tests
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -160,7 +160,7 @@ jobs:
 
   dependencies:
     name: Dependency Submission
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 25
     permissions:
       contents: write

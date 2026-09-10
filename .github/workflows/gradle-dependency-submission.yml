@@ -19,7 +19,7 @@ permissions: {}
 
 jobs:
   submit:
-    runs-on: Node_Runner
+    runs-on: main-verification
     timeout-minutes: 15
     permissions:
       contents: write

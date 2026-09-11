@@ -2,6 +2,7 @@ package com.orchords.orchordsai.ui.pages.assistant.detail
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -44,7 +44,7 @@ fun BackgroundPicker(
     var urlInput by remember { mutableStateOf("") }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
             val localUris = filesManager.createChatFilesByContents(listOf(it))
@@ -92,11 +92,7 @@ fun BackgroundPicker(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(
-                    onClick = {
-                        onUpdate(null)
-                    }
-                ) {
+                TextButton(onClick = { onUpdate(null) }) {
                     Text(stringResource(R.string.assistant_page_remove))
                 }
             }
@@ -113,20 +109,16 @@ fun BackgroundPicker(
 
     if (showPickOption) {
         AlertDialog(
-            onDismissRequest = {
-                showPickOption = false
-            },
-            title = {
-                Text(stringResource(R.string.assistant_page_select_background))
-            },
+            onDismissRequest = { showPickOption = false },
+            title = { Text(stringResource(R.string.assistant_page_select_background)) },
             text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
                             showPickOption = false
-                            imagePickerLauncher.launch("image/*")
+                            imagePickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -156,11 +148,7 @@ fun BackgroundPicker(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPickOption = false
-                    }
-                ) {
+                TextButton(onClick = { showPickOption = false }) {
                     Text(stringResource(R.string.assistant_page_cancel))
                 }
             }
@@ -169,12 +157,8 @@ fun BackgroundPicker(
 
     if (showUrlInput) {
         AlertDialog(
-            onDismissRequest = {
-                showUrlInput = false
-            },
-            title = {
-                Text(stringResource(R.string.assistant_page_enter_image_url))
-            },
+            onDismissRequest = { showUrlInput = false },
+            title = { Text(stringResource(R.string.assistant_page_enter_image_url)) },
             text = {
                 OutlinedTextField(
                     value = urlInput,
@@ -198,11 +182,7 @@ fun BackgroundPicker(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showUrlInput = false
-                    }
-                ) {
+                TextButton(onClick = { showUrlInput = false }) {
                     Text(stringResource(R.string.assistant_page_cancel))
                 }
             }

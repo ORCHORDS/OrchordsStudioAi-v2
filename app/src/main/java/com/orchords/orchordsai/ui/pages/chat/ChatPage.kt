@@ -67,6 +67,8 @@ import com.orchords.orchordsai.data.datastore.getCurrentChatModel
 import com.orchords.orchordsai.data.files.FilesManager
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.model.Conversation
+import com.orchords.orchordsai.data.model.ConversationRetention
+import com.orchords.orchordsai.data.model.TemporaryConversationRegistry
 import com.orchords.orchordsai.data.repository.WorkspaceRepository
 import com.orchords.orchordsai.service.ChatError
 import com.orchords.orchordsai.ui.components.ai.ChatAttachmentPickerActions
@@ -83,6 +85,7 @@ import com.orchords.orchordsai.ui.hooks.EditStateContent
 import com.orchords.orchordsai.ui.hooks.useEditState
 import com.orchords.orchordsai.utils.base64Decode
 import com.orchords.orchordsai.utils.navigateToChatPage
+import com.orchords.orchordsai.utils.navigateToTemporaryChatPage
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
@@ -91,6 +94,7 @@ import kotlin.uuid.Uuid
 
 @Composable
 fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
+    val isTemporary = TemporaryConversationRegistry.isTemporary(id.toString())
     val vm: ChatVM = koinViewModel(
         parameters = {
             parametersOf(id.toString())
@@ -108,17 +112,21 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     val enableWebSearch by vm.enableWebSearch.collectAsStateWithLifecycle()
     val errors by vm.errors.collectAsStateWithLifecycle()
 
+    LaunchedEffect(isTemporary, conversation.retention) {
+        if (isTemporary && conversation.retention != ConversationRetention.TEMPORARY) {
+            vm.updateConversation(conversation.copy(retention = ConversationRetention.TEMPORARY))
+        }
+    }
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val softwareKeyboardController = LocalSoftwareKeyboardController.current
 
-    // Handle back press when drawer is open
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch {
             drawerState.close()
         }
     }
 
-    // Hide keyboard when drawer is open
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) {
             softwareKeyboardController?.hide()
@@ -215,6 +223,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     onClearAllErrors = { vm.clearAllErrors() },
                     followPolicy = followPolicy,
                     onFollowPolicyChange = { followPolicy = it },
+                    temporary = isTemporary,
                 )
             }
         }
@@ -249,6 +258,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
                     onClearAllErrors = { vm.clearAllErrors() },
                     followPolicy = followPolicy,
                     onFollowPolicyChange = { followPolicy = it },
+                    temporary = isTemporary,
                 )
             }
             BackHandler(drawerState.isOpen) {
@@ -277,6 +287,7 @@ private fun ChatPageContent(
     onClearAllErrors: () -> Unit,
     followPolicy: ViewportFollowPolicy,
     onFollowPolicyChange: (ViewportFollowPolicy) -> Unit,
+    temporary: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
@@ -320,8 +331,12 @@ private fun ChatPageContent(
                     bigScreen = bigScreen,
                     drawerState = drawerState,
                     previewMode = previewMode,
+                    temporary = temporary,
                     onNewChat = {
                         navigateToChatPage(navController)
+                    },
+                    onNewTemporaryChat = {
+                        navigateToTemporaryChatPage(navController)
                     },
                     onClickMenu = {
                         previewMode = !previewMode
@@ -603,8 +618,10 @@ private fun TopBar(
     drawerState: DrawerState,
     bigScreen: Boolean,
     previewMode: Boolean,
+    temporary: Boolean,
     onClickMenu: () -> Unit,
     onNewChat: () -> Unit,
+    onNewTemporaryChat: () -> Unit,
     onUpdateTitle: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -643,12 +660,26 @@ private fun TopBar(
                     val model = settings.getCurrentChatModel()
                     val provider = model?.findProvider(providers = settings.providers, checkOverwrite = false)
                     Text(
-                        text = conversation.title.ifBlank { stringResource(R.string.chat_page_new_chat) },
+                        text = conversation.title.ifBlank {
+                            if (temporary) {
+                                stringResource(R.string.chat_page_temporary_chat)
+                            } else {
+                                stringResource(R.string.chat_page_new_chat)
+                            }
+                        },
                         maxLines = 1,
                         style = MaterialTheme.typography.bodyMedium,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (model != null && provider != null) {
+                    if (temporary) {
+                        Text(
+                            text = stringResource(R.string.chat_page_temporary_not_saved),
+                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                        )
+                    } else if (model != null && provider != null) {
                         Text(
                             text = "${assistant.name.ifBlank { stringResource(R.string.assistant_page_default_assistant) }} / ${model.displayName} (${provider.name})",
                             overflow = TextOverflow.Ellipsis,
@@ -669,6 +700,17 @@ private fun TopBar(
                 }
             ) {
                 Icon(if (previewMode) HugeIcons.Cancel01 else HugeIcons.LeftToRightListBullet, "Chat Options")
+            }
+
+            if (!temporary) {
+                IconButton(
+                    onClick = onNewTemporaryChat,
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_page_temporary_badge),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
 
             IconButton(

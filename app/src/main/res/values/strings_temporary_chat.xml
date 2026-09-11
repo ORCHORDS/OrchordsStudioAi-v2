@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_page_temporary_chat">Temporary chat</string>
+    <string name="chat_page_temporary_not_saved">Not saved to history</string>
+    <string name="chat_page_new_temporary_chat">New temporary chat</string>
+    <string name="chat_page_temporary_badge">Temp</string>
+</resources>

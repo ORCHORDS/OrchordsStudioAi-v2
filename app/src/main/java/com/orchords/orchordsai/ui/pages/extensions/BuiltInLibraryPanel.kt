@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -60,7 +59,7 @@ fun BuiltInLibraryPanel(modifier: Modifier = Modifier) {
     }
     var showBrowser by remember { mutableStateOf(false) }
     if (showBrowser) BuiltInLibraryBrowser(onDismiss = { showBrowser = false })
-    var installing by remember { mutableStateOf(false) }
+    var repairing by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<BuiltInLibraryInstallResult?>(null) }
 
@@ -70,28 +69,29 @@ fun BuiltInLibraryPanel(modifier: Modifier = Modifier) {
             Text(stringResource(R.string.library_install_inventory, catalog.modes.size, catalog.lorebooks.size, catalog.skills.size))
             Text(stringResource(R.string.library_install_selection_notice))
             TextButton(onClick = { showBrowser = true }) { Text(stringResource(R.string.library_browser_open)) }
-            Button(
-                enabled = !settings.init && !installing,
+            TextButton(
+                enabled = !settings.init && !repairing,
                 onClick = {
-                    if (!installing) {
-                        installing = true
+                    if (!repairing) {
+                        repairing = true
                         failed = false
                         result = null
                         scope.launch {
                             try {
-                                result = installer.installMissing()
+                                result = installer.installMissing(restoreRemovedSkills = true)
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (_: Exception) {
                                 failed = true
                             } finally {
-                                installing = false
+                                repairing = false
                             }
                         }
                     }
                 },
-            ) { Text(stringResource(R.string.library_install_missing)) }
-            if (installing) CircularProgressIndicator()
+            ) { Text(stringResource(R.string.library_repair_missing)) }
+            Text(stringResource(R.string.library_repair_notice), style = MaterialTheme.typography.bodySmall)
+            if (repairing) CircularProgressIndicator()
             result?.let { receipt ->
                 Text(
                     stringResource(R.string.library_install_result, receipt.addedModes, receipt.addedLorebooks, receipt.addedSkills, receipt.preservedSkills),

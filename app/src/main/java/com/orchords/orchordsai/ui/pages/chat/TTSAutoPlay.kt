@@ -39,7 +39,7 @@ fun TTSAutoPlay(vm: ChatVM, setting: Settings, conversation: Conversation) {
         update.segments.forEachIndexed { index, segment ->
             tts.speak(
                 text = segment,
-                flush = update.flushFirstSegment && index == 0,
+                flushCalled = update.flushFirstSegment && index == 0,
             )
         }
     }
@@ -62,7 +62,7 @@ fun TTSAutoPlay(vm: ChatVM, setting: Settings, conversation: Conversation) {
                 update.segments.forEachIndexed { index, segment ->
                     tts.speak(
                         text = segment,
-                        flush = update.flushFirstSegment && index == 0,
+                        flushCalled = update.flushFirstSegment && index == 0,
                     )
                 }
                 return@collect

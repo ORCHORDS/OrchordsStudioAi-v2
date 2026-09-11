@@ -150,10 +150,11 @@ class ImgGenVM(
                     ?: throw IllegalStateException("Provider not found")
 
                 val requestPrompt = _prompt.value
+                val requestedImageCount = _numberOfImages.value
                 val params = ImageGenerationParams(
                     model = model,
                     prompt = requestPrompt,
-                    numOfImages = _numberOfImages.value,
+                    numOfImages = requestedImageCount,
                     size = _size.value,
                     customHeaders = model.customHeaders,
                     customBody = model.customBodies
@@ -166,6 +167,7 @@ class ImgGenVM(
                     images = images,
                     prompt = requestPrompt,
                     modelName = model.displayName,
+                    outputCount = requestedImageCount,
                 )
             } catch (e: Exception) {
                 if(e is CancellationException) return@launch
@@ -195,11 +197,12 @@ class ImgGenVM(
 
                 val requestPrompt = _prompt.value
                 val sourceImages = _referenceImages.value
+                val requestedImageCount = _numberOfImages.value
                 val params = ImageEditParams(
                     model = model,
                     prompt = requestPrompt,
                     images = sourceImages,
-                    numOfImages = _numberOfImages.value,
+                    numOfImages = requestedImageCount,
                     size = _size.value,
                     customHeaders = model.customHeaders,
                     customBody = model.customBodies
@@ -212,6 +215,7 @@ class ImgGenVM(
                     images = images,
                     prompt = requestPrompt,
                     modelName = model.displayName,
+                    outputCount = requestedImageCount,
                     type = GenMediaEntity.TYPE_IMAGE_EDIT,
                     sourcePaths = sourceImages.joinToString("\n"),
                 )
@@ -233,52 +237,72 @@ class ImgGenVM(
         images: Flow<ImageGenerationItem>,
         prompt: String,
         modelName: String,
+        outputCount: Int,
         type: String = GenMediaEntity.TYPE_IMAGE_GENERATION,
         sourcePaths: String? = null,
     ) {
-        val finalImages = mutableListOf<GeneratedImage>()
-        var previewFile: File? = null
-        var finalIndex = 0
+        val slots = ImageGenerationSlots<GeneratedImage>(outputCount)
 
-        images.collect { item ->
-            if (item.partial) {
-                previewFile?.delete()
-                val imageFile = saveImagePreview(
-                    item = item,
-                    modelName = modelName,
-                    index = item.partialImageIndex ?: finalIndex,
-                )
-                previewFile = imageFile
-                _currentGeneratedImages.value = finalImages + GeneratedImage(
-                    id = 0,
-                    prompt = prompt,
-                    filePath = imageFile.absolutePath,
-                    timestamp = System.currentTimeMillis(),
-                    model = modelName
-                )
-            } else {
-                previewFile?.delete()
-                previewFile = null
-                val imageFile = saveImageToStorage(
-                    item = item,
-                    prompt = prompt,
-                    modelName = modelName,
-                    index = finalIndex,
-                    type = type,
-                    sourcePaths = sourcePaths,
-                )
-                finalImages.add(
-                    GeneratedImage(
+        try {
+            images.collect { item ->
+                if (item.partial) {
+                    val slotIndex = slots.resolvePartialIndex(item.partialImageIndex)
+                        ?: return@collect
+                    if (slots.isFinal(slotIndex)) return@collect
+
+                    val imageFile = saveImagePreview(
+                        item = item,
+                        modelName = modelName,
+                        index = slotIndex,
+                    )
+                    val generatedImage = GeneratedImage(
+                        id = 0,
+                        prompt = prompt,
+                        filePath = imageFile.absolutePath,
+                        timestamp = System.currentTimeMillis(),
+                        model = modelName
+                    )
+                    val mutation = slots.putPartial(slotIndex, generatedImage)
+                    if (!mutation.accepted) {
+                        imageFile.delete()
+                        return@collect
+                    }
+                    mutation.replacedPreview?.let { previous ->
+                        File(previous.filePath).delete()
+                    }
+                    _currentGeneratedImages.value = slots.snapshot()
+                } else {
+                    val slotIndex = slots.resolveFinalIndex(item.partialImageIndex)
+                        ?: return@collect
+                    if (slots.isFinal(slotIndex)) return@collect
+
+                    val imageFile = saveImageToStorage(
+                        item = item,
+                        prompt = prompt,
+                        modelName = modelName,
+                        index = slotIndex,
+                        type = type,
+                        sourcePaths = sourcePaths,
+                    )
+                    val generatedImage = GeneratedImage(
                         id = 0, // Will be updated after database insertion
                         prompt = prompt,
                         filePath = imageFile.absolutePath,
                         timestamp = System.currentTimeMillis(),
                         model = modelName
                     )
-                )
-                finalIndex++
-                _currentGeneratedImages.value = finalImages.toList()
+                    val mutation = slots.putFinal(slotIndex, generatedImage)
+                    mutation.replacedPreview?.let { previous ->
+                        File(previous.filePath).delete()
+                    }
+                    _currentGeneratedImages.value = slots.snapshot()
+                }
             }
+        } finally {
+            slots.drainPartials().forEach { preview ->
+                File(preview.filePath).delete()
+            }
+            _currentGeneratedImages.value = slots.snapshot()
         }
     }
 

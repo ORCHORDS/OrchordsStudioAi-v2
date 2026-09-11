@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="library_install_title">Built-in library</string>
-    <string name="library_install_inventory">%1$d modes · %2$d lorebooks · %3$d skills available to install</string>
-    <string name="library_install_selection_notice">Install missing definitions without replacing your edits. Then choose the modes, lorebooks and skills for each assistant. Installation does not connect accounts or enable tools.</string>
+    <string name="library_install_inventory">%1$d modes · %2$d lorebooks · %3$d skills bundled with ORCHORDS</string>
+    <string name="library_install_selection_notice">Bundled definitions are made available automatically without replacing your edits. Choose the modes, lorebooks and skills for each assistant. Bundled content does not connect accounts or enable tools.</string>
     <string name="library_install_missing">Install missing library content</string>
+    <string name="library_repair_missing">Repair bundled library</string>
+    <string name="library_repair_notice">Repair restores removed bundled skills and fills missing built-in content. Existing skill folders and edits are still preserved.</string>
     <string name="library_install_result">Added %1$d modes, %2$d lorebooks and %3$d skills. Preserved %4$d existing skill folders.</string>
     <string name="library_install_partial">Some skills could not be installed: %1$s. Existing content was preserved. Check storage and retry to install only the missing items.</string>
-    <string name="library_install_failed">Library installation could not finish. No account permissions were changed. Check storage or existing library data, then retry; already installed content is preserved.</string>
+    <string name="library_install_failed">Library repair could not finish. No account permissions were changed. Check storage or existing library data, then retry; already installed content is preserved.</string>
     <string name="library_open_prompts">Inspect modes and lorebooks</string>
     <string name="library_open_skills">Inspect installed skills</string>
     <string name="library_open_assistants">Choose content and tools per assistant</string>

@@ -36,7 +36,7 @@ class RootfsCutoverTest {
             val staging = root.childWithMarker("staging", "new")
 
             assertThrows(IllegalStateException::class.java) {
-                finalizeRootfsInstall(staging, linux) { error("patch failed") }
+                finalizeRootfsInstall(staging, linux, patch = { error("patch failed") })
             }
 
             assertEquals("old", File(linux, "marker").readText())
@@ -92,3 +92,4 @@ class RootfsCutoverTest {
             File(this, "marker").writeText(marker)
         }
 }
+

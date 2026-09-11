@@ -13,6 +13,7 @@ import com.orchords.orchordsai.data.db.dao.GenMediaDAO
 import com.orchords.orchordsai.data.db.dao.ManagedFileDAO
 import com.orchords.orchordsai.data.db.dao.MemoryDAO
 import com.orchords.orchordsai.data.db.dao.MessageNodeDAO
+import com.orchords.orchordsai.data.db.dao.ProviderUsageEventDAO
 import com.orchords.orchordsai.data.db.dao.WorkspaceDAO
 import com.orchords.orchordsai.data.db.entity.ConversationEntity
 import com.orchords.orchordsai.data.db.entity.FavoriteEntity
@@ -21,13 +22,14 @@ import com.orchords.orchordsai.data.db.entity.GenMediaEntity
 import com.orchords.orchordsai.data.db.entity.ManagedFileEntity
 import com.orchords.orchordsai.data.db.entity.MemoryEntity
 import com.orchords.orchordsai.data.db.entity.MessageNodeEntity
+import com.orchords.orchordsai.data.db.entity.ProviderUsageEventEntity
 import com.orchords.orchordsai.data.db.entity.WorkspaceEntity
 import com.orchords.orchordsai.data.db.migrations.Migration_16_17
 import com.orchords.orchordsai.data.db.migrations.Migration_22_23
 import com.orchords.orchordsai.data.db.migrations.Migration_8_9
 import com.orchords.orchordsai.utils.JsonInstant
 
-const val APP_DATABASE_SCHEMA_VERSION = 25
+const val APP_DATABASE_SCHEMA_VERSION = 26
 
 @Database(
     entities = [
@@ -39,6 +41,7 @@ const val APP_DATABASE_SCHEMA_VERSION = 25
         FavoriteEntity::class,
         WorkspaceEntity::class,
         FolderEntity::class,
+        ProviderUsageEventEntity::class,
     ],
     version = APP_DATABASE_SCHEMA_VERSION,
     autoMigrations = [
@@ -60,6 +63,7 @@ const val APP_DATABASE_SCHEMA_VERSION = 25
         AutoMigration(from = 21, to = 22),
         AutoMigration(from = 22, to = 23, spec = Migration_22_23::class),
         AutoMigration(from = 23, to = 24),
+        AutoMigration(from = 25, to = 26),
     ]
 )
 @TypeConverters(TokenUsageConverter::class)
@@ -79,6 +83,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun workspaceDao(): WorkspaceDAO
 
     abstract fun folderDao(): FolderDAO
+
+    abstract fun providerUsageEventDao(): ProviderUsageEventDAO
 }
 
 object TokenUsageConverter {

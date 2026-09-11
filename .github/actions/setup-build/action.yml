@@ -39,11 +39,21 @@ runs:
     - name: Set up pnpm
       # Shell guard instead of pnpm/action-setup: the action installs into
       # ~/setup-pnpm, which two concurrent agents sharing $HOME race on
-      # (ENOTEMPTY during cold start). npm is preinstalled on hosted images
-      # and the dedicated runner has pnpm globally already.
+      # (ENOTEMPTY during cold start). A stale Corepack shim can still satisfy
+      # command -v while failing at runtime, so verify pnpm 11 itself and fall
+      # back to a runner-temp install when the preinstalled command is broken.
       if: inputs.web == 'true'
       shell: bash
-      run: command -v pnpm >/dev/null 2>&1 || sudo npm install -g pnpm@11
+      run: |
+        set -euo pipefail
+        pnpm_version="$(pnpm --version 2>/dev/null || true)"
+        if ! printf '%s\n' "$pnpm_version" | grep -Eq '^11([.]|$)'; then
+          pnpm_root="$RUNNER_TEMP/pnpm-11"
+          npm install --global --prefix "$pnpm_root" pnpm@11
+          echo "$pnpm_root/bin" >> "$GITHUB_PATH"
+          export PATH="$pnpm_root/bin:$PATH"
+        fi
+        pnpm --version | grep -Eq '^11([.]|$)'
 
     - name: Set up Node (hosted)
       if: inputs.web == 'true' && inputs.gradle == 'true'

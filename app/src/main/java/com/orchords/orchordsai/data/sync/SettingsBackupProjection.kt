@@ -74,6 +74,7 @@ internal val PORTABLE_SETTINGS_V1_EXCLUDED_FIELDS = setOf(
     "webServerEnabled",
     "webServerJwtEnabled",
     "webServerAccessPassword",
+    "onboardingState",
 )
 
 internal fun encodePortableSettingsBackup(settings: Settings, json: Json): String {
@@ -131,6 +132,7 @@ private fun Settings.toPortableSettingsState(): Settings {
         webServerEnabled = false,
         webServerJwtEnabled = false,
         webServerAccessPassword = "",
+        onboardingState = defaults.onboardingState,
     )
 }
 

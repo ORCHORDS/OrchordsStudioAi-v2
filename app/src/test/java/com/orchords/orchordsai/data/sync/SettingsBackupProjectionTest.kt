@@ -10,6 +10,7 @@ import com.orchords.orchordsai.data.ai.mcp.McpOAuthState
 import com.orchords.orchordsai.data.ai.mcp.McpServerConfig
 import com.orchords.orchordsai.data.datastore.DisplaySetting
 import com.orchords.orchordsai.data.datastore.NetworkSetting
+import com.orchords.orchordsai.data.datastore.OnboardingState
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.WebDavConfig
 import com.orchords.orchordsai.data.model.Assistant
@@ -104,6 +105,7 @@ class SettingsBackupProjectionTest {
         webServerJwtEnabled = true,
         webServerAccessPassword = sentinel,
         webServerLocalhostOnly = true,
+        onboardingState = OnboardingState.COMPLETED,
     )
 
     @Test
@@ -114,6 +116,7 @@ class SettingsBackupProjectionTest {
         assertFalse(encoded.contains(sentinel))
         assertTrue(encoded.contains("KEEP_LOCAL_ASSISTANT_PROMPT"))
         assertTrue(encoded.contains("Keep nickname"))
+        assertFalse(encoded.contains("onboardingState"))
     }
 
     @Test
@@ -147,6 +150,7 @@ class SettingsBackupProjectionTest {
         assertTrue(restored.webServerAccessPassword.isBlank())
         assertEquals(9090, restored.webServerPort)
         assertTrue(restored.webServerLocalhostOnly)
+        assertEquals(OnboardingState.UNINITIALIZED, restored.onboardingState)
         assertFalse(json.encodeToString(Settings.serializer(), restored).contains(sentinel))
     }
 
@@ -161,6 +165,7 @@ class SettingsBackupProjectionTest {
         assertTrue(restored.mcpServers.isEmpty())
         assertTrue(restored.providers.filterIsInstance<ProviderSetting.OpenAI>().all { it.apiKey.isBlank() })
         assertTrue(restored.assistants.single().customHeaders.isEmpty())
+        assertEquals(OnboardingState.UNINITIALIZED, restored.onboardingState)
     }
 
     @OptIn(ExperimentalSerializationApi::class)

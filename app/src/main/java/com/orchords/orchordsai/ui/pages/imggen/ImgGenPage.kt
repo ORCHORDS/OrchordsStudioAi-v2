@@ -2,6 +2,7 @@ package com.orchords.orchordsai.ui.pages.imggen
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -342,7 +343,7 @@ private fun InputBar(
     val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val imagePickerLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { selectedUris ->
+        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { selectedUris ->
             if (selectedUris.isNotEmpty()) {
                 scope.launch {
                     val paths = selectedUris.mapNotNull { uri ->
@@ -413,7 +414,11 @@ private fun InputBar(
             }
 
             IconButton(
-                onClick = { imagePickerLauncher.launch("image/*") }
+                onClick = {
+                    imagePickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
             ) {
                 Icon(
                     imageVector = HugeIcons.Add01,

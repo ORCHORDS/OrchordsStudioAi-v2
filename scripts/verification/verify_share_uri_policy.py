@@ -196,7 +196,11 @@ def main() -> None:
             path.write_text(text, encoding="utf-8")
             fixtures.append(str(path))
         output = directory / "tests.jar"
-        subprocess.run([compiler, str(source), *fixtures, "-nowarn", "-include-runtime", "-d", str(output)], check=True, timeout=120)
+        subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
+            [compiler, str(source), *fixtures, "-nowarn", "-include-runtime", "-d", str(output)],
+            check=True,
+            timeout=120,
+        )
         subprocess.run([java, "-jar", str(output)], check=True, timeout=60)
 
 

@@ -39,9 +39,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.orchords.orchordsai.BuildConfig
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.Screen
+import com.orchords.orchordsai.release.resolveBuildIdentity
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.easteregg.EmojiBurstHost
 import com.orchords.orchordsai.ui.components.ui.CardGroup
@@ -54,6 +54,7 @@ import com.orchords.orchordsai.utils.plus
 fun SettingAboutPage() {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val context = LocalContext.current
+    val buildIdentity = remember(context) { resolveBuildIdentity(context) }
     val navController = LocalNavController.current
     val emojiOptions = remember {
         listOf(
@@ -138,7 +139,7 @@ fun SettingAboutPage() {
                             ),
                             leadingContent = { Icon(HugeIcons.Code, null) },
                             supportingContent = {
-                                Text("${BuildConfig.VERSION_NAME} / ${BuildConfig.VERSION_CODE}")
+                                Text(buildIdentity.displayText())
                             },
                             headlineContent = { Text(stringResource(R.string.about_page_version)) },
                         )

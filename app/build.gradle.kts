@@ -22,6 +22,9 @@ val releaseVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.
     value.toIntOrNull()?.takeIf { it in 1..2_100_000_000 }
         ?: throw GradleException("releaseVersionCode must be an integer in 1..2100000000, got '$value'")
 }
+val buildSha = providers.environmentVariable("GITHUB_SHA").orNull
+    ?.takeIf { Regex("[0-9a-fA-F]{40}").matches(it) }
+    ?: "local"
 
 android {
     namespace = "com.orchords.orchordsai"
@@ -92,11 +95,23 @@ android {
             }
             buildConfigField("String", "VERSION_NAME", "\"${android.defaultConfig.versionName}\"")
             buildConfigField("String", "VERSION_CODE", "\"${android.defaultConfig.versionCode}\"")
+            buildConfigField("String", "BUILD_SHA", "\"$buildSha\"")
+            buildConfigField(
+                "String",
+                "BUILD_CHANNEL",
+                "\"${if (releaseVersionName != null) "daily-release" else "local-release"}\"",
+            )
         }
         debug {
             applicationIdSuffix = ".debug"
             buildConfigField("String", "VERSION_NAME", "\"${android.defaultConfig.versionName}\"")
             buildConfigField("String", "VERSION_CODE", "\"${android.defaultConfig.versionCode}\"")
+            buildConfigField("String", "BUILD_SHA", "\"$buildSha\"")
+            buildConfigField(
+                "String",
+                "BUILD_CHANNEL",
+                "\"${if (releaseVersionName != null) "daily-debug" else "local-debug"}\"",
+            )
         }
     }
     compileOptions {

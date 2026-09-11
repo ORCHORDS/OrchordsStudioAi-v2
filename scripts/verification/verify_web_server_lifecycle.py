@@ -9,6 +9,10 @@ default; --coroutines-jar can select the repository-pinned dependency).
 """
 from __future__ import annotations
 
+# The subprocess argument vectors are built from validated tool paths and fixed
+# fixture/source paths; no shell is used.
+# nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
+
 import argparse
 from pathlib import Path
 import shutil

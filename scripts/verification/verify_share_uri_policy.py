@@ -8,6 +8,10 @@ SDK is needed. Unsupported symlink creation fails explicitly rather than passing
 """
 from __future__ import annotations
 
+# The subprocess argument vectors are built exclusively from validated tool paths,
+# repository fixtures, and fixed compiler flags; no shell is used.
+# nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
+
 import argparse
 from pathlib import Path
 import shutil

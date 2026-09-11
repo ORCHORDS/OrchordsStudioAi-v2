@@ -32,8 +32,16 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
 
     private fun allWorkspaces(): List<WorkspaceEntity> = runBlocking { dao().getAll() }
 
-    private fun workspaceName(root: String): String =
-        allWorkspaces().firstOrNull { it.root == root }?.name ?: root
+    private fun workspaceByRoot(root: String): WorkspaceEntity? = runBlocking { dao().getByRoot(root) }
+
+    private fun workspaceName(root: String): String = workspaceByRoot(root)?.name ?: root
+
+    private fun requireAuthoritativeWorkspace(target: DocId): DocId {
+        if (!target.isRoot) {
+            require(workspaceByRoot(target.root) != null) { "Unknown Workspace document" }
+        }
+        return target
+    }
 
     override fun onCreate(): Boolean = true
 
@@ -56,7 +64,7 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
 
     override fun queryDocument(documentId: String, projection: Array<String>?): Cursor {
         val cursor = MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION)
-        val target = parseDocId(documentId)
+        val target = requireAuthoritativeWorkspace(parseDocId(documentId))
         if (target.isRoot) {
             cursor.newRow().apply {
                 add(Document.COLUMN_DOCUMENT_ID, ROOT_DOC_ID)
@@ -81,7 +89,7 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
         sortOrder: String?,
     ): Cursor {
         val cursor = MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION)
-        val parent = parseDocId(parentDocumentId)
+        val parent = requireAuthoritativeWorkspace(parseDocId(parentDocumentId))
         if (parent.isRoot) {
             for (ws in allWorkspaces()) {
                 val dir = manager().filesDir(ws.root).also { it.mkdirs() }
@@ -106,7 +114,7 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
         mode: String,
         signal: CancellationSignal?,
     ): ParcelFileDescriptor {
-        val target = parseDocId(documentId)
+        val target = requireAuthoritativeWorkspace(parseDocId(documentId))
         require(!target.isRoot) { "Cannot open root as a document" }
         val file = resolveFile(target.root, target.relPath)
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.parseMode(mode))
@@ -117,9 +125,8 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
         mimeType: String,
         displayName: String,
     ): String {
-        val parent = parseDocId(parentDocumentId)
+        val parent = requireAuthoritativeWorkspace(parseDocId(parentDocumentId))
         require(!parent.isRoot) { "Cannot create document at root" }
-        manager().ensureWorkspace(parent.root)
         val parentDir = resolveFile(parent.root, parent.relPath)
         require(parentDir.isDirectory) { "Parent is not a directory" }
         val target = uniqueChild(parentDir, displayName)
@@ -133,7 +140,7 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
     }
 
     override fun deleteDocument(documentId: String) {
-        val target = parseDocId(documentId)
+        val target = requireAuthoritativeWorkspace(parseDocId(documentId))
         require(!target.isRoot && target.relPath.isNotEmpty()) { "Cannot delete this document" }
         val file = resolveFile(target.root, target.relPath)
         val ok = if (file.isDirectory) file.deleteRecursively() else file.delete()
@@ -142,7 +149,7 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
     }
 
     override fun renameDocument(documentId: String, displayName: String): String {
-        val target = parseDocId(documentId)
+        val target = requireAuthoritativeWorkspace(parseDocId(documentId))
         require(!target.isRoot && target.relPath.isNotEmpty()) { "Cannot rename this document" }
         val file = resolveFile(target.root, target.relPath)
         val dest = File(file.parentFile, displayName.replace('/', '_'))
@@ -153,8 +160,8 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
     }
 
     override fun copyDocument(sourceDocumentId: String, targetParentDocumentId: String): String {
-        val source = parseDocId(sourceDocumentId)
-        val targetParent = parseDocId(targetParentDocumentId)
+        val source = requireAuthoritativeWorkspace(parseDocId(sourceDocumentId))
+        val targetParent = requireAuthoritativeWorkspace(parseDocId(targetParentDocumentId))
         require(!source.isRoot && source.relPath.isNotEmpty()) { "Cannot copy this document" }
         require(!targetParent.isRoot) { "Cannot copy to root" }
         val srcFile = resolveFile(source.root, source.relPath)
@@ -174,8 +181,8 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
         sourceParentDocumentId: String?,
         targetParentDocumentId: String,
     ): String {
-        val source = parseDocId(sourceDocumentId)
-        val targetParent = parseDocId(targetParentDocumentId)
+        val source = requireAuthoritativeWorkspace(parseDocId(sourceDocumentId))
+        val targetParent = requireAuthoritativeWorkspace(parseDocId(targetParentDocumentId))
         require(!source.isRoot && source.relPath.isNotEmpty()) { "Cannot move this document" }
         require(!targetParent.isRoot) { "Cannot move to root" }
         val srcFile = resolveFile(source.root, source.relPath)
@@ -197,20 +204,22 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
     }
 
     override fun getDocumentType(documentId: String): String {
-        val target = parseDocId(documentId)
+        val target = requireAuthoritativeWorkspace(parseDocId(documentId))
         if (target.isRoot) return Document.MIME_TYPE_DIR
         return mimeOf(resolveFile(target.root, target.relPath))
     }
 
-    override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean {
+    override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean = runCatching {
         val parent = parseDocId(parentDocumentId)
         val child = parseDocId(documentId)
-        if (child.isRoot) return false
-        if (parent.isRoot) return true
-        if (parent.root != child.root) return false
-        if (parent.relPath.isEmpty()) return true
-        return child.relPath == parent.relPath || child.relPath.startsWith(parent.relPath + "/")
-    }
+        if (child.isRoot) return@runCatching false
+        if (workspaceByRoot(child.root) == null) return@runCatching false
+        if (parent.isRoot) return@runCatching true
+        if (workspaceByRoot(parent.root) == null) return@runCatching false
+        if (parent.root != child.root) return@runCatching false
+        if (parent.relPath.isEmpty()) return@runCatching true
+        child.relPath == parent.relPath || child.relPath.startsWith(parent.relPath + "/")
+    }.getOrDefault(false)
 
     // --- helpers ---
 
@@ -265,7 +274,6 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
 
     private fun resolveFile(root: String, relPath: String): File {
         val base = manager().filesDir(root).canonicalFile
-        base.mkdirs()
         val normalized = relPath.trim().trimStart('/')
         require(!normalized.contains('\u0000')) { "Path contains invalid character" }
         if (normalized.isEmpty()) return base

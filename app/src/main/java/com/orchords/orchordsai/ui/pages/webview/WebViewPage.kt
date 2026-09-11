@@ -40,6 +40,8 @@ import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.webview.WEB_VIEW_BASE_URL
 import com.orchords.orchordsai.ui.components.webview.WebView
 import com.orchords.orchordsai.ui.components.webview.WebViewContentCache
+import com.orchords.orchordsai.ui.components.webview.WebViewSecurityProfile
+import com.orchords.orchordsai.ui.components.webview.isAllowedWebViewMainFrameUrl
 import com.orchords.orchordsai.ui.components.webview.rememberWebViewState
 import com.orchords.orchordsai.ui.theme.JetbrainsMono
 
@@ -50,6 +52,7 @@ fun WebViewPage(url: String, contentId: String) {
     val state = if (url.isNotEmpty()) {
         rememberWebViewState(
             url = url,
+            securityProfile = WebViewSecurityProfile.EXTERNAL_WEB,
             settings = {
                 builtInZoomControls = true
                 displayZoomControls = false
@@ -64,6 +67,7 @@ fun WebViewPage(url: String, contentId: String) {
             data = content,
             baseUrl = WEB_VIEW_BASE_URL,
             mimeType = "text/html",
+            securityProfile = WebViewSecurityProfile.INTERNAL_TRUSTED,
             settings = {
                 builtInZoomControls = true
                 displayZoomControls = false
@@ -108,9 +112,7 @@ fun WebViewPage(url: String, contentId: String) {
                     }
 
                     val urlHandler = LocalUriHandler.current
-                    IconButton(
-                        onClick = { showDropdown = true }
-                    ) {
+                    IconButton(onClick = { showDropdown = true }) {
                         Icon(HugeIcons.MoreVertical, contentDescription = "More options")
 
                         DropdownMenu(
@@ -122,11 +124,14 @@ fun WebViewPage(url: String, contentId: String) {
                                 leadingIcon = { Icon(HugeIcons.Earth, contentDescription = null) },
                                 onClick = {
                                     showDropdown = false
-                                    state.currentUrl?.let { url ->
-                                        if (url.isNotBlank()) {
-                                            urlHandler.openUri(url)
+                                    state.currentUrl
+                                        ?.takeIf {
+                                            isAllowedWebViewMainFrameUrl(
+                                                WebViewSecurityProfile.EXTERNAL_WEB,
+                                                it,
+                                            )
                                         }
-                                    }
+                                        ?.let(urlHandler::openUri)
                                 }
                             )
                             DropdownMenuItem(

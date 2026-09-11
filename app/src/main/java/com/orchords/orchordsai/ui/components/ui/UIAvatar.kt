@@ -206,6 +206,7 @@ fun UIAvatar(
             }
         }
 
+        // Show edit icon when editable
         if (onUpdate != null) {
             Box(
                 modifier = Modifier
@@ -229,10 +230,16 @@ fun UIAvatar(
 
     if (showPickOption) {
         AlertDialog(
-            onDismissRequest = { showPickOption = false },
-            title = { Text(text = stringResource(id = R.string.avatar_change_avatar)) },
+            onDismissRequest = {
+                showPickOption = false
+            },
+            title = {
+                Text(text = stringResource(id = R.string.avatar_change_avatar))
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Button(
                         onClick = {
                             showPickOption = false
@@ -275,7 +282,11 @@ fun UIAvatar(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showPickOption = false }) {
+                TextButton(
+                    onClick = {
+                        showPickOption = false
+                    }
+                ) {
                     Text(stringResource(id = R.string.avatar_cancel))
                 }
             }
@@ -284,7 +295,9 @@ fun UIAvatar(
 
     if (showEmojiPicker) {
         ModalBottomSheet(
-            onDismissRequest = { showEmojiPicker = false },
+            onDismissRequest = {
+                showEmojiPicker = false
+            },
             sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
         ) {
             EmojiPicker(
@@ -302,8 +315,12 @@ fun UIAvatar(
 
     if (showUrlInput) {
         AlertDialog(
-            onDismissRequest = { showUrlInput = false },
-            title = { Text(text = stringResource(id = R.string.avatar_url_dialog_title)) },
+            onDismissRequest = {
+                showUrlInput = false
+            },
+            title = {
+                Text(text = stringResource(id = R.string.avatar_url_dialog_title))
+            },
             text = {
                 OutlinedTextField(
                     value = urlInput,
@@ -326,7 +343,11 @@ fun UIAvatar(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showUrlInput = false }) {
+                TextButton(
+                    onClick = {
+                        showUrlInput = false
+                    }
+                ) {
                     Text(stringResource(id = R.string.avatar_cancel))
                 }
             }
@@ -351,6 +372,11 @@ private fun ProceduralAvatar(name: String, modifier: Modifier = Modifier) {
 }
 
 private fun vercelAvatarColors(name: String): Pair<Color, Color> {
+    // SHA-256 here (migrated from SHA-1 on 2026-08-31 during security
+    // remediation). The hue comes from the sum of digest bytes, so this
+    // migration is the documented one-time palette re-derivation: avatar
+    // colors reshuffle exactly once for every existing assistant /
+    // conversation and stay stable from this point on.
     val bytes = MessageDigest.getInstance("SHA-256").digest(name.toByteArray(Charsets.UTF_8))
     val sum = bytes.fold(0) { acc, b -> acc + (b.toInt() and 0xFF) }
     val hue = (sum % 360).toFloat()
@@ -384,9 +410,23 @@ private fun PreviewUIAvatar() {
         modifier = Modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        UIAvatar(name = "John Doe", value = Avatar.Dummy, loading = false)
-        UIAvatar(name = "John Doe", value = Avatar.Dummy, loading = loading)
-        Button(onClick = { loading = !loading }) {
+        UIAvatar(
+            name = "John Doe",
+            value = Avatar.Dummy,
+            loading = false
+        )
+
+        UIAvatar(
+            name = "John Doe",
+            value = Avatar.Dummy,
+            loading = loading,
+        )
+
+        Button(
+            onClick = {
+                loading = !loading
+            }
+        ) {
             Text("Toggle Loading")
         }
     }

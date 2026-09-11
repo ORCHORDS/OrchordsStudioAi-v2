@@ -16,7 +16,7 @@ class RootfsCutoverTest {
             val linux = root.childWithMarker("linux", "old")
             val staging = root.childWithMarker("staging", "new")
 
-            finalizeRootfsInstall(staging, linux) { staged ->
+            finalizeRootfsInstall(staging, linux, patch = { staged ->
                 File(staged, "patched").writeText("yes")
             }
 
@@ -92,4 +92,5 @@ class RootfsCutoverTest {
             File(this, "marker").writeText(marker)
         }
 }
+
 

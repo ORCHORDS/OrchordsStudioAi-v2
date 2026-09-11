@@ -15,11 +15,11 @@ import com.orchords.orchordsai.data.datastore.WebDavConfig
 import com.orchords.orchordsai.data.datastore.validateSettingsPromptContent
 import com.orchords.orchordsai.data.sync.DATABASE_BACKUP_ENTRY
 import com.orchords.orchordsai.data.sync.DatabaseSnapshotService
+import com.orchords.orchordsai.data.sync.allocateBackupRestoreStagingFile
 import com.orchords.orchordsai.data.sync.decodePortableSettingsBackup
 import com.orchords.orchordsai.data.sync.encodePortableSettingsBackup
 import com.orchords.orchordsai.data.sync.newBackupFileName
 import com.orchords.orchordsai.data.sync.requireSafeBackupDisplayName
-import com.orchords.orchordsai.data.sync.resolveBackupCacheFile
 import com.orchords.orchordsai.utils.fileSizeToString
 import java.io.File
 import java.io.FileInputStream
@@ -77,13 +77,12 @@ class WebDavSync(
     }
 
     suspend fun restore(config: WebDavConfig, item: WebDavBackupItem) = withContext(Dispatchers.IO) {
-        val client = getClient(config)
-        val safeDisplayName = requireSafeBackupDisplayName(item.displayName)
-        val backupFile = resolveBackupCacheFile(context.cacheDir, safeDisplayName)
+        requireSafeBackupDisplayName(item.displayName)
+        val backupFile = allocateBackupRestoreStagingFile(context.cacheDir)
 
         try {
-            Log.i(TAG, "restore: Downloading $safeDisplayName")
-            client.downloadToFile(safeDisplayName, backupFile).getOrThrow()
+            Log.i(TAG, "restore: Downloading validated remote backup")
+            downloadWebDavResourceToFile(config, httpClient, item.href, backupFile).getOrThrow()
             Log.i(TAG, "restore: Downloaded ${backupFile.length().fileSizeToString()}")
             restoreFromBackupFile(backupFile, config)
         } finally {

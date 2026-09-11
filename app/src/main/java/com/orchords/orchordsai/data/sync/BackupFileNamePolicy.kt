@@ -24,3 +24,15 @@ internal fun resolveBackupCacheFile(cacheDir: File, displayName: String): File {
     }
     return target
 }
+
+/**
+ * Allocate local restore staging independently from any remote WebDAV display metadata.
+ * The returned file already exists and is always a direct child of [cacheDir].
+ */
+internal fun allocateBackupRestoreStagingFile(cacheDir: File): File {
+    val root = cacheDir.canonicalFile
+    require(root.isDirectory || root.mkdirs()) { "Backup cache directory is unavailable" }
+    val target = File.createTempFile("orchords-restore-", ".zip", root).canonicalFile
+    require(target.parentFile == root) { "Invalid backup staging path" }
+    return target
+}

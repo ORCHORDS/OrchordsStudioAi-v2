@@ -27,12 +27,27 @@ jobs:
           persist-credentials: false
           clean: false
 
-      - name: Verify pnpm and Node on private runner
+      - name: Set up pnpm 11 and verify Node on private runner
         shell: bash
         run: |
           set -euo pipefail
           node -v | grep -q '^v22'
-          command -v pnpm >/dev/null
+
+          runner_slug="$(printf '%s' "$RUNNER_NAME" | tr -cs 'A-Za-z0-9_.-' '-')"
+          tool_root="${RUNNER_TOOL_CACHE:-$RUNNER_TEMP}"
+          pnpm_root="$tool_root/pnpm-11-$runner_slug"
+          mkdir -p "$pnpm_root"
+
+          pnpm_version=''
+          if command -v pnpm >/dev/null 2>&1; then
+            pnpm_version="$(pnpm --version 2>/dev/null || true)"
+          fi
+          if ! printf '%s\n' "$pnpm_version" | grep -Eq '^11([.]|$)'; then
+            npm install --global --prefix "$pnpm_root" pnpm@11
+          fi
+          echo "$pnpm_root/bin" >> "$GITHUB_PATH"
+          export PATH="$pnpm_root/bin:$PATH"
+          pnpm --version | grep -Eq '^11([.]|$)'
 
       - name: Audit web-ui dependency graph
         working-directory: web-ui

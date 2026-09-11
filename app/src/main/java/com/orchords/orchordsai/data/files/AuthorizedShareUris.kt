@@ -18,7 +18,10 @@ suspend fun FilesManager.createManagedUploadShareUri(
     file: File,
 ): Uri {
     val filesDir = context.filesDir.canonicalFile
-    val uploadDir = File(filesDir, FileFolders.UPLOAD).canonicalFile
+    // Canonicalize the Android parent, not the allowed child: following a
+    // redirected upload root would redefine which private files are shareable.
+    val uploadDir = File(filesDir, FileFolders.UPLOAD)
+    require(uploadDir.canonicalFile == uploadDir) { "Managed share root is redirected" }
     val candidate = file.canonicalFile
     require(candidate.isFile) { "Managed share file does not exist" }
     require(candidate.toPath().startsWith(uploadDir.toPath())) {
@@ -47,7 +50,8 @@ fun createStagedShareUri(
     file: File,
     root: StagedShareRoot,
 ): Uri {
-    val allowedRoot = File(context.cacheDir, root.directoryName).canonicalFile
+    val allowedRoot = File(context.cacheDir.canonicalFile, root.directoryName)
+    require(allowedRoot.canonicalFile == allowedRoot) { "Staged share root is redirected" }
     val candidate = file.canonicalFile
     require(candidate.isFile) { "Staged share file does not exist" }
     require(candidate.toPath().startsWith(allowedRoot.toPath())) {

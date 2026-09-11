@@ -23,6 +23,7 @@ import com.orchords.orchordsai.data.files.FilesManager
 import com.orchords.orchordsai.data.model.Conversation
 import com.orchords.orchordsai.data.model.ConversationLoadState
 import com.orchords.orchordsai.data.model.MessageNode
+import com.orchords.orchordsai.data.model.TemporaryConversationRegistry
 import com.orchords.orchordsai.data.model.allowsDurablePersistence
 import com.orchords.orchordsai.utils.JsonInstant
 import java.time.Instant
@@ -184,7 +185,7 @@ class ConversationRepository(
     suspend fun countConversations(): Int = conversationDAO.countAll()
 
     suspend fun insertConversation(conversation: Conversation) {
-        if (!conversation.retention.allowsDurablePersistence()) return
+        if (!conversation.allowsRepositoryPersistence()) return
         requireCompleteConversationForRewrite(conversation)
         database.withTransaction {
             conversationDAO.insert(conversationToConversationEntity(conversation))
@@ -194,7 +195,7 @@ class ConversationRepository(
     }
 
     suspend fun updateConversation(conversation: Conversation) {
-        if (!conversation.retention.allowsDurablePersistence()) return
+        if (!conversation.allowsRepositoryPersistence()) return
         requireCompleteConversationForRewrite(conversation)
         database.withTransaction {
             conversationDAO.update(conversationToConversationEntity(conversation))
@@ -205,7 +206,7 @@ class ConversationRepository(
     }
 
     suspend fun deleteConversation(conversation: Conversation) {
-        if (!conversation.retention.allowsDurablePersistence()) return
+        if (!conversation.allowsRepositoryPersistence()) return
         val fullConversation = if (conversation.messageNodes.isEmpty()) {
             getConversationById(conversation.id) ?: conversation
         } else conversation
@@ -246,7 +247,7 @@ class ConversationRepository(
     }
 
     fun conversationToConversationEntity(conversation: Conversation): ConversationEntity {
-        require(conversation.retention.allowsDurablePersistence()) {
+        require(conversation.allowsRepositoryPersistence()) {
             "Temporary conversations cannot be serialized into the durable conversation store"
         }
         require(conversation.messageNodes.none { node -> node.messages.any { it.hasBase64Part() } })
@@ -358,6 +359,10 @@ class ConversationRepository(
         // dangling blob that the orphan-row cleanup pass can pick up later.
         previousBlobIds.forEach { messageNodePayloadStore.delete(it) }
     }
+
+    private fun Conversation.allowsRepositoryPersistence(): Boolean =
+        retention.allowsDurablePersistence() &&
+            !TemporaryConversationRegistry.isTemporary(id.toString())
 }
 
 data class LightConversationEntity(

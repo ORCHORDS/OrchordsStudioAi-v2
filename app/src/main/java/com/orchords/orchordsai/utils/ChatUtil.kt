@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import com.orchords.ai.ui.UIMessage
 import com.orchords.orchordsai.Screen
+import com.orchords.orchordsai.data.model.TemporaryConversationRegistry
 import com.orchords.orchordsai.ui.context.Navigator
 import kotlin.uuid.Uuid
 
@@ -26,6 +27,22 @@ fun navigateToChatPage(
             nodeId = nodeId?.toString(),
         )
     )
+}
+
+fun navigateToTemporaryChatPage(
+    navigator: Navigator,
+    initText: String? = null,
+    initFiles: List<Uri> = emptyList(),
+): Uuid {
+    val chatId = Uuid.random()
+    TemporaryConversationRegistry.markTemporary(chatId.toString())
+    navigateToChatPage(
+        navigator = navigator,
+        chatId = chatId,
+        initText = initText,
+        initFiles = initFiles,
+    )
+    return chatId
 }
 
 fun Context.copyMessageToClipboard(message: UIMessage) {

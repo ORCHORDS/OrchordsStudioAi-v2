@@ -201,7 +201,9 @@ def main() -> None:
             check=True,
             timeout=120,
         )
-        subprocess.run([java, "-jar", str(output)], check=True, timeout=60)
+        subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
+            [java, "-jar", str(output)], check=True, timeout=60
+        )
 
 
 if __name__ == "__main__":

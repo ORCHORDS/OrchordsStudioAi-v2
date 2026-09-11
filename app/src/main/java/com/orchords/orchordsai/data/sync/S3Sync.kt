@@ -3,16 +3,15 @@ package com.orchords.orchordsai.data.sync
 import android.content.Context
 import android.util.Log
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import com.orchords.orchordsai.data.files.FileFolders
 import com.orchords.orchordsai.data.files.SafeFilePaths
 import com.orchords.orchordsai.data.files.SkillPaths
-import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.SettingsStore
 import com.orchords.orchordsai.data.datastore.validateSettingsPromptContent
-import com.orchords.orchordsai.data.datastore.migration.SettingsJsonMigrator
 import com.orchords.orchordsai.data.sync.s3.S3Client
 import com.orchords.orchordsai.data.sync.s3.S3Config
 import com.orchords.orchordsai.utils.fileSizeToString
@@ -132,7 +131,7 @@ class S3Sync(
                 addVirtualFileToZip(
                     zipOut = zipOut,
                     name = "settings.json",
-                    content = json.encodeToString(settingsStore.settingsFlow.value)
+                    content = encodePortableSettingsBackup(settingsStore.settingsFlow.value, json)
                 )
 
                 if (config.items.contains(S3Config.BackupItem.DATABASE)) {
@@ -208,13 +207,14 @@ class S3Sync(
                                 val settingsJson = zipIn.readBytes().toString(Charsets.UTF_8)
                                 Log.i(TAG, "restoreFromBackupFile: Restoring settings")
                                 try {
-                                    val migratedJson = SettingsJsonMigrator.migrate(settingsJson)
-                                    val settings = json.decodeFromString<Settings>(migratedJson)
+                                    val settings = decodePortableSettingsBackup(settingsJson, json)
                                     settingsStore.update(validateSettingsPromptContent(settings))
                                     Log.i(TAG, "restoreFromBackupFile: Settings restored successfully")
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "restoreFromBackupFile: Failed to restore settings", e)
-                                    throw Exception("Failed to restore settings: ${e.message}")
+                                    if (e is CancellationException) throw e
+                                    // Parser/validation exceptions may echo legacy inline secrets.
+                                    Log.e(TAG, "restoreFromBackupFile: Invalid backup settings")
+                                    throw IllegalArgumentException("Invalid backup settings")
                                 }
                             }
 

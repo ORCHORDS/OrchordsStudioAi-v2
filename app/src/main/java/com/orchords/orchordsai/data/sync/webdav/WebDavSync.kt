@@ -3,19 +3,20 @@ package com.orchords.orchordsai.data.sync.webdav
 import android.content.Context
 import android.util.Log
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import com.orchords.orchordsai.data.files.FileFolders
 import com.orchords.orchordsai.data.files.SafeFilePaths
 import com.orchords.orchordsai.data.files.SkillPaths
-import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.SettingsStore
 import com.orchords.orchordsai.data.datastore.WebDavConfig
 import com.orchords.orchordsai.data.datastore.validateSettingsPromptContent
-import com.orchords.orchordsai.data.datastore.migration.SettingsJsonMigrator
 import com.orchords.orchordsai.data.sync.DATABASE_BACKUP_ENTRY
 import com.orchords.orchordsai.data.sync.DatabaseSnapshotService
+import com.orchords.orchordsai.data.sync.decodePortableSettingsBackup
+import com.orchords.orchordsai.data.sync.encodePortableSettingsBackup
 import com.orchords.orchordsai.data.sync.newBackupFileName
 import com.orchords.orchordsai.data.sync.requireSafeBackupDisplayName
 import com.orchords.orchordsai.data.sync.resolveBackupCacheFile
@@ -109,6 +110,7 @@ class WebDavSync(
             restoreFromBackupFile(file, config)
             Log.i(TAG, "restoreFromLocalFile: Restore completed successfully")
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e(TAG, "restoreFromLocalFile: Failed to restore from local file", e)
             throw Exception("Restore failed: ${e.message}")
         }
@@ -125,7 +127,7 @@ class WebDavSync(
                 addVirtualFileToZip(
                     zipOut = zipOut,
                     name = "settings.json",
-                    content = json.encodeToString(settingsStore.settingsFlow.value)
+                    content = encodePortableSettingsBackup(settingsStore.settingsFlow.value, json)
                 )
 
                 if (config.items.contains(WebDavConfig.BackupItem.DATABASE)) {
@@ -191,13 +193,14 @@ class WebDavSync(
                                 val settingsJson = zipIn.readBytes().toString(Charsets.UTF_8)
                                 Log.i(TAG, "restoreFromBackupFile: Restoring settings")
                                 try {
-                                    val migratedJson = SettingsJsonMigrator.migrate(settingsJson)
-                                    val settings = json.decodeFromString<Settings>(migratedJson)
+                                    val settings = decodePortableSettingsBackup(settingsJson, json)
                                     settingsStore.update(validateSettingsPromptContent(settings))
                                     Log.i(TAG, "restoreFromBackupFile: Settings restored successfully")
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "restoreFromBackupFile: Failed to restore settings", e)
-                                    throw Exception("Failed to restore settings: ${e.message}")
+                                    if (e is CancellationException) throw e
+                                    // Parser/validation exceptions may echo legacy inline secrets.
+                                    Log.e(TAG, "restoreFromBackupFile: Invalid backup settings")
+                                    throw IllegalArgumentException("Invalid backup settings")
                                 }
                             }
 

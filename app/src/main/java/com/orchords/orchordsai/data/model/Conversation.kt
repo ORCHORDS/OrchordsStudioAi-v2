@@ -36,6 +36,7 @@ data class Conversation(
     // Absolute path inside the workspace rootfs
     val workspaceCwd: String? = null,
     val folderId: Uuid? = null,
+    val retention: ConversationRetention = ConversationRetention.RETAINED,
     @Transient
     val loadState: ConversationLoadState = ConversationLoadState.COMPLETE,
     @Transient
@@ -106,11 +107,13 @@ data class Conversation(
             id: Uuid,
             assistantId: Uuid = DEFAULT_ASSISTANT_ID,
             messages: List<MessageNode> = emptyList(),
-            newConversation: Boolean = false
+            newConversation: Boolean = false,
+            retention: ConversationRetention = ConversationRetention.RETAINED,
         ) = Conversation(
             id = id,
             assistantId = assistantId,
             messageNodes = messages,
+            retention = retention,
             newConversation = newConversation,
         )
     }

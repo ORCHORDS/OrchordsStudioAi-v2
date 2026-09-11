@@ -65,9 +65,6 @@ class SkillManager(
         deleted
     }
 
-    /**
-     *
-     */
     suspend fun pruneOrphanedEnabledSkills(): List<SkillMetadata> = withContext(Dispatchers.IO) {
         val skills = listSkills()
         val directories = SkillPackageStore.withLock { getSkillsDir().listFiles() }
@@ -135,11 +132,14 @@ class SkillManager(
             val frontmatter = SkillFrontmatterParser.parse(content)
             val name = frontmatter["name"]?.takeIf { it.isNotBlank() } ?: return null
             val description = frontmatter["description"]?.takeIf { it.isNotBlank() } ?: return null
+            val packageMetadata = frontmatter.getStringMap("metadata")
             SkillMetadata(
                 name = name,
                 description = description,
                 compatibility = frontmatter["compatibility"],
                 disableModelInvocation = frontmatter.isModelInvocationDisabled(),
+                origin = packageMetadata?.get("origin"),
+                version = packageMetadata?.get("version"),
                 skillDir = skillDir,
             )
         }.getOrElse {
@@ -154,6 +154,8 @@ data class SkillMetadata(
     val description: String,
     val compatibility: String? = null,
     val disableModelInvocation: Boolean = false,
+    val origin: String? = null,
+    val version: String? = null,
     val skillDir: File,
 ) {
     val skillFile: File get() = skillDir.resolve("SKILL.md")

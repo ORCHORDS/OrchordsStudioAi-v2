@@ -53,6 +53,17 @@ class SkillFrontmatter internal constructor(
 
     internal fun contains(key: String): Boolean = values.containsKey(key)
 
+    fun getStringMap(key: String): Map<String, String>? {
+        val raw = values[key] as? Map<*, *> ?: return null
+        val result = LinkedHashMap<String, String>()
+        for ((entryKey, entryValue) in raw) {
+            val stringKey = entryKey as? String ?: return null
+            val stringValue = entryValue as? String ?: return null
+            result[stringKey] = stringValue
+        }
+        return result
+    }
+
     /** Missing policy preserves automatic use; a present malformed policy never grants it. */
     fun isModelInvocationDisabled(): Boolean {
         val key = "disable-model-invocation"

@@ -34,6 +34,12 @@ class BuiltInLibraryTest {
             val parsed = SkillFrontmatterParser.parse(file)
             assertEquals(skill.name, parsed["name"])
             assertEquals(skill.description, parsed["description"])
+            assertEquals(
+                mapOf("origin" to BUILT_IN_SKILL_ORIGIN, "version" to BUILT_IN_SKILL_VERSION),
+                parsed.getStringMap("metadata"),
+            )
+            assertEquals(BUILT_IN_SKILL_ORIGIN, skill.origin)
+            assertEquals(BUILT_IN_SKILL_VERSION, skill.version)
             assertEquals(skill.body, SkillFrontmatterParser.extractBody(file).trimEnd())
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -92,7 +93,11 @@ fun BackgroundPicker(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = { onUpdate(null) }) {
+                TextButton(
+                    onClick = {
+                        onUpdate(null)
+                    }
+                ) {
                     Text(stringResource(R.string.assistant_page_remove))
                 }
             }
@@ -109,10 +114,16 @@ fun BackgroundPicker(
 
     if (showPickOption) {
         AlertDialog(
-            onDismissRequest = { showPickOption = false },
-            title = { Text(stringResource(R.string.assistant_page_select_background)) },
+            onDismissRequest = {
+                showPickOption = false
+            },
+            title = {
+                Text(stringResource(R.string.assistant_page_select_background))
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Button(
                         onClick = {
                             showPickOption = false
@@ -148,7 +159,11 @@ fun BackgroundPicker(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showPickOption = false }) {
+                TextButton(
+                    onClick = {
+                        showPickOption = false
+                    }
+                ) {
                     Text(stringResource(R.string.assistant_page_cancel))
                 }
             }
@@ -157,8 +172,12 @@ fun BackgroundPicker(
 
     if (showUrlInput) {
         AlertDialog(
-            onDismissRequest = { showUrlInput = false },
-            title = { Text(stringResource(R.string.assistant_page_enter_image_url)) },
+            onDismissRequest = {
+                showUrlInput = false
+            },
+            title = {
+                Text(stringResource(R.string.assistant_page_enter_image_url))
+            },
             text = {
                 OutlinedTextField(
                     value = urlInput,
@@ -182,7 +201,11 @@ fun BackgroundPicker(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showUrlInput = false }) {
+                TextButton(
+                    onClick = {
+                        showUrlInput = false
+                    }
+                ) {
                     Text(stringResource(R.string.assistant_page_cancel))
                 }
             }

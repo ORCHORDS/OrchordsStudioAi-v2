@@ -95,10 +95,10 @@ interface MessageNodeDAO {
         maxChars: Int,
     ): String?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(nodes: List<MessageNodeEntity>)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(node: MessageNodeEntity)
 
     @Update

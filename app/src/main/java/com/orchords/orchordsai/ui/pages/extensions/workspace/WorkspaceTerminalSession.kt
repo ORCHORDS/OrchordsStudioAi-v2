@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
+import android.os.Build
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -92,9 +93,10 @@ internal fun prepareWorkspaceTerminalSession(context: Context, root: String) {
     File(workspaceDir, "files").mkdirs()
     File(workspaceDir, "tmp").mkdirs()
     File(appContext.filesDir, FileFolders.SKILLS).mkdirs()
+    val nameservers = resolveWorkspaceDnsPolicy(appContext.activeDnsSnapshot())
     RootfsPatcher().patch(
         linuxDir,
-        RootfsPatchOptions(nameservers = appContext.activeDnsServers())
+        RootfsPatchOptions(nameservers = nameservers)
     )
 }
 
@@ -316,12 +318,16 @@ private val URL_REGEX =
 
 private val URL_TRAILING_TRIM = charArrayOf('.', ',', ';', ':', '!', '?', ')', ']', '}', '\'', '"')
 
-private fun Context.activeDnsServers(): List<String> {
+private fun Context.activeDnsSnapshot(): WorkspaceDnsSnapshot {
     val connectivityManager =
-        getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return emptyList()
-    val network = connectivityManager.activeNetwork ?: return emptyList()
-    return connectivityManager.getLinkProperties(network)
-        ?.dnsServers
-        ?.mapNotNull { it.hostAddress }
-        .orEmpty()
+        getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return WorkspaceDnsSnapshot(emptyList(), privateDnsActive = false)
+    val network = connectivityManager.activeNetwork
+        ?: return WorkspaceDnsSnapshot(emptyList(), privateDnsActive = false)
+    val linkProperties = connectivityManager.getLinkProperties(network)
+        ?: return WorkspaceDnsSnapshot(emptyList(), privateDnsActive = false)
+    return WorkspaceDnsSnapshot(
+        nameservers = linkProperties.dnsServers.mapNotNull { it.hostAddress },
+        privateDnsActive = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && linkProperties.isPrivateDnsActive,
+    )
 }

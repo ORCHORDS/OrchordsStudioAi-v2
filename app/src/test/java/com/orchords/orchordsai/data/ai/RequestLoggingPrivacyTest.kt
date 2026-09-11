@@ -41,7 +41,7 @@ class RequestLoggingPrivacyTest {
         assertEquals("https://example.com/", log.url)
         assertEquals("POST", log.method)
         assertEquals(401, log.responseCode)
-        assertEquals(17, log.durationMs)
+        assertEquals(17L, log.durationMs)
         assertNull(log.requestBody)
         assertEquals(mapOf("Content-Type" to "<present>"), log.requestHeaders)
         assertEquals(mapOf("Content-Type" to "<present>"), log.responseHeaders)

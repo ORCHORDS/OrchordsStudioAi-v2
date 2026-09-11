@@ -34,11 +34,9 @@ class RootfsInstaller(
             stagingDir.mkdirs()
             download(url, archive, onProgress)
             extractTar(archive, stagingDir, format, onProgress)
-            linuxDir.deleteRecursively()
-            require(stagingDir.renameTo(linuxDir)) {
-                "Failed to move rootfs into workspace"
+            finalizeRootfsInstall(stagingDir, linuxDir) { stagedRootfs ->
+                patcher.patch(stagedRootfs)
             }
-            patcher.patch(linuxDir)
             onProgress(RootfsInstallProgress(stage = RootfsInstallStage.INSTALLED))
         } finally {
             archive.delete()

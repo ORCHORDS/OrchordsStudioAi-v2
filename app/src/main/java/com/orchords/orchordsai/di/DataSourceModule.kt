@@ -41,10 +41,13 @@ import com.orchords.search.SearchService
 import com.orchords.orchordsai.data.sync.S3Sync
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+
+private val BACKUP_HTTP_CLIENT = named("backup_http_client")
 
 val dataSourceModule = module {
     single {
@@ -249,12 +252,28 @@ val dataSourceModule = module {
         ProviderManager(client = get(), context = get())
     }
 
+    single<HttpClient>(BACKUP_HTTP_CLIENT) {
+        HttpClient(OkHttp) {
+            followRedirects = false
+            engine {
+                config {
+                    connectTimeout(20, TimeUnit.SECONDS)
+                    readTimeout(10, TimeUnit.MINUTES)
+                    writeTimeout(120, TimeUnit.SECONDS)
+                    followSslRedirects(false)
+                    followRedirects(false)
+                    retryOnConnectionFailure(true)
+                }
+            }
+        }
+    }
+
     single {
         WebDavSync(
             settingsStore = get(),
             json = get(),
             context = get(),
-            httpClient = get(),
+            httpClient = get(BACKUP_HTTP_CLIENT),
             databaseSnapshotService = get(),
         )
     }
@@ -279,7 +298,7 @@ val dataSourceModule = module {
             settingsStore = get(),
             json = get(),
             context = get(),
-            httpClient = get(),
+            httpClient = get(BACKUP_HTTP_CLIENT),
             databaseSnapshotService = get(),
         )
     }

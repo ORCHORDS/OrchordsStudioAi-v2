@@ -35,6 +35,7 @@ import com.orchords.asr.ASRProviderSetting
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV1Migration
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV2Migration
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV3Migration
+import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV4Migration
 import com.orchords.orchordsai.data.extensions.toModeInjection
 import com.orchords.orchordsai.data.extensions.toLorebook
 import com.orchords.orchordsai.data.model.Assistant
@@ -64,7 +65,8 @@ private val Context.settingsStore by preferencesDataStore(
         listOf(
             PreferenceStoreV1Migration(),
             PreferenceStoreV2Migration(),
-            PreferenceStoreV3Migration()
+            PreferenceStoreV3Migration(),
+            PreferenceStoreV4Migration(),
         )
     }
 )
@@ -141,7 +143,7 @@ class SettingsStore(
         val BACKUP_REMINDER_CONFIG = stringPreferencesKey("backup_reminder_config")
 
         val LAUNCH_COUNT = intPreferencesKey("launch_count")
-
+        val ONBOARDING_STATE = stringPreferencesKey("onboarding_state")
     }
 
     private val dataStore = context.settingsStore
@@ -236,6 +238,9 @@ class SettingsStore(
                     JsonInstant.decodeFromString(it)
                 } ?: BackupReminderConfig(),
                 launchCount = preferences[LAUNCH_COUNT] ?: 0,
+                onboardingState = preferences[ONBOARDING_STATE]?.let { stored ->
+                    OnboardingState.entries.firstOrNull { it.name == stored }
+                } ?: OnboardingState.UNINITIALIZED,
             )
         }
         .map {
@@ -419,6 +424,7 @@ class SettingsStore(
             preferences[WEB_SERVER_LOCALHOST_ONLY] = settings.webServerLocalhostOnly
             preferences[BACKUP_REMINDER_CONFIG] = JsonInstant.encodeToString(settings.backupReminderConfig)
             preferences[LAUNCH_COUNT] = settings.launchCount
+            preferences[ONBOARDING_STATE] = settings.onboardingState.name
         }
     }
 
@@ -562,6 +568,7 @@ data class Settings(
     val webServerLocalhostOnly: Boolean = false,
     val backupReminderConfig: BackupReminderConfig = BackupReminderConfig(),
     val launchCount: Int = 0,
+    val onboardingState: OnboardingState = OnboardingState.UNINITIALIZED,
 ) {
     companion object {
         fun dummy() = Settings(init = true)

@@ -1,5 +1,7 @@
 package com.orchords.orchordsai.data.datastore
 
+import kotlinx.serialization.Serializable
+
 /**
  * Durable onboarding intent is intentionally separate from configuration health.
  *
@@ -7,6 +9,7 @@ package com.orchords.orchordsai.data.datastore
  * legacy profile must never be sent through full first-run onboarding merely because its current
  * gateway configuration is incomplete or degraded.
  */
+@Serializable
 enum class OnboardingState {
     UNINITIALIZED,
     REQUIRED,

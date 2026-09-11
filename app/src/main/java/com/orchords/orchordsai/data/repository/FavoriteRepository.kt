@@ -41,6 +41,7 @@ class FavoriteRepository(
     }
 
     suspend fun isNodeFavorited(conversationId: Uuid, nodeId: Uuid): Boolean {
-        return dao.existsByRefKey(NodeFavoriteAdapter.buildRefKey(conversationId.toString(), nodeId.toString()))
+        val entity = dao.getByRefKey(NodeFavoriteAdapter.buildRefKey(conversationId.toString(), nodeId.toString()))
+        return entity != null && NodeFavoriteAdapter.decodeRef(entity) != null
     }
 }

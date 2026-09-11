@@ -46,9 +46,12 @@ object NodeFavoriteAdapter : FavoriteAdapter<NodeFavoriteTarget> {
 
     fun decodeRef(entity: FavoriteEntity): NodeFavoriteRef? {
         if (entity.type != type.value) return null
-        return runCatching {
+        val ref = runCatching {
             JsonInstant.decodeFromString<NodeFavoriteRef>(entity.refJson)
-        }.getOrNull()
+        }.getOrNull() ?: return null
+        return ref.takeIf {
+            entity.refKey == buildRefKey(it.conversationId.toString(), it.nodeId.toString())
+        }
     }
 
     fun decodeMeta(entity: FavoriteEntity): FavoriteMeta? {

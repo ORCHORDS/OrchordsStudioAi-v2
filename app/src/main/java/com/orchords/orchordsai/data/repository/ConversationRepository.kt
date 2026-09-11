@@ -19,6 +19,7 @@ import com.orchords.orchordsai.data.db.dao.FavoriteDAO
 import com.orchords.orchordsai.data.db.dao.MessageNodeDAO
 import com.orchords.orchordsai.data.db.entity.ConversationEntity
 import com.orchords.orchordsai.data.db.entity.MessageNodeEntity
+import com.orchords.orchordsai.data.favorite.NodeFavoriteAdapter
 import com.orchords.orchordsai.data.files.FilesManager
 import com.orchords.orchordsai.data.model.Conversation
 import com.orchords.orchordsai.data.model.ConversationLoadState
@@ -317,8 +318,8 @@ class ConversationRepository(
     )
 
     private suspend fun loadMessageNodes(conversationId: String): MessageNodeLoadResult {
-        val favoriteNodeIds = favoriteDAO.getFavoriteNodeIdsOfConversation(conversationId)
-            .mapNotNull { runCatching { Uuid.parse(it) }.getOrNull() }
+        val favoriteNodeIds = favoriteDAO.getNodeFavoritesOfConversation(conversationId)
+            .mapNotNull { NodeFavoriteAdapter.decodeRef(it)?.nodeId }
             .toSet()
         return database.withTransaction {
             loadConversationNodesSafely(messageNodeDAO, conversationId, favoriteNodeIds, payloadSource)

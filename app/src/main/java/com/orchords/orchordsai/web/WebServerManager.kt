@@ -4,15 +4,12 @@ import android.content.Context
 import android.util.Log
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import com.orchords.orchordsai.AppScope
 import com.orchords.orchordsai.data.datastore.SettingsStore
 import com.orchords.orchordsai.data.files.FilesManager
@@ -100,16 +97,8 @@ class WebServerManager(
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     private val nsdRegistrar = NsdServiceRegistrar(context)
 
-    /**
-     * Guard for [stop]. When the foreground service that owns this server is
-     * destroyed through any path other than the explicit `ACTION_STOP` we still
-     * need to tear down the Ktor listener and NSD registration. But a second
-     * stop call before the first finishes must not flip state, must not relaunch
-     * the listener, and must not surface a stale "stopping" UI for an already-idle
-     * server — `restart()` chains `stop() -> start()` and a redundant stop after
-     * `start()` would have to be a no-op as well.
-     */
-    private val shutdownGate = ShutdownGate()
+    // Application-owned: serviceScope cancellation must not cancel teardown.
+    private val lifecycleQueue = WebServerLifecycleQueue(appScope)
 
     private val _state = MutableStateFlow(WebServerState())
     val state: StateFlow<WebServerState> = _state.asStateFlow()
@@ -119,61 +108,70 @@ class WebServerManager(
         serviceName: String = DEFAULT_SERVICE_NAME,
         localhostOnly: Boolean = false
     ) {
+        lifecycleQueue.submit { startLocked(port, serviceName, localhostOnly) }
+    }
+
+    /** Called only while lifecycleQueue owns the listener. */
+    private suspend fun startLocked(port: Int, serviceName: String, localhostOnly: Boolean) {
         if (server != null) {
             Log.w(TAG, "Server already running")
             return
         }
 
-        appScope.launch {
-            val host = if (localhostOnly) HOST_LOOPBACK else HOST_ALL_INTERFACES
-            val address = selectWebServerAddress(localhostOnly)
-            val baseState = WebServerState(
-                port = port,
-                serviceName = serviceName,
-                localhostOnly = localhostOnly,
-                address = address,
-            )
-            try {
-                _state.value = _state.value.copy(isLoading = true)
-                Log.i(TAG, "Starting web server on $host:$port (address=$address)")
-                val bindFailure = isAddressAvailable(host = host, port = port)
-                if (bindFailure != null) {
-                    Log.w(TAG, "Cannot bind $host:$port: $bindFailure")
-                    _state.value = baseState.copy(error = "Cannot bind $host:$port: $bindFailure")
-                    return@launch
-                }
-                server = startWebServer(port = port, host = host) {
-                    configureWebApi(context, chatService, conversationRepo, folderRepo, settingsStore, filesManager)
-                }.start(wait = false)
-
-                _state.value = baseState.copy(isRunning = true)
-                if (!localhostOnly) {
-                    runCatching {
-                        nsdRegistrar.register(
-                            port = port,
-                            serviceName = serviceName,
-                            onRegistered = { info ->
-                                val nsdAddress = info.address.hostAddress
-                                _state.value = _state.value.copy(
-                                    serviceName = info.serviceName,
-                                    hostname = info.hostname,
-                                    address = if (nsdAddress.isNullOrBlank() || nsdAddress == "0.0.0.0") {
-                                        _state.value.address ?: address
-                                    } else {
-                                        nsdAddress
-                                    }
-                                )
-                            }
-                        )
-                    }.onFailure {
-                        Log.w(TAG, "NSD register failed", it)
-                    }
-                }
-                Log.i(TAG, "Web server started successfully on $host:$port")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to start web server", e)
-                _state.value = baseState.copy(error = e.message)
+        val host = if (localhostOnly) HOST_LOOPBACK else HOST_ALL_INTERFACES
+        val address = selectWebServerAddress(localhostOnly)
+        val baseState = WebServerState(
+            port = port,
+            serviceName = serviceName,
+            localhostOnly = localhostOnly,
+            address = address,
+        )
+        try {
+            _state.value = _state.value.copy(isLoading = true)
+            Log.i(TAG, "Starting web server on $host:$port (address=$address)")
+            val bindFailure = isAddressAvailable(host = host, port = port)
+            if (bindFailure != null) {
+                Log.w(TAG, "Cannot bind $host:$port: $bindFailure")
+                _state.value = baseState.copy(error = "Cannot bind $host:$port: $bindFailure")
+                return
             }
+            val candidate = startWebServer(port = port, host = host) {
+                configureWebApi(context, chatService, conversationRepo, folderRepo, settingsStore, filesManager)
+            }
+            // Retain ownership even if start throws after partially opening resources.
+            server = candidate
+            candidate.start(wait = false)
+
+            _state.value = baseState.copy(isRunning = true)
+            if (!localhostOnly) {
+                runCatching {
+                    nsdRegistrar.register(
+                        port = port,
+                        serviceName = serviceName,
+                        onRegistered = { info ->
+                            val nsdAddress = info.address.hostAddress
+                            _state.value = _state.value.copy(
+                                serviceName = info.serviceName,
+                                hostname = info.hostname,
+                                address = if (nsdAddress.isNullOrBlank() || nsdAddress == "0.0.0.0") {
+                                    _state.value.address ?: address
+                                } else {
+                                    nsdAddress
+                                }
+                            )
+                        }
+                    )
+                }.onFailure {
+                    if (it is CancellationException) throw it
+                    Log.w(TAG, "NSD register failed", it)
+                }
+            }
+            Log.i(TAG, "Web server started successfully on $host:$port")
+        } catch (e: Exception) {
+            withContext(NonCancellable) { stopLocked() }
+            if (e is CancellationException) throw e
+            Log.e(TAG, "Failed to start web server", e)
+            _state.value = baseState.copy(isRunning = server != null, error = e.message)
         }
     }
 
@@ -182,77 +180,31 @@ class WebServerManager(
     }
 
     fun stop() {
-        // Idempotent: an already-idle server (or a shutdown already in flight from
-        // a previous stop call) returns immediately so the WebServerService.onDestroy()
-        // path cannot leave the UI in a stale "stopping" state.
-        if (server == null && !shutdownGate.isInFlight()) return
-        if (!shutdownGate.enter()) return
-        _state.value =
-            _state.value.copy(isRunning = false, isLoading = true, hostname = null, address = null, error = null)
-        // Ktor's CIO EmbeddedServer.stop() calls runBlocking internally for up to
-        // gracePeriodMillis + timeoutMillis. Run it on Dispatchers.IO so neither
-        // the foreground-service destruction path nor any UI-thread caller pays
-        // that blocking cost on the main thread.
-        appScope.launch(Dispatchers.IO) {
-            try {
-                Log.i(TAG, "Stopping web server")
-                server?.stop(1000, 2000)
-                server = null
-                runCatching {
-                    nsdRegistrar.unregister()
-                }.onFailure {
-                    Log.w(TAG, "NSD unregister failed", it)
-                }
-                _state.value = _state.value.copy(isLoading = false)
-                Log.i(TAG, "Web server stopped")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to stop web server", e)
-                _state.value = _state.value.copy(isLoading = false, error = e.message)
-            } finally {
-                shutdownGate.exit()
-            }
-        }
+        // Always enqueue: server may still be null while an earlier start is queued.
+        lifecycleQueue.submit { stopLocked() }
     }
 
-    /**
-     * Synchronously stop the server. Used by restart() to fence start() behind
-     * the previous listener being fully torn down. Returns true if the server
-     * is fully stopped by the time this method returns.
-     */
-    private fun stopBlocking(): Boolean {
-        // Idempotent: an already-idle server returns true immediately.
-        if (server == null && !shutdownGate.isInFlight()) return true
-        if (!shutdownGate.enter()) {
-            // Another caller already owns the shutdown. Wait for it.
-            return runBlocking(Dispatchers.IO) {
-                while (shutdownGate.isInFlight()) {
-                    kotlinx.coroutines.delay(10)
-                }
-                server == null
-            }
-        }
+    /** A failed close retains ownership and prevents a replacement bind. */
+    private suspend fun stopLocked(keepLoading: Boolean = false): Boolean {
+        val activeServer = server ?: return true
         _state.value =
             _state.value.copy(isRunning = false, isLoading = true, hostname = null, address = null, error = null)
         return try {
-            runBlocking(Dispatchers.IO) {
-                Log.i(TAG, "Stopping web server (synchronous)")
-                server?.stop(1000, 2000)
+            try {
+                activeServer.stop(1000, 2000)
                 server = null
-                runCatching {
-                    nsdRegistrar.unregister()
-                }.onFailure {
-                    Log.w(TAG, "NSD unregister failed", it)
-                }
-                _state.value = _state.value.copy(isLoading = false)
-                Log.i(TAG, "Web server stopped (synchronous)")
+            } finally {
+                // NSD cleanup must run even when Ktor shutdown throws.
+                nsdRegistrar.unregister()
             }
+            _state.value = _state.value.copy(isLoading = keepLoading)
+            Log.i(TAG, "Web server stopped")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop web server (synchronous)", e)
-            _state.value = _state.value.copy(isLoading = false, error = e.message)
+            if (e is CancellationException) throw e
+            Log.e(TAG, "Failed to stop web server", e)
+            _state.value = _state.value.copy(isRunning = server != null, isLoading = false, error = e.message)
             false
-        } finally {
-            shutdownGate.exit()
         }
     }
 
@@ -261,14 +213,15 @@ class WebServerManager(
         serviceName: String = _state.value.serviceName,
         localhostOnly: Boolean = _state.value.localhostOnly
     ) {
-        // Restart must serialize stop() -> start(); otherwise the new server's
-        // port-availability probe runs while the previous Ktor listener still
-        // owns the socket, so port-restart appears to "do nothing".
-        if (!stopBlocking()) {
-            Log.w(TAG, "Restart aborted: previous shutdown failed")
-            return
+        // One queued operation: no caller-thread runBlocking, polling, or gap in
+        // which another start could claim the old listener's socket/NSD identity.
+        lifecycleQueue.submit {
+            if (stopLocked(keepLoading = true)) {
+                startLocked(port, serviceName, localhostOnly)
+            } else {
+                Log.w(TAG, "Restart aborted: previous shutdown failed")
+            }
         }
-        start(port, serviceName, localhostOnly)
     }
 
     /**

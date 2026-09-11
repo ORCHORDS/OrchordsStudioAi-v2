@@ -18,7 +18,7 @@ class RootfsCutoverTest {
 
             finalizeRootfsInstall(staging, linux, patch = { staged: File ->
                 File(staged, "patched").writeText("yes")
-            }
+            })
 
             assertEquals("new", File(linux, "marker").readText())
             assertTrue(File(linux, "patched").isFile)
@@ -92,6 +92,3 @@ class RootfsCutoverTest {
             File(this, "marker").writeText(marker)
         }
 }
-
-
-

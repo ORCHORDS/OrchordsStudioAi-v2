@@ -71,6 +71,30 @@ interface MessageNodeDAO {
     @Query("SELECT * FROM message_node WHERE id = :nodeId LIMIT 1")
     suspend fun getNodeById(nodeId: String): MessageNodeEntity?
 
+    @Query(
+        "SELECT id, conversation_id, node_index, select_index, payload_blob_id " +
+            "FROM message_node WHERE id = :nodeId LIMIT 1"
+    )
+    suspend fun getNodeMetaById(nodeId: String): MessageNodeMeta?
+
+    /** Scalar byte length is safe to read even when the text itself cannot fit a CursorWindow. */
+    @Query(
+        "SELECT length(CAST(messages AS BLOB)) FROM message_node " +
+            "WHERE id = :nodeId AND payload_blob_id IS NULL LIMIT 1"
+    )
+    suspend fun getInlineMessagesUtf8ByteLength(nodeId: String): Long?
+
+    /** SQLite substr is 1-based and projects only the requested bounded text chunk. */
+    @Query(
+        "SELECT substr(messages, :startCharOneBased, :maxChars) FROM message_node " +
+            "WHERE id = :nodeId AND payload_blob_id IS NULL LIMIT 1"
+    )
+    suspend fun getInlineMessagesChunk(
+        nodeId: String,
+        startCharOneBased: Int,
+        maxChars: Int,
+    ): String?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(nodes: List<MessageNodeEntity>)
 

@@ -29,6 +29,30 @@ class ConversationNodeLoaderTest {
     }
 
     @Test
+    fun `failed page can recover legacy row without direct full-row read`() = runBlocking {
+        val rows = (0 until 3).map(::row)
+        val legacyId = rows[1].id
+        val reader = FakeReader(
+            rows = rows,
+            failedPages = setOf(0),
+            unreadableIds = setOf(legacyId),
+            legacyRecoverableIds = setOf(legacyId),
+        )
+
+        val result = loadConversationNodesSafely(
+            reader = reader,
+            conversationId = CONVERSATION_ID,
+            favoriteNodeIds = emptySet(),
+            payloadSource = InlinePayloadSource,
+        )
+
+        assertEquals(3, result.nodes.size)
+        assertTrue(result.corruptNodeIds.isEmpty())
+        assertEquals(ConversationLoadState.COMPLETE, result.loadState)
+        assertTrue(legacyId in reader.legacyReads)
+    }
+
+    @Test
     fun `two unreadable rows are isolated independently across failed pages`() = runBlocking {
         val rows = (0 until 150).map(::row)
         val badIds = setOf(rows[10].id, rows[130].id)
@@ -69,9 +93,6 @@ class ConversationNodeLoaderTest {
 
     @Test
     fun `externalized payload resolves via the payload source`() = runBlocking {
-        // Use the inline JSON format that the loader is wired to (same as the
-        // happy-path inline rows: `"[]"` decodes cleanly).
-        val blobbedJson = "[]"
         val rows = listOf(
             MessageNodeEntity(
                 id = "00000000-0000-0000-0000-000000000001",
@@ -84,7 +105,7 @@ class ConversationNodeLoaderTest {
             row(1),
         )
         val reader = FakeReader(rows)
-        val source = MapPayloadSource(mapOf(99L to blobbedJson))
+        val source = MapPayloadSource(mapOf(99L to "[]"))
 
         val result = loadConversationNodesSafely(
             reader = reader,
@@ -132,9 +153,11 @@ class ConversationNodeLoaderTest {
         private val rows: List<MessageNodeEntity>,
         private val failedPages: Set<Int> = emptySet(),
         private val unreadableIds: Set<String> = emptySet(),
+        private val legacyRecoverableIds: Set<String> = emptySet(),
     ) : ConversationNodeReader {
         val pageOffsets = mutableListOf<Int>()
         val singleRowOffsets = mutableListOf<Int>()
+        val legacyReads = mutableListOf<String>()
 
         override suspend fun count(conversationId: String): Int = rows.size
 
@@ -152,6 +175,12 @@ class ConversationNodeLoaderTest {
         override suspend fun nodeById(nodeId: String): MessageNodeEntity? {
             if (nodeId in unreadableIds) throw IllegalStateException("simulated row read failure")
             return rows.firstOrNull { it.id == nodeId }
+        }
+
+        override suspend fun legacyNodeById(nodeId: String): MessageNodeEntity? {
+            legacyReads += nodeId
+            if (nodeId in legacyRecoverableIds) return rows.firstOrNull { it.id == nodeId }
+            return nodeById(nodeId)
         }
     }
 

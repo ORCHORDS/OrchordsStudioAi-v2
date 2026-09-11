@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dokar.sonner.ToastType
 import kotlinx.coroutines.launch
+import com.orchords.highlight.CODE_FONT_FEATURE_SETTINGS
 import com.orchords.orchordsai.data.repository.WorkspaceRepository
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.context.LocalToaster
@@ -149,6 +150,7 @@ fun WorkspaceFileEditorPage(
                     fontFamily = JetbrainsMono,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
+                    fontFeatureSettings = CODE_FONT_FEATURE_SETTINGS,
                 ),
             )
         }

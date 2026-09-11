@@ -1,0 +1,6 @@
+.markdown code,
+.markdown pre,
+.markdown pre code {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}

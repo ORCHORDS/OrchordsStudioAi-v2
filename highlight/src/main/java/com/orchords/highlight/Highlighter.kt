@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -17,6 +18,9 @@ import com.orchords.highlight.core.HighlightEngine
 import com.orchords.highlight.languages.builtinLanguages
 
 private const val MAX_CODE_LENGTH = 4096
+
+/** OpenType policy for source-code surfaces: preserve literal operator glyph identity. */
+const val CODE_FONT_FEATURE_SETTINGS = "\"liga\" 0, \"calt\" 0"
 
 val LocalCodeHighlighter = staticCompositionLocalOf { CodeHighlighter() }
 
@@ -80,5 +84,6 @@ fun CodeHighlightText(
         softWrap = softWrap,
         maxLines = maxLines,
         minLines = minLines,
+        style = TextStyle(fontFeatureSettings = CODE_FONT_FEATURE_SETTINGS),
     )
 }

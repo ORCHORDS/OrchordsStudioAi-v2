@@ -22,6 +22,11 @@ class FolderRepository(
         return folderDAO.getFolderById(id.toString())?.toFolder()
     }
 
+    /** Object-level authorization boundary for Assistant-scoped folder operations. */
+    suspend fun getFolderByIdForAssistant(id: Uuid, assistantId: Uuid): Folder? {
+        return getFolderById(id)?.takeIf { folder -> folder.assistantId == assistantId }
+    }
+
     suspend fun createFolder(assistantId: Uuid, name: String): Folder {
         val folder = Folder(
             assistantId = assistantId,

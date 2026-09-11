@@ -54,7 +54,9 @@ fun Route.folderRoutes(
                 throw BadRequestException("Folder name must not be blank")
             }
 
-            folderRepo.getFolderById(uuid) ?: throw NotFoundException("Folder not found")
+            val settings = settingsStore.settingsFlow.first()
+            folderRepo.getFolderByIdForAssistant(uuid, settings.assistantId)
+                ?: throw NotFoundException("Folder not found")
             folderRepo.renameFolder(uuid, name)
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
@@ -62,9 +64,12 @@ fun Route.folderRoutes(
         // DELETE /api/folders/{id} - Delete a folder (conversations are kept, just unfiled)
         delete("/{id}") {
             val uuid = call.parameters["id"].toUuid("folder id")
-            folderRepo.getFolderById(uuid) ?: throw NotFoundException("Folder not found")
+            val settings = settingsStore.settingsFlow.first()
+            folderRepo.getFolderByIdForAssistant(uuid, settings.assistantId)
+                ?: throw NotFoundException("Folder not found")
 
-            // Refuse to delete while a conversation inside is still generating
+            // Refuse to delete while a conversation inside is still generating. Ownership is
+            // validated first so an out-of-scope UUID can never reach mutation or guard state.
             if (chatService.hasGeneratingConversationInFolder(uuid)) {
                 throw ConflictException("Folder has a generating conversation")
             }

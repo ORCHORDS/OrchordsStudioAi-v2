@@ -9,7 +9,8 @@
     "typecheck": "react-router typegen && tsc",
     "lint": "oxlint app --fix",
     "fmt": "oxfmt app",
-    "fmt:check": "oxfmt app --check"
+    "fmt:check": "oxfmt app --check",
+    "test:ask-user": "tsx --test app/components/message/parts/ask-user-state.test.ts"
   },
   "dependencies": {
     "@react-router/node": "7.18.2",

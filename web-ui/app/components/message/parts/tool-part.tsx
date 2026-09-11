@@ -40,6 +40,13 @@ import { ControlledChainOfThoughtStep } from "../chain-of-thought";
 import { AudioPart as AudioPartRenderer } from "./audio-part";
 import { ImagePart as ImagePartRenderer } from "./image-part";
 import { VideoPart as VideoPartRenderer } from "./video-part";
+import {
+  formatAnsweredValue,
+  isAskUserComplete,
+  parseAskUserQuestions,
+  serializeAskUserAnswers,
+  toggleMultiSelection,
+} from "./ask-user-state";
 
 interface ToolPartProps {
   tool: UIToolPart;
@@ -240,32 +247,6 @@ function ScrapeWebPreview({ content }: { content: unknown }) {
   );
 }
 
-interface AskUserQuestion {
-  id: string;
-  question: string;
-  options: string[];
-}
-
-function parseAskUserQuestions(args: unknown): AskUserQuestion[] {
-  try {
-    const questions = getArrayField(args, "questions");
-    return questions
-      .map((q) => {
-        if (!q || typeof q !== "object" || Array.isArray(q)) return null;
-        const record = q as Record<string, unknown>;
-        const id = typeof record.id === "string" ? record.id : "";
-        const question = typeof record.question === "string" ? record.question : "";
-        if (!id || !question) return null;
-        const rawOptions = Array.isArray(record.options) ? record.options : [];
-        const options = rawOptions.filter((o): o is string => typeof o === "string");
-        return { id, question, options } satisfies AskUserQuestion;
-      })
-      .filter((q): q is AskUserQuestion => q !== null);
-  } catch {
-    return [];
-  }
-}
-
 function AskUserToolStep({
   tool,
   loading,
@@ -279,6 +260,7 @@ function AskUserToolStep({
   const args = React.useMemo(() => safeJsonParse(tool.input), [tool.input]);
   const questions = React.useMemo(() => parseAskUserQuestions(args), [args]);
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
+  const [multiAnswers, setMultiAnswers] = React.useState<Record<string, string[]>>({});
 
   const isPending = tool.approvalState.type === "pending";
   const isAnswered = tool.approvalState.type === "answered";
@@ -289,25 +271,34 @@ function AskUserToolStep({
       ? firstQuestion
       : t("tool_part.ask_user_questions_count", { count: questions.length });
 
-  const allAnswered = questions.length > 0 && questions.every((q) => answers[q.id]?.trim());
+  const allAnswered = isAskUserComplete(questions, answers, multiAnswers);
 
   const handleSubmit = () => {
     if (!onToolApproval || !allAnswered) return;
-    const payload = JSON.stringify({
-      answers: Object.fromEntries(questions.map((q) => [q.id, answers[q.id] ?? ""])),
-    });
-    void onToolApproval(tool.toolCallId, true, "", payload);
+    void onToolApproval(
+      tool.toolCallId,
+      true,
+      "",
+      serializeAskUserAnswers(questions, answers, multiAnswers),
+    );
   };
 
   const setAnswer = (questionId: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  // Parse answered state for display
-  const answeredValues = React.useMemo(() => {
+  const toggleMultiAnswer = (questionId: string, option: string) => {
+    setMultiAnswers((prev) => ({
+      ...prev,
+      [questionId]: toggleMultiSelection(prev[questionId], option),
+    }));
+  };
+
+  // New multi answers are arrays; legacy Android/Web answers remain string-compatible.
+  const answeredValues = React.useMemo<Record<string, unknown>>(() => {
     if (tool.approvalState.type !== "answered") return {};
     try {
-      const parsed = JSON.parse(tool.approvalState.answer) as { answers?: Record<string, string> };
+      const parsed = JSON.parse(tool.approvalState.answer) as { answers?: Record<string, unknown> };
       return parsed.answers ?? {};
     } catch {
       return {};
@@ -340,20 +331,31 @@ function AskUserToolStep({
               <>
                 {q.options.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {q.options.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setAnswer(q.id, option)}
-                        className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                          answers[q.id] === option
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
+                    {q.options.map((option) => {
+                      const selected =
+                        q.selectionType === "multi"
+                          ? (multiAnswers[q.id] ?? []).includes(option)
+                          : answers[q.id] === option;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() =>
+                            q.selectionType === "multi"
+                              ? toggleMultiAnswer(q.id, option)
+                              : setAnswer(q.id, option)
+                          }
+                          className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
                 <Input
@@ -371,7 +373,8 @@ function AskUserToolStep({
               </>
             ) : isAnswered ? (
               <div className="text-sm text-primary">
-                {answeredValues[q.id] ?? tool.approvalState.type === "answered" ? answeredValues[q.id] || "" : ""}
+                {formatAnsweredValue(answeredValues[q.id]) ||
+                  (tool.approvalState.type === "answered" ? tool.approvalState.answer : "")}
               </div>
             ) : null}
           </div>

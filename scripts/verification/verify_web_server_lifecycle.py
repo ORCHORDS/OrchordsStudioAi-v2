@@ -300,15 +300,16 @@ def main() -> None:
             path.write_text(text, encoding="utf-8")
             sources.append(path)
         output = directory / "regressions.jar"
+        # argv is passed directly with shell=False; compiler/java are absolute paths from shutil.which.
         subprocess.run([compiler, *map(str, sources), "-nowarn", "-cp", str(jar),
-                        "-include-runtime", "-d", str(output)], check=True, timeout=120)
+                        "-include-runtime", "-d", str(output)], check=True, timeout=120)  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
         import os
         classpath = os.pathsep.join((str(output), str(jar.resolve())))
         for iteration in range(args.repeat):
             print(f"Iteration {iteration + 1}/{args.repeat}", flush=True)
             subprocess.run([java, "-cp", classpath,
                             "com.orchords.orchordsai.web.LifecycleHarnessKt"],
-                           check=True, timeout=60)
+                           check=True, timeout=60)  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
 
 
 if __name__ == "__main__":

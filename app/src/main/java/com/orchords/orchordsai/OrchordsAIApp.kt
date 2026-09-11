@@ -16,6 +16,8 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import com.orchords.orchordsai.data.files.FileFolders
+import com.orchords.orchordsai.data.model.TemporaryConversationMarkerStore
+import com.orchords.orchordsai.data.model.TemporaryConversationRegistry
 import java.io.File
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -56,6 +58,13 @@ internal fun webServerNetworkPermissionAllowsAutoStart(
 class OrchordsAIApp : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        TemporaryConversationRegistry.initialize(
+            TemporaryConversationMarkerStore(
+                File(noBackupFilesDir, TemporaryConversationMarkerStore.DIRECTORY_NAME)
+            )
+        )
+
         StartupSoundPlayer(this).playOnce(R.raw.loader_start)
 
         startKoin {

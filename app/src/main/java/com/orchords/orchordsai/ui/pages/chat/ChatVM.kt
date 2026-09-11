@@ -36,6 +36,7 @@ import com.orchords.orchordsai.data.model.Avatar
 import com.orchords.orchordsai.data.model.Conversation
 import com.orchords.orchordsai.data.model.MessageNode
 import com.orchords.orchordsai.data.model.NodeFavoriteTarget
+import com.orchords.orchordsai.data.model.TemporaryConversationRegistry
 import com.orchords.orchordsai.data.repository.ConversationRepository
 import com.orchords.orchordsai.data.repository.FavoriteRepository
 import com.orchords.orchordsai.service.ChatError
@@ -85,7 +86,9 @@ class ChatVM(
             chatService.initializeConversation(_conversationId)
         }
 
-        context.writeStringPreference("lastConversationId", _conversationId.toString())
+        if (!TemporaryConversationRegistry.isTemporary(_conversationId.toString())) {
+            context.writeStringPreference("lastConversationId", _conversationId.toString())
+        }
     }
 
     override fun onCleared() {

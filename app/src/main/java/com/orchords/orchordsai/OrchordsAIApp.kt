@@ -30,7 +30,9 @@ import com.orchords.orchordsai.di.appModule
 import com.orchords.orchordsai.di.dataSourceModule
 import com.orchords.orchordsai.di.repositoryModule
 import com.orchords.orchordsai.di.viewModelModule
+import com.orchords.orchordsai.data.extensions.BuiltInLibraryInstaller
 import com.orchords.orchordsai.data.files.FilesManager
+import com.orchords.orchordsai.data.files.SkillManager
 import com.orchords.orchordsai.data.datastore.SettingsStore
 import com.orchords.orchordsai.service.WebServerService
 import com.orchords.orchordsai.utils.CrashHandler
@@ -97,11 +99,36 @@ class OrchordsAIApp : Application() {
         // sync upload files to DB
         syncManagedFiles()
 
+        // First-party modes/lorebooks/skills ship with the app and are seeded idempotently.
+        seedBuiltInLibrary()
+
         // Start WebServer if enabled in settings
         startWebServerIfEnabled()
 
         // Increment launch count
         incrementLaunchCount()
+    }
+
+    private fun seedBuiltInLibrary() {
+        get<AppScope>().launch(Dispatchers.IO) {
+            runCatching {
+                val settingsStore = get<SettingsStore>()
+                settingsStore.settingsFlow.first { !it.init }
+                val receipt = BuiltInLibraryInstaller(
+                    settingsStore = settingsStore,
+                    skillManager = get<SkillManager>(),
+                ).installMissing()
+                Log.i(
+                    TAG,
+                    "seedBuiltInLibrary: modes=${receipt.addedModes}, lorebooks=${receipt.addedLorebooks}, " +
+                        "skills=${receipt.addedSkills}, preserved=${receipt.preservedSkills}, " +
+                        "removed=${receipt.skippedRemovedSkills}, failed=${receipt.failedSkills.size}",
+                )
+            }.onFailure {
+                // Bundled-content seeding is recoverable. Never block core startup or claim success.
+                Log.e(TAG, "seedBuiltInLibrary failed", it)
+            }
+        }
     }
 
     private fun incrementLaunchCount() {

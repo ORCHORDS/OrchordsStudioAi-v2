@@ -1,6 +1,7 @@
 package com.orchords.orchordsai.data.datastore
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -29,7 +30,7 @@ private fun decodeLifecycle(preferences: Preferences): BuiltInLibraryLifecycleSt
         JsonInstant.decodeFromString<BuiltInLibraryLifecycleState>(encoded)
     } ?: BuiltInLibraryLifecycleState()
 
-private fun Preferences.writeLifecycle(state: BuiltInLibraryLifecycleState) {
+private fun MutablePreferences.writeLifecycle(state: BuiltInLibraryLifecycleState) {
     this[BUILT_IN_LIBRARY_LIFECYCLE] = JsonInstant.encodeToString(state)
 }
 

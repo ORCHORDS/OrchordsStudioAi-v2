@@ -139,6 +139,40 @@ class ConversationNodeLoaderTest {
         assertEquals(listOf(rows[0].id, rows[2].id), result.nodes.map { it.id.toString() })
     }
 
+    @Test
+    fun `legacy recovery path must not call nodeById with the full CursorWindow row`() = runBlocking {
+        // See issue #345: the legacy recovery seam MUST avoid the full-row read that
+        // historically required the (now removed) global CursorWindow reflection hack.
+        // This test loads a large inline payload through a tracking reader and asserts
+        // that the recovery path never delegates to the direct nodeById accessor.
+        val rows = (0 until 3).map(::row)
+        val legacyId = rows[1].id
+        // Build a JSON array large enough to require multiple bounded chunks. Whitespace
+        // between array brackets is valid JSON and yields an empty List<UIMessage>.
+        val largePayload = "[" + " ".repeat(LARGE_INLINE_BYTES.toInt() - 2) + "]"
+        val reader = TrackingReader(
+            rows = rows,
+            inlinePayloads = mapOf(legacyId to largePayload),
+        )
+
+        val result = loadConversationNodesSafely(
+            reader = reader,
+            conversationId = CONVERSATION_ID,
+            favoriteNodeIds = emptySet(),
+            payloadSource = legacyInlineSourceOf(reader),
+        )
+
+        // The first and third small rows decode cleanly through the legacy path; the
+        // enormous inline row gets projected too. The exact decode status of the giant
+        // row depends on platform JSON limits, so we only assert the safety property
+        // that matters for issue #345: the recovery path used chunked reads and never
+        // touched the full-row accessor.
+        assertTrue(result.nodes.isNotEmpty())
+        assertEquals(listOf(legacyId), reader.legacyChunkReads)
+        assertTrue(reader.chunkReadCount(legacyId) > 1)
+        assertEquals(emptyList<String>(), reader.fullRowReads)
+    }
+
     private fun row(index: Int) = MessageNodeEntity(
         id = id(index),
         conversationId = CONVERSATION_ID,
@@ -179,15 +213,88 @@ class ConversationNodeLoaderTest {
 
         override suspend fun legacyNodeById(nodeId: String): MessageNodeEntity? {
             legacyReads += nodeId
-            if (nodeId in legacyRecoverableIds) return rows.firstOrNull { it.id == nodeId }
-            return nodeById(nodeId)
+            // Real implementations MUST project the inline payload through bounded chunks
+            // rather than calling [nodeById], which historically required the
+            // (now removed) CursorWindow reflection override. Test fakes must not
+            // delegate to [nodeById] either, so we model the recovery seam directly:
+            // recoverable ids project a chunked payload; unreadable ids fail loudly.
+            if (nodeId in legacyRecoverableIds) {
+                val staged = rows.firstOrNull { it.id == nodeId } ?: return null
+                var cursor = 0
+                return readLegacyInlinePayload(
+                    expectedUtf8Bytes = staged.messages.toByteArray(Charsets.UTF_8).size.toLong(),
+                    maxUtf8Bytes = 16L * 1024 * 1024,
+                    chunkChars = 64 * 1024,
+                ) { startChar, maxChars ->
+                    cursor = startChar
+                    if (startChar >= staged.messages.length) ""
+                    else staged.messages.substring(startChar, minOf(startChar + maxChars, staged.messages.length))
+                }?.let { reconstructed -> staged.copy(messages = reconstructed) }
+            }
+            if (nodeId in unreadableIds) throw IllegalStateException("simulated row read failure")
+            return rows.firstOrNull { it.id == nodeId }
         }
     }
 
     companion object {
         private const val CONVERSATION_ID = "00000000-0000-0000-0000-000000000255"
+        internal const val LARGE_INLINE_BYTES = 3L * 1024 * 1024
     }
 }
+
+private class TrackingReader(
+    private val rows: List<MessageNodeEntity>,
+    private val inlinePayloads: Map<String, String>,
+) : ConversationNodeReader {
+    val fullRowReads = mutableListOf<String>()
+    val legacyChunkReads = mutableListOf<String>()
+    private val chunkReads = mutableMapOf<String, Int>()
+
+    override suspend fun count(conversationId: String): Int = rows.size
+
+    override suspend fun page(conversationId: String, limit: Int, offset: Int): List<MessageNodeEntity> {
+        // Force the loader into the legacy per-row recovery path so we can observe chunk usage.
+        throw IllegalStateException("simulated page read failure for recovery path")
+    }
+
+    override suspend fun nodeIdAtOffset(conversationId: String, offset: Int): String? {
+        return rows.getOrNull(offset)?.id
+    }
+
+    override suspend fun nodeById(nodeId: String): MessageNodeEntity? {
+        fullRowReads += nodeId
+        // Historic reflection-hack behavior lived behind this exact accessor. Fail loudly
+        // if a future caller accidentally reintroduces a direct full-row read.
+        error("TrackingReader.nodeById must not be called; the loader must project via chunks")
+    }
+
+    override suspend fun legacyNodeById(nodeId: String): MessageNodeEntity? {
+        val payload = inlinePayloads[nodeId]
+        if (payload == null) {
+            return rows.firstOrNull { it.id == nodeId }
+        }
+        val reconstructed = readLegacyInlinePayload(
+            expectedUtf8Bytes = payload.toByteArray(Charsets.UTF_8).size.toLong(),
+            maxUtf8Bytes = 16L * 1024 * 1024,
+            chunkChars = 64 * 1024,
+        ) { startChar, maxChars ->
+            if (startChar >= payload.length) ""
+            else payload.substring(startChar, minOf(startChar + maxChars, payload.length))
+                .also { if (it.isNotEmpty()) chunkReads.merge(nodeId, 1, Int::plus) }
+        } ?: return null
+        legacyChunkReads += nodeId
+        val meta = rows.first { it.id == nodeId }
+        return meta.copy(messages = reconstructed)
+    }
+
+    fun chunkReadCount(nodeId: String): Int = chunkReads[nodeId] ?: 0
+}
+
+private fun legacyInlineSourceOf(reader: TrackingReader): ConversationNodePayloadSource =
+    object : ConversationNodePayloadSource {
+        override suspend fun resolve(entity: MessageNodeEntity): String? =
+            entity.payloadBlobId?.let { null } ?: entity.messages.takeIf { it.isNotEmpty() }
+    }
 
 private object InlinePayloadSource : ConversationNodePayloadSource {
     override suspend fun resolve(entity: MessageNodeEntity): String? =

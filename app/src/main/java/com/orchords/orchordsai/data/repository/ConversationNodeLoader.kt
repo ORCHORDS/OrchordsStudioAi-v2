@@ -41,10 +41,14 @@ internal interface ConversationNodeReader {
 
     /**
      * Recovery seam for rows whose full inline payload cannot fit a CursorWindow.
-     * Tests/fakes may keep the old direct-row behavior; production overrides this
-     * with metadata + bounded substr projections.
+     *
+     * The implementation MUST materialize the payload via bounded, projected reads
+     * (e.g. metadata + scalar UTF-8 byte length + substring chunks) so that no call
+     * ever has to load the full row into a CursorWindow. Implementations must not
+     * delegate back to [nodeById]; doing so reintroduces the historical reflection
+     * hack that this loader exists to retire.
      */
-    suspend fun legacyNodeById(nodeId: String): MessageNodeEntity? = nodeById(nodeId)
+    suspend fun legacyNodeById(nodeId: String): MessageNodeEntity?
 }
 
 internal suspend fun loadConversationNodesSafely(

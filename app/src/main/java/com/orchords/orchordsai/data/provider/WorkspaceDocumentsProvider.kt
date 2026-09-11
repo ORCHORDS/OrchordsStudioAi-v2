@@ -97,6 +97,7 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
                     .forEach { addFileRow(cursor, parent.root, it) }
             }
         }
+        registerNotificationUri(cursor, parentDocumentId)
         return cursor
     }
 
@@ -290,13 +291,26 @@ class WorkspaceDocumentsProvider : DocumentsProvider() {
     private fun buildDocId(root: String, relPath: String): String =
         if (relPath.isEmpty()) "$DOC_PREFIX$root" else "$DOC_PREFIX$root/$relPath"
 
-    private fun notifyChange(parentDocumentId: String) {
+    private fun registerNotificationUri(cursor: MatrixCursor, parentDocumentId: String) {
         val ctx = context ?: return
-        val uri = DocumentsContract.buildChildDocumentsUri(
-            ctx.packageName + ".documents",
+        cursor.setNotificationUri(
+            ctx.contentResolver,
+            childDocumentsUri(ctx.packageName, parentDocumentId),
+        )
+    }
+
+    private fun childDocumentsUri(packageName: String, parentDocumentId: String) =
+        DocumentsContract.buildChildDocumentsUri(
+            "$packageName.documents",
             parentDocumentId,
         )
-        ctx.contentResolver.notifyChange(uri, null)
+
+    private fun notifyChange(parentDocumentId: String) {
+        val ctx = context ?: return
+        ctx.contentResolver.notifyChange(
+            childDocumentsUri(ctx.packageName, parentDocumentId),
+            null,
+        )
     }
 
     private data class DocId(

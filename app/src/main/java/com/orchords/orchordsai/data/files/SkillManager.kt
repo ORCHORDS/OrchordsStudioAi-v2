@@ -6,6 +6,9 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.orchords.orchordsai.data.datastore.SettingsStore
+import com.orchords.orchordsai.data.extensions.BuiltInLibrary
+import com.orchords.orchordsai.data.extensions.clearBuiltInSkillTombstone
+import com.orchords.orchordsai.data.extensions.tombstoneBuiltInSkill
 
 class SkillManager(
     private val context: Context,
@@ -48,21 +51,31 @@ class SkillManager(
 
     suspend fun deleteSkill(name: String): Boolean = withContext(Dispatchers.IO) {
         val skillDir = resolveSkillDir(name) ?: return@withContext false
-        val deleted = SkillPackageStore.withLock { skillDir.deleteRecursively() }
-        if (deleted) {
-            settingsStore.update { settings ->
-                settings.copy(
-                    assistants = settings.assistants.map { assistant ->
-                        if (assistant.enabledSkills.contains(name)) {
-                            assistant.copy(enabledSkills = assistant.enabledSkills - name)
-                        } else {
-                            assistant
-                        }
-                    }
-                )
-            }
+        val catalogNames = BuiltInLibrary.catalog.skills.mapTo(linkedSetOf()) { it.name }
+        val isBuiltInName = name in catalogNames
+        val skillsRoot = getSkillsDir()
+        if (isBuiltInName) {
+            // Persist deletion intent before removing the package so startup seeding cannot race and
+            // interpret this explicit removal as a missing bundled skill.
+            tombstoneBuiltInSkill(skillsRoot, name, catalogNames)
         }
-        deleted
+        val deleted = SkillPackageStore.withLock { skillDir.deleteRecursively() }
+        if (!deleted) {
+            if (isBuiltInName) clearBuiltInSkillTombstone(skillsRoot, name)
+            return@withContext false
+        }
+        settingsStore.update { settings ->
+            settings.copy(
+                assistants = settings.assistants.map { assistant ->
+                    if (assistant.enabledSkills.contains(name)) {
+                        assistant.copy(enabledSkills = assistant.enabledSkills - name)
+                    } else {
+                        assistant
+                    }
+                }
+            )
+        }
+        true
     }
 
     suspend fun pruneOrphanedEnabledSkills(): List<SkillMetadata> = withContext(Dispatchers.IO) {

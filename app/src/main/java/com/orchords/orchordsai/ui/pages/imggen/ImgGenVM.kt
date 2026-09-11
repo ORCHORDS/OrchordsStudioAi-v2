@@ -252,7 +252,6 @@ class ImgGenVM(
 
                     val imageFile = saveImagePreview(
                         item = item,
-                        modelName = modelName,
                         index = slotIndex,
                     )
                     val generatedImage = GeneratedImage(
@@ -308,11 +307,15 @@ class ImgGenVM(
 
     private fun saveImagePreview(
         item: ImageGenerationItem,
-        modelName: String,
         index: Int,
     ): File {
         val timestamp = System.currentTimeMillis()
-        val imageFile = File(getApplication<Application>().appTempFolder, "imggen_${timestamp}_${modelName}_$index.png")
+        val imageFile = allocateGeneratedMediaFile(
+            root = getApplication<Application>().appTempFolder,
+            kind = GeneratedMediaFileKind.PREVIEW,
+            timestamp = timestamp,
+            index = index,
+        )
         return filesManager.createImageFileFromBase64(item.data, imageFile.absolutePath)
     }
 
@@ -325,14 +328,17 @@ class ImgGenVM(
         sourcePaths: String? = null,
     ): File {
         val imagesDir = filesManager.getImagesDir()
-
         val timestamp = System.currentTimeMillis()
-        val filename = "${timestamp}_${modelName}_$index.png"
-        val imageFile = File(imagesDir, filename)
+        val imageFile = allocateGeneratedMediaFile(
+            root = imagesDir,
+            kind = GeneratedMediaFileKind.FINAL,
+            timestamp = timestamp,
+            index = index,
+        )
 
         val createdFile = filesManager.createImageFileFromBase64(item.data, imageFile.absolutePath)
 
-        // Save to database with relative path
+        // Save to database with relative path. Model display text remains metadata, never path identity.
         val relativePath = "images/${imageFile.name}"
         val entity = GenMediaEntity(
             path = relativePath,

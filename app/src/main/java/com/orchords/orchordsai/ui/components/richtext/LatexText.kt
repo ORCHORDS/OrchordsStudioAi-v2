@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
 import ru.noties.jlatexmath.JLatexMathDrawable
-import ru.noties.jlatexmath.JLatexMathSplitter
 
 fun assumeLatexSize(latex: String, fontSize: Float): Rect {
     return runCatching {
@@ -97,6 +96,8 @@ fun getLatexDrawable(
 }
 
 /**
+ * Wrap inline LaTeX only at syntax-safe top-level boundaries. Protected groups are rendered as
+ * one drawable even when they exceed [maxWidthPx]; visual overflow is safer than corrupting math.
  */
 fun splitLatex(
     latex: String,
@@ -105,11 +106,43 @@ fun splitLatex(
     color: Int
 ): List<JLatexMathDrawable> {
     return runCatching {
-        JLatexMathSplitter.split(processLatex(latex), maxWidthPx, fontSize, color)
+        val processed = processLatex(latex)
+        val atomicSegments = segmentLatexForWrapping(processed)
+        if (atomicSegments.size == 1) {
+            return@runCatching listOf(buildInlineLatexDrawable(atomicSegments.single(), fontSize, color))
+        }
+
+        val lines = mutableListOf<JLatexMathDrawable>()
+        var current = ""
+        atomicSegments.forEach { segment ->
+            val candidate = current + segment
+            val candidateDrawable = buildInlineLatexDrawable(candidate, fontSize, color)
+            if (current.isNotEmpty() && candidateDrawable.bounds.width() > maxWidthPx) {
+                lines += buildInlineLatexDrawable(current, fontSize, color)
+                current = segment
+            } else {
+                current = candidate
+            }
+        }
+        if (current.isNotEmpty()) {
+            lines += buildInlineLatexDrawable(current, fontSize, color)
+        }
+        lines
     }.onFailure {
         it.printStackTrace()
     }.getOrElse { emptyList() }
 }
+
+private fun buildInlineLatexDrawable(
+    latex: String,
+    fontSize: Float,
+    color: Int,
+): JLatexMathDrawable = JLatexMathDrawable.builder(latex)
+    .textSize(fontSize)
+    .color(color)
+    .padding(0)
+    .align(JLatexMathDrawable.ALIGN_LEFT)
+    .build()
 
 @Composable
 fun LatexDrawable(

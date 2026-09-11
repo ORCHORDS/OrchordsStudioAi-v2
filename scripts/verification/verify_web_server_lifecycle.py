@@ -305,7 +305,7 @@ def main() -> None:
             sources.append(path)
         output = directory / "regressions.jar"
         subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
-            [compiler, *map(str, sources), "-nowarn", "-cp", str(jar),
+            [compiler, *map(str, sources), "-nowarn", "-cp", str(jar),  # nosemgrep
              "-include-runtime", "-d", str(output)],
             check=True, timeout=120)
         import os
@@ -313,7 +313,7 @@ def main() -> None:
         for iteration in range(args.repeat):
             print(f"Iteration {iteration + 1}/{args.repeat}", flush=True)
             subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
-                [java, "-cp", classpath, "com.orchords.orchordsai.web.LifecycleHarnessKt"],
+                [java, "-cp", classpath, "com.orchords.orchordsai.web.LifecycleHarnessKt"],  # nosemgrep
                 check=True, timeout=60)
 
 

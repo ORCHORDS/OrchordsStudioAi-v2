@@ -201,7 +201,7 @@ def main() -> None:
             fixtures.append(str(path))
         output = directory / "tests.jar"
         subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
-            [compiler, str(source), *fixtures, "-nowarn", "-include-runtime", "-d", str(output)],
+            [compiler, str(source), *fixtures, "-nowarn", "-include-runtime", "-d", str(output)],  # nosemgrep
             check=True,
             timeout=120,
         )

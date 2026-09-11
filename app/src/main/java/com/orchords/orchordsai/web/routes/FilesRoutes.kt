@@ -110,7 +110,10 @@ fun Route.filesRoutes(
             val file = resolveManagedWebFileById(context.filesDir, entity)
                 ?: throw NotFoundException("File not found")
 
-            call.response.header("Content-Type", entity.mimeType)
+            val headers = managedFileDownloadHeaders(entity.displayName)
+            call.response.header("Content-Type", headers.contentType)
+            call.response.header("Content-Disposition", headers.contentDisposition)
+            call.response.header("X-Content-Type-Options", headers.contentTypeOptions)
             call.respondFile(file)
         }
 
@@ -133,9 +136,10 @@ fun Route.filesRoutes(
                 managedFile = entity,
             ) ?: throw NotFoundException("File not found")
 
-            val contentType = entity.mimeType.takeIf { it.isNotBlank() }
-                ?: ContentType.Application.OctetStream.toString()
-            call.response.header("Content-Type", contentType)
+            val headers = managedFileDownloadHeaders(entity.displayName)
+            call.response.header("Content-Type", headers.contentType)
+            call.response.header("Content-Disposition", headers.contentDisposition)
+            call.response.header("X-Content-Type-Options", headers.contentTypeOptions)
             call.respondFile(file)
         }
     }

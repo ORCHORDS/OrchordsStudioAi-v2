@@ -295,6 +295,74 @@ class ChatCompletionsRequestMessageTest {
     }
 
     @Test
+    fun `system message is serialized first with content preserved on canonical gateway`() {
+        // Regression for #416: confirm the canonical gateway path places the system instruction
+        // ahead of any user/assistant content, preserves the prompt verbatim, and resolves to a
+        // stable instruction role (system or developer) for the active model+host pair.
+        val messages = listOf(
+            UIMessage.system("You are Orchords, the first-party assistant."),
+            UIMessage.user("Hello"),
+            UIMessage.assistant("Hi there"),
+            UIMessage.user("Tell me a joke"),
+        )
+
+        val result = invokeBuildMessages(messages)
+
+        assertTrue(
+            "system must produce at least one serialized message",
+            result.isNotEmpty(),
+        )
+        val first = result[0].jsonObject
+        val firstRole = first["role"]?.jsonPrimitive?.content
+        assertTrue(
+            "instruction role must be one of the canonical first-party variants",
+            firstRole == "system" || firstRole == "developer",
+        )
+        assertEquals(
+            "You are Orchords, the first-party assistant.",
+            first["content"]?.jsonPrimitive?.content,
+        )
+        // User messages must follow the system instruction.
+        val firstUserIndex = result.indexOfFirst {
+            it.jsonObject["role"]?.jsonPrimitive?.content == "user"
+        }
+        assertTrue("expected a user message after system", firstUserIndex > 0)
+    }
+
+    @Test
+    fun `parallel tool results keep exact tool_call_id correlation`() {
+        // Regression for #416 continuation: each tool result must keep the original
+        // tool_call_id verbatim; the request must not reorder results away from their calls.
+        val assistantMessage = UIMessage(
+            role = MessageRole.ASSISTANT,
+            parts = listOf(
+                UIMessagePart.Text("Dispatching"),
+                createExecutedTool("call_a", "lookup", "{\"k\":1}", "alpha"),
+                createExecutedTool("call_b", "lookup", "{\"k\":2}", "beta"),
+            ),
+        )
+
+        val result = invokeBuildMessages(
+            listOf(UIMessage.user("Do two lookups"), assistantMessage),
+        )
+
+        val toolMessages = result.map { it.jsonObject }.filter {
+            it["role"]?.jsonPrimitive?.content == "tool"
+        }
+        assertEquals(2, toolMessages.size)
+        assertEquals(
+            listOf("call_a", "call_b"),
+            toolMessages.map { it["tool_call_id"]?.jsonPrimitive?.content },
+        )
+        // First tool result must reference the first assistant tool_call id.
+        val assistant = result.first { it.jsonObject.containsKey("tool_calls") }.jsonObject
+        val calls = assistant["tool_calls"]?.jsonArray.orEmpty()
+        assertEquals(listOf("call_a", "call_b"), calls.map {
+            it.jsonObject["id"]?.jsonPrimitive?.content
+        })
+    }
+
+    @Test
     fun `complex multi-round conversation with interleaved reasoning and tools`() {
         // Complex scenario simulating agent conversation
         val messages = listOf(

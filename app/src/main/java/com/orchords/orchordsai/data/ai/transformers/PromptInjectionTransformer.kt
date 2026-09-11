@@ -39,6 +39,7 @@ internal fun transformMessages(
     lorebooks: List<Lorebook>,
     conversationModeInjectionIds: Set<Uuid> = emptySet(),
     conversationLorebookIds: Set<Uuid> = emptySet(),
+    runtimeVariables: PromptInjectionRuntimeVariables = PromptInjectionRuntimeVariables.capture(),
 ): List<UIMessage> {
     val budgeted = selectBudgetedInjections(
         collectInjectionCandidates(
@@ -50,7 +51,7 @@ internal fun transformMessages(
             conversationLorebookIds = conversationLorebookIds,
         )
     )
-    val injections = budgeted.injections
+    val injections = budgeted.injections.map { it.renderRuntimeVariables(runtimeVariables) }
 
     if (injections.isEmpty()) {
         return messages

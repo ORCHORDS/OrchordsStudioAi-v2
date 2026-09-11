@@ -37,6 +37,15 @@ class AssistantRoleBoundaryPolicyTest {
     }
 
     @Test
+    fun `assistant context stays disabled until explicit consent policy exists`() {
+        val service = source("app/src/main/java/com/orchords/orchordsai/service/assistant/OrchordsVoiceInteractionServices.kt")
+
+        assertTrue(service.contains("setDisabledShowContext"))
+        assertTrue(service.contains("VoiceInteractionSession.SHOW_WITH_ASSIST"))
+        assertTrue(service.contains("VoiceInteractionSession.SHOW_WITH_SCREENSHOT"))
+    }
+
+    @Test
     fun `assistant role gateway uses official role contract`() {
         val gateway = source("app/src/main/java/com/orchords/orchordsai/service/assistant/AssistantRoleGateway.kt")
         assertTrue(gateway.contains("RoleManager.ROLE_ASSISTANT"))

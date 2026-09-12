@@ -7,10 +7,10 @@ import kotlinx.serialization.Serializable
  * Controls whether OpenAI Chat Completions tool-result messages include the
  * optional compatibility `name` member.
  *
- * AUTO follows known route behavior: native OpenAI omits the field, while the
- * Gemini OpenAI-compatible bridge requires the provider-visible function name.
- * Unknown compatible endpoints conservatively omit it and can explicitly opt
- * in with INCLUDE. No compatibility retry is performed after network I/O.
+ * AUTO resolves to a deterministic OMIT for every host. The first-party
+ * oai-1.0 contract never relies on a name field; non-Orchards OpenAI-compatible
+ * endpoints must explicitly opt in with INCLUDE if their bridge requires it.
+ * Arbitrary OpenAI-compatible endpoints are out of scope for AUTO (#353).
  */
 @Serializable
 enum class ToolResultNameMode {
@@ -30,5 +30,5 @@ internal fun resolveToolResultName(
 ): Boolean = when (mode) {
     ToolResultNameMode.INCLUDE -> true
     ToolResultNameMode.OMIT -> false
-    ToolResultNameMode.AUTO -> host == "generativelanguage.googleapis.com"
+    ToolResultNameMode.AUTO -> false
 }

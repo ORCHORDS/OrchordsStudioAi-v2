@@ -53,11 +53,31 @@ class ChatCompletionsToolResultNameTest {
     }
 
     @Test
-    fun `Gemini OpenAI compatible AUTO includes provider visible tool name`() {
+    fun `arbitrary compatible endpoint AUTO omits tool result name per first party contract`() {
+        // Regression for #353: AUTO on a non-Orchards host omits the optional name
+        // member. The canonical gateway has no name field requirement; any other
+        // OpenAI-compatible endpoint needing the field must opt in with INCLUDE.
         val body = buildRequest(
             providerSetting = ProviderSetting.OpenAI(
                 baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
                 toolResultNameMode = ToolResultNameMode.AUTO,
+            ),
+            message = executedToolMessage("call-gemini", "provider_safe_name"),
+        )
+
+        val result = toolResult(body)
+        assertEquals("call-gemini", result["tool_call_id"]?.jsonPrimitive?.content)
+        assertFalse(result.containsKey("name"))
+    }
+
+    @Test
+    fun `arbitrary compatible endpoint can still include tool result name via explicit INCLUDE`() {
+        // Regression for #353: the INCLUDE override is preserved for bridges that
+        // explicitly require the provider-visible tool name. AUTO never implies it.
+        val body = buildRequest(
+            providerSetting = ProviderSetting.OpenAI(
+                baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
+                toolResultNameMode = ToolResultNameMode.INCLUDE,
             ),
             message = executedToolMessage("call-gemini", "provider_safe_name"),
         )
@@ -151,6 +171,82 @@ class ChatCompletionsToolResultNameTest {
         assertTrue(error.cause is IllegalArgumentException)
         assertTrue(error.cause?.message.orEmpty().contains("tool_call_id"))
     }
+
+    @Test
+    fun `Orchords gateway AUTO mode omits tool result name for first party contract`() {
+        // Regression for #353: under AUTO and the canonical Orchords gateway host,
+        // role=tool messages must omit the optional name member. The production
+        // OAI-1.0 route only binds results through tool_call_id and never relies
+        // on the gateway receiving a name field that originated from internal
+        // display text or aliases.
+        val body = buildRequest(
+            providerSetting = ProviderSetting.OpenAI(
+                baseUrl = "https://api.orchords.com/v1",
+                toolResultNameMode = ToolResultNameMode.AUTO,
+            ),
+            message = executedToolMessage("call-orchords", "orchords_search"),
+        )
+
+        val result = toolResult(body)
+        assertEquals("call-orchords", result["tool_call_id"]?.jsonPrimitive?.content)
+        assertFalse(
+            "OAI-1.0 role=tool result must not serialize a name field for the canonical gateway",
+            result.containsKey("name"),
+        )
+    }
+
+    @Test
+    fun `unknown arbitrary OpenAI compatible endpoint AUTO omits tool result name`() {
+        // Regression for #353: with AUTO on a host that is not the canonical
+        // Orchords gateway, the resolver must omit the optional name member.
+        // Cross-provider compatibility matrices are explicitly out of scope for
+        // the first-party oai-1.0 contract.
+        val body = buildRequest(
+            providerSetting = ProviderSetting.OpenAI(
+                baseUrl = "https://arbitrary.example/v1",
+                toolResultNameMode = ToolResultNameMode.AUTO,
+            ),
+            message = executedToolMessage("call-unknown", "tool"),
+        )
+
+        val result = toolResult(body)
+        assertEquals("call-unknown", result["tool_call_id"]?.jsonPrimitive?.content)
+        assertFalse(result.containsKey("name"))
+    }
+
+    @Test
+    fun `parallel MCP tool calls remain unambiguous on the Orchords gateway`() {
+        // Regression for #353: locally we may hold namespaced MCP tool identities
+        // (with `/` and `.`), but on the canonical gateway the wire shape stays
+        // deterministic per call: tool_call_id binds the result, no result-name
+        // derivation from display text, and unrelated ids remain unambiguous.
+        val canonical = "mcp__workspace/server.read-file"
+        val messageA = executedToolMessage("call_a", canonical)
+        val messageB = executedToolMessage("call_b", "orchords_search")
+        val body = buildRequest(
+            providerSetting = ProviderSetting.OpenAI(
+                baseUrl = "https://api.orchords.com/v1",
+                toolResultNameMode = ToolResultNameMode.AUTO,
+            ),
+            message = mergeToolMessages(messageA, messageB),
+        )
+        val results = body["messages"]?.jsonArray
+            ?.map { it.jsonObject }
+            ?.filter { it["role"]?.jsonPrimitive?.content == "tool" }
+            ?: error("tool result messages missing")
+
+        val callIds = results.map { it["tool_call_id"]?.jsonPrimitive?.content }
+        assertEquals(listOf("call_a", "call_b"), callIds)
+        assertTrue(
+            "no tool result should attach a name on the first-party gateway",
+            results.none { it.containsKey("name") },
+        )
+    }
+
+    private fun mergeToolMessages(a: UIMessage, b: UIMessage): UIMessage = UIMessage(
+        role = MessageRole.ASSISTANT,
+        parts = (a.parts + b.parts),
+    )
 
     private fun executedToolMessage(callId: String, toolName: String): UIMessage = UIMessage(
         role = MessageRole.ASSISTANT,

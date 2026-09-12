@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.onFailure
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
@@ -77,11 +78,16 @@ import okhttp3.sse.EventSources
 import kotlin.time.Clock
 
 private const val TAG = "ChatCompletionsAPI"
+internal const val DEFAULT_STREAM_BUFFER_CAPACITY = 64
 
 class ChatCompletionsAPI(
     private val client: OkHttpClient,
-    private val keyRoulette: KeyRoulette
+    private val keyRoulette: KeyRoulette,
+    private val streamBufferCapacity: Int = DEFAULT_STREAM_BUFFER_CAPACITY,
 ) : OpenAIImpl {
+    init {
+        require(streamBufferCapacity > 0) { "streamBufferCapacity must be positive" }
+    }
     override suspend fun generateText(
         providerSetting: ProviderSetting.OpenAI,
         messages: List<UIMessage>,
@@ -165,8 +171,8 @@ class ChatCompletionsAPI(
 
         fun sendChunks(chunks: Iterable<StreamChunk>) {
             chunks.forEach { chunk ->
-                trySend(chunk).onFailure { e ->
-                    Log.w(TAG, "onEvent: chunk dropped type=${e?.javaClass?.simpleName ?: "Unknown"}")
+                trySendBlocking(chunk).onFailure { e ->
+                    Log.w(TAG, "onEvent: chunk delivery failed type=${e?.javaClass?.simpleName ?: "Unknown"}")
                 }
             }
         }
@@ -222,7 +228,7 @@ class ChatCompletionsAPI(
         awaitClose {
             eventSource.cancel()
         }
-    }.buffer(Channel.UNLIMITED)
+    }.buffer(streamBufferCapacity)
 
     private fun buildChatCompletionRequest(
         messages: List<UIMessage>,

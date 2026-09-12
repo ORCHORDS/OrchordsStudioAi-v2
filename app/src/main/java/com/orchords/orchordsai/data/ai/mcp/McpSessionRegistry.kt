@@ -440,6 +440,12 @@ internal class McpSessionRegistry(
     private fun HttpRequestBuilder.appendResolvedHeaders(config: McpServerConfig) {
         headers.appendAll(StringValues.build {
             config.resolvedHeaders().forEach { (name, value) -> append(name, value) }
+            if (isCloudflareMcpHost(config.serverUrl)) {
+                // Cloudflare's streamable-HTTP MCP gateway rejects plain POSTs that do
+                // not advertise both the JSON and SSE response variants; advertise both
+                // so the gateway can negotiate a direct streamable-HTTP session.
+                append("Accept", MCP_STREAMABLE_ACCEPT)
+            }
         })
     }
 
@@ -462,6 +468,16 @@ internal data class McpConnectionKey(
     val clientName: String,
     val headers: List<Pair<String, String>>,
 )
+
+internal const val MCP_STREAMABLE_ACCEPT = "application/json, text/event-stream"
+
+internal fun isCloudflareMcpHost(url: String): Boolean {
+    val host = runCatching { java.net.URI(url).host?.lowercase() }.getOrNull() ?: return false
+    return host == "cloudflare.com" ||
+        host == "mcp.cloudflare.com" ||
+        host.endsWith(".cloudflare.com") ||
+        host.endsWith(".mcp.cloudflare.com")
+}
 
 internal fun McpServerConfig.connectionKey(): McpConnectionKey = McpConnectionKey(
     transportType = when (this) {

@@ -39,6 +39,7 @@ class ConversationRepository(
     private val filesManager: FilesManager,
     private val messageFtsManager: MessageFtsManager,
     private val messageNodePayloadStore: MessageNodePayloadStore,
+    private val favoriteRepository: FavoriteRepository,
 ) {
 
     private val payloadSource = object : ConversationNodePayloadSource {
@@ -361,7 +362,7 @@ class ConversationRepository(
     }
 
     private suspend fun loadMessageNodes(conversationId: String): MessageNodeLoadResult {
-        val favoriteNodeIds = favoriteDAO.getNodeFavoritesOfConversation(conversationId)
+        val favoriteNodeIds = favoriteRepository.getNodeFavoritesOfConversation(Uuid.parse(conversationId))
             .mapNotNull { NodeFavoriteAdapter.decodeRef(it)?.nodeId }
             .toSet()
         return database.withTransaction {

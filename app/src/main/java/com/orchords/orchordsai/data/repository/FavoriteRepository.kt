@@ -17,7 +17,18 @@ class FavoriteRepository(
 
     suspend fun getByRefKey(refKey: String): FavoriteEntity? = dao.getByRefKey(refKey)
 
-    suspend fun existsByRefKey(refKey: String): Boolean = dao.existsByRefKey(refKey)
+    suspend fun existsByRefKey(refKey: String): Boolean {
+        val entity = dao.getByRefKey(refKey) ?: return false
+        return when (entity.type) {
+            FavoriteType.NODE.value -> NodeFavoriteAdapter.decodeRef(entity) != null
+            else -> true
+        }
+    }
+
+    suspend fun getNodeFavoritesOfConversation(conversationId: Uuid): List<FavoriteEntity> {
+        return dao.getNodeFavoritesOfConversation(conversationId.toString())
+            .filter { NodeFavoriteAdapter.decodeRef(it)?.conversationId == conversationId }
+    }
 
     suspend fun deleteByRefKey(refKey: String): Int = dao.deleteByRefKey(refKey)
 

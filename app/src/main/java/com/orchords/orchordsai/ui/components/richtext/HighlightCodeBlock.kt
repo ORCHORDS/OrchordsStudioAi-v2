@@ -77,6 +77,7 @@ import com.orchords.orchordsai.ui.modifier.onClick
 import com.orchords.orchordsai.ui.theme.AtomOneDarkPalette
 import com.orchords.orchordsai.ui.theme.AtomOneLightPalette
 import com.orchords.orchordsai.ui.theme.JetbrainsMono
+import com.orchords.orchordsai.ui.theme.applyCodeFontFamily
 import com.orchords.orchordsai.ui.theme.LocalDarkMode
 import com.orchords.orchordsai.utils.toDp
 import kotlin.time.Clock
@@ -270,6 +271,7 @@ private fun CodeBlockWithLineNumbersWrapped(
                         fontFamily = JetbrainsMono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         softWrap = false,
+                        style = textStyle.applyCodeFontFamily(),
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     CodeHighlightText(
@@ -324,6 +326,7 @@ private fun CodeBlockDefault(
                         fontFamily = JetbrainsMono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         softWrap = false,
+                        style = textStyle.applyCodeFontFamily(),
                     )
                 }
             }
@@ -370,6 +373,7 @@ private fun HighlightCodeActions(
             fontFamily = JetbrainsMono,
             color = MaterialTheme.colorScheme.onSurfaceVariant
                 .copy(alpha = 0.5f),
+            style = TextStyle.Default.applyCodeFontFamily(),
         )
         Spacer(Modifier.weight(1f))
         Row(

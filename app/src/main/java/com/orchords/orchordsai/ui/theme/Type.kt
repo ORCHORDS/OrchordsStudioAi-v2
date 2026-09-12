@@ -86,3 +86,23 @@ val JetbrainsMono = FontFamily(
         )
     )
 )
+
+/**
+ * OpenType feature policy for source-code surfaces: disable programming
+ * ligatures and contextual alternates so consecutive operator glyphs such
+ * as `==`, `===`, `->`, `>=` render as separate code points instead of
+ * merging into a single ligature glyph. Keep this string in sync with
+ * `com.orchords.highlight.CODE_FONT_FEATURE_SETTINGS`.
+ */
+const val CODE_FONT_FEATURE_SETTINGS = "\"liga\" 0, \"calt\" 0"
+
+/**
+ * Merge the [JetbrainsMono] font family and the code-feature policy onto
+ * an existing [TextStyle]. Code-oriented `Text(...)` callsites that don't
+ * route through `CodeHighlightText` (line numbers, language labels) must
+ * apply this helper so ligature suppression stays consistent.
+ */
+fun TextStyle.applyCodeFontFamily(): TextStyle = copy(
+    fontFamily = JetbrainsMono,
+    fontFeatureSettings = CODE_FONT_FEATURE_SETTINGS,
+)

@@ -42,6 +42,8 @@ data class Conversation(
     @Transient
     val corruptNodeIds: Set<String> = emptySet(),
     @Transient
+    val integrityFields: Set<String> = emptySet(),
+    @Transient
     val newConversation: Boolean = false
 ) {
     val files: List<Uri>

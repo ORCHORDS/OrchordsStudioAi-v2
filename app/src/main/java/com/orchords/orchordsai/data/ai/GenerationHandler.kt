@@ -32,7 +32,9 @@ import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.ToolApprovalState
 import com.orchords.ai.ui.StreamChunkHandler
 import com.orchords.ai.ui.handleTextGenerationResult
+import com.orchords.ai.ui.applyToolResultRetention
 import com.orchords.ai.ui.limitContext
+import com.orchords.ai.ui.ToolResultRetentionMode
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.data.ai.transformers.InputMessageTransformer
 import com.orchords.orchordsai.data.ai.transformers.MessageTransformer
@@ -48,6 +50,8 @@ import com.orchords.orchordsai.data.db.dao.ProviderUsageEventDAO
 import com.orchords.orchordsai.data.db.entity.ProviderUsageEventEntity
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.model.AssistantMemory
+import com.orchords.orchordsai.data.model.resolvedToolResultRetentionDepth
+import com.orchords.orchordsai.data.model.toUiMode
 import com.orchords.orchordsai.data.repository.MemoryRepository
 import java.io.File
 import java.io.IOException
@@ -399,7 +403,14 @@ class GenerationHandler(
             if (system.isNotBlank()) {
                 add(UIMessage.system(prompt = system).copy(isSynthetic = true))
             }
-            addAll(messages.limitContext(assistant.contextMessageLimit))
+            addAll(
+                messages
+                    .limitContext(assistant.contextMessageLimit)
+                    .applyToolResultRetention(
+                        mode = assistant.toolResultRetention.toUiMode(),
+                        latestNRounds = assistant.resolvedToolResultRetentionDepth(),
+                    )
+            )
         }.transforms(
             transformers = transformers,
             context = context,

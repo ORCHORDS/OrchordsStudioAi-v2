@@ -22,6 +22,8 @@ data class Assistant(
     val temperature: Float? = null,
     val topP: Float? = null,
     val contextMessageLimit: Int = 0,
+    val toolResultRetention: ToolResultRetention = ToolResultRetention.ALL,
+    val toolResultRetentionDepth: Int = DEFAULT_TOOL_RESULT_RETENTION_DEPTH,
     val streamOutput: Boolean = true,
     val enableMemory: Boolean = false,
     val useGlobalMemory: Boolean = false,
@@ -61,6 +63,32 @@ data class AssistantMemory(
     val id: Int,
     val content: String = "",
 )
+
+@Serializable
+enum class ToolResultRetention {
+    @SerialName("all")
+    ALL,
+
+    @SerialName("latest_n")
+    LATEST_N,
+
+    @SerialName("omit_older_completed")
+    OMIT_OLDER_COMPLETED,
+}
+
+const val DEFAULT_TOOL_RESULT_RETENTION_DEPTH = 8
+const val MAX_TOOL_RESULT_RETENTION_DEPTH = 256
+
+fun Assistant.resolvedToolResultRetentionDepth(): Int {
+    if (toolResultRetention != ToolResultRetention.LATEST_N) return Int.MAX_VALUE
+    return toolResultRetentionDepth.coerceIn(1, MAX_TOOL_RESULT_RETENTION_DEPTH)
+}
+
+fun ToolResultRetention.toUiMode(): com.orchords.ai.ui.ToolResultRetentionMode = when (this) {
+    ToolResultRetention.ALL -> com.orchords.ai.ui.ToolResultRetentionMode.ALL
+    ToolResultRetention.LATEST_N -> com.orchords.ai.ui.ToolResultRetentionMode.LATEST_N
+    ToolResultRetention.OMIT_OLDER_COMPLETED -> com.orchords.ai.ui.ToolResultRetentionMode.OMIT_OLDER_COMPLETED
+}
 
 @Serializable
 enum class AssistantAffectScope {

@@ -77,6 +77,19 @@ interface MessageNodeDAO {
     )
     suspend fun getNodeMetaById(nodeId: String): MessageNodeMeta?
 
+    /**
+     * Return the owning `conversation_id` for each id that exists. Missing ids are
+     * omitted from the result. Used to validate cross-conversation identity collisions
+     * before any destructive save — see #295.
+     */
+    @Query("SELECT id, conversation_id FROM message_node WHERE id IN (:nodeIds)")
+    suspend fun getOwnersByIds(nodeIds: List<String>): List<NodeOwnerRow>
+
+    data class NodeOwnerRow(
+        val id: String,
+        @ColumnInfo("conversation_id") val conversationId: String,
+    )
+
     /** Scalar byte length is safe to read even when the text itself cannot fit a CursorWindow. */
     @Query(
         "SELECT length(CAST(messages AS BLOB)) FROM message_node " +

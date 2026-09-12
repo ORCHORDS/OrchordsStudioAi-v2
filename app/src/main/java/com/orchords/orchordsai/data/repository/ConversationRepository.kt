@@ -194,9 +194,20 @@ class ConversationRepository(
     suspend fun insertConversation(conversation: Conversation) {
         if (!conversation.allowsRepositoryPersistence()) return
         requireCompleteConversationForRewrite(conversation)
+        val conversationId = conversation.id.toString()
+        val nodeIds = conversation.messageNodes.map { it.id.toString() }
+        // Fail fast before any destructive delete/insert: a node ID owned by a
+        // different conversation is an identity conflict (#295), not a legitimate
+        // upsert. Validation must run outside the transaction so a thrown error
+        // does not leave the database mid-mutation.
+        ConversationIdentityPolicy.assertNoCrossConversationCollision(
+            messageNodeDAO = messageNodeDAO,
+            targetConversationId = conversationId,
+            nodeIds = nodeIds,
+        )
         database.withTransaction {
             conversationDAO.insert(conversationToConversationEntity(conversation))
-            saveMessageNodes(conversation.id.toString(), conversation.messageNodes)
+            saveMessageNodes(conversationId, conversation.messageNodes)
         }
         messageFtsManager.indexConversation(conversation)
     }
@@ -204,10 +215,21 @@ class ConversationRepository(
     suspend fun updateConversation(conversation: Conversation) {
         if (!conversation.allowsRepositoryPersistence()) return
         requireCompleteConversationForRewrite(conversation)
+        val conversationId = conversation.id.toString()
+        val nodeIds = conversation.messageNodes.map { it.id.toString() }
+        // Fail fast before `deleteByConversation`: a colliding node id owned by
+        // another conversation must reject the rewrite atomically (#295). Validating
+        // outside the transaction means a thrown exception leaves every existing
+        // row untouched.
+        ConversationIdentityPolicy.assertNoCrossConversationCollision(
+            messageNodeDAO = messageNodeDAO,
+            targetConversationId = conversationId,
+            nodeIds = nodeIds,
+        )
         database.withTransaction {
             conversationDAO.update(conversationToConversationEntity(conversation))
-            messageNodeDAO.deleteByConversation(conversation.id.toString())
-            saveMessageNodes(conversation.id.toString(), conversation.messageNodes)
+            messageNodeDAO.deleteByConversation(conversationId)
+            saveMessageNodes(conversationId, conversation.messageNodes)
         }
         messageFtsManager.indexConversation(conversation)
     }

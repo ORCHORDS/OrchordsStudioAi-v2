@@ -30,4 +30,44 @@ class MessageNodeIdentityConflictPolicyTest {
         assertTrue(update.contains("messageNodeDAO.deleteByConversation"))
         assertTrue(update.contains("saveMessageNodes"))
     }
+
+    @Test
+    fun `insertConversation validates identity collisions before destructive mutation`() {
+        val repository = source("app/src/main/java/com/orchords/orchordsai/data/repository/ConversationRepository.kt")
+        val insert = repository.substringAfter("suspend fun insertConversation(conversation: Conversation)")
+            .substringBefore("suspend fun updateConversation(conversation: Conversation)")
+
+        assertTrue(insert.contains("ConversationIdentityPolicy"))
+        assertTrue(insert.contains("assertNoCrossConversationCollision"))
+    }
+
+    @Test
+    fun `updateConversation validates identity collisions before deleteByConversation`() {
+        val repository = source("app/src/main/java/com/orchords/orchordsai/data/repository/ConversationRepository.kt")
+        val update = repository.substringAfter("suspend fun updateConversation(conversation: Conversation)")
+            .substringBefore("suspend fun deleteConversation(conversation: Conversation)")
+
+        val collisionCheckOffset = update.indexOf("assertNoCrossConversationCollision")
+        val deleteOffset = update.indexOf("messageNodeDAO.deleteByConversation")
+        assertTrue("update must invoke identity-collision check", collisionCheckOffset >= 0)
+        assertTrue("update must invoke deleteByConversation", deleteOffset >= 0)
+        assertTrue(
+            "identity-collision check must precede destructive delete in updateConversation",
+            collisionCheckOffset < deleteOffset
+        )
+    }
+
+    @Test
+    fun `identity conflict surfaces a typed error rather than raw payload`() {
+        val exception = source("app/src/main/java/com/orchords/orchordsai/data/repository/MessageNodeIdentityConflictException.kt")
+        val policy = source("app/src/main/java/com/orchords/orchordsai/data/repository/ConversationIdentityPolicy.kt")
+
+        assertTrue(exception.contains(": IllegalStateException"))
+        assertTrue(exception.contains("val nodeId"))
+        assertTrue(exception.contains("val ownerConversationId"))
+        assertTrue(exception.contains("val attemptedConversationId"))
+
+        assertTrue(policy.contains("MessageNodeIdentityConflictException"))
+        assertTrue(policy.contains("messageNodeDAO.getOwnersByIds"))
+    }
 }

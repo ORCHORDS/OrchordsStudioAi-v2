@@ -57,6 +57,28 @@ class NetworkSecurityConfigTest {
     }
 
     @Test
+    fun `trust-anchor src values are restricted to system or user`() {
+        // Android only recognises `system` and `user` as literal anchor names. Any other
+        // string (e.g. `com.google.android.gms`) is rejected by NetworkSecurityConfig at
+        // runtime, which breaks release builds and trips lint on daily CI.
+        val xml = source(configPath)
+        val anchors = Regex("<certificates[^>]*src\\s*=\\s*\"([^\"]+)\"", RegexOption.IGNORE_CASE)
+            .findAll(xml)
+            .map { it.groupValues[1] }
+            .toList()
+        assertTrue(
+            "network_security_config.xml must declare at least one trust anchor",
+            anchors.isNotEmpty(),
+        )
+        anchors.forEach { src ->
+            assertTrue(
+                "Trust-anchor src must be \"system\" or \"user\" but was: $src",
+                src == "system" || src == "user",
+            )
+        }
+    }
+
+    @Test
     fun `cleartext is enabled only for documented loopback hosts`() {
         val xml = source(configPath)
         val blocks = extractDomainBlocks(xml)

@@ -330,6 +330,18 @@ class ChatCompletionsRequestMessageTest {
     }
 
     @Test
+    fun `canonical gateway preserves exact system and user request text`() {
+        val system = "You are Orchords, the first-party assistant."
+        val user = "Use the exact words: \"search: Kotlin coroutines\""
+
+        val result = invokeBuildMessages(listOf(UIMessage.system(system), UIMessage.user(user)))
+
+        assertEquals(system, result[0].jsonObject["content"]?.jsonPrimitive?.content)
+        assertEquals("user", result[1].jsonObject["role"]?.jsonPrimitive?.content)
+        assertEquals(user, result[1].jsonObject["content"]?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun `parallel tool results keep exact tool_call_id correlation`() {
         // Regression for #416 continuation: each tool result must keep the original
         // tool_call_id verbatim; the request must not reorder results away from their calls.

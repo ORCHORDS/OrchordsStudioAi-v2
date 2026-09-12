@@ -820,7 +820,12 @@ class ChatCompletionsAPI(
             jsonObject["role"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "ASSISTANT"
         )
 
-        val content = jsonObject["content"]?.jsonPrimitiveOrNull?.contentOrNull ?: ""
+        val contentElement = jsonObject["content"]
+        val content = contentElement?.jsonPrimitiveOrNull?.contentOrNull
+            ?: contentElement?.jsonArrayOrNull?.mapNotNull { part ->
+                part.jsonObjectOrNull?.get("text")?.jsonPrimitiveOrNull?.contentOrNull
+            }?.joinToString("")
+            ?: ""
         val refusal = jsonObject["refusal"]?.jsonPrimitiveOrNull?.contentOrNull
         val reasoning = jsonObject["reasoning_content"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: jsonObject["reasoning"]?.jsonPrimitiveOrNull?.contentOrNull
@@ -892,7 +897,7 @@ class ChatCompletionsAPI(
     }
 
     private fun parseAnnotations(jsonArray: JsonArray): List<UIMessageAnnotation> {
-        return jsonArray.map { element ->
+        return jsonArray.mapNotNull { element ->
             val type =
                 element.jsonObject["type"]?.jsonPrimitive?.contentOrNull ?: error("type is null")
             when (type) {
@@ -905,7 +910,7 @@ class ChatCompletionsAPI(
                     )
                 }
 
-                else -> error("unknown annotation type: $type")
+                else -> null
             }
         }
     }

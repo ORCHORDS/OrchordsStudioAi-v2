@@ -170,7 +170,8 @@ val dataSourceModule = module {
             context = get(),
             providerManager = get(),
             json = get(),
-            memoryRepo = get()
+            memoryRepo = get(),
+            providerUsageEventDAO = get()
         )
     }
 

@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.orchords.orchordsai.data.db.dao.ConversationDAO
 import com.orchords.orchordsai.data.db.dao.MessageNodeDAO
+import com.orchords.orchordsai.data.db.dao.ProviderUsageAggregate
+import com.orchords.orchordsai.data.db.dao.ProviderUsageEventDAO
 import com.orchords.orchordsai.data.db.dao.getMessageCountPerDay
 import com.orchords.orchordsai.data.db.dao.getTokenStats
 import com.orchords.orchordsai.data.datastore.SettingsStore
@@ -24,6 +26,7 @@ data class AppStats(
     val totalPromptTokens: Long = 0L,
     val totalCompletionTokens: Long = 0L,
     val totalCachedTokens: Long = 0L,
+    val providerUsage: ProviderUsageAggregate = ProviderUsageAggregate(),
     val conversationsPerDay: Map<LocalDate, Int> = emptyMap(),
     val launchCount: Int = 0,
 )
@@ -31,6 +34,7 @@ data class AppStats(
 class StatsVM(
     private val conversationDAO: ConversationDAO,
     private val messageNodeDAO: MessageNodeDAO,
+    private val providerUsageEventDAO: ProviderUsageEventDAO,
     private val settingsStore: SettingsStore,
 ) : ViewModel() {
 
@@ -63,6 +67,7 @@ class StatsVM(
         val totalConversations = conversationDAO.countAll()
 
         val tokenStats = messageNodeDAO.getTokenStats()
+        val providerUsage = providerUsageEventDAO.aggregateLifetime()
 
         val launchCount = settingsStore.settingsFlow.value.launchCount
 
@@ -73,6 +78,7 @@ class StatsVM(
             totalPromptTokens = tokenStats.promptTokens,
             totalCompletionTokens = tokenStats.completionTokens,
             totalCachedTokens = tokenStats.cachedTokens,
+            providerUsage = providerUsage,
             conversationsPerDay = conversationsPerDay,
             launchCount = launchCount,
         )

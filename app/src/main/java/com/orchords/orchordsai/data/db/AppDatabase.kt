@@ -29,7 +29,7 @@ import com.orchords.orchordsai.data.db.migrations.Migration_22_23
 import com.orchords.orchordsai.data.db.migrations.Migration_8_9
 import com.orchords.orchordsai.utils.JsonInstant
 
-const val APP_DATABASE_SCHEMA_VERSION = 26
+const val APP_DATABASE_SCHEMA_VERSION = 27
 
 @Database(
     entities = [
@@ -64,6 +64,7 @@ const val APP_DATABASE_SCHEMA_VERSION = 26
         AutoMigration(from = 22, to = 23, spec = Migration_22_23::class),
         AutoMigration(from = 23, to = 24),
         AutoMigration(from = 25, to = 26),
+        AutoMigration(from = 26, to = 27),
     ]
 )
 @TypeConverters(TokenUsageConverter::class)

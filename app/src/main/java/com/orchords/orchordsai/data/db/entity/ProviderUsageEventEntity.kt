@@ -63,6 +63,19 @@ data class ProviderUsageEventEntity(
     val isPartial: Boolean = false,
     @ColumnInfo("schema_version")
     val schemaVersion: Int = 1,
+    /** Immutable decimal-string snapshots; null means cost is unknown. */
+    @ColumnInfo("cost_currency")
+    val costCurrency: String? = null,
+    @ColumnInfo("cost_input")
+    val costInput: String? = null,
+    @ColumnInfo("cost_cached_input")
+    val costCachedInput: String? = null,
+    @ColumnInfo("cost_output")
+    val costOutput: String? = null,
+    @ColumnInfo("cost_total")
+    val costTotal: String? = null,
+    @ColumnInfo("pricing_revision")
+    val pricingRevision: String? = null,
 ) {
     init {
         require(usageEventId.isNotBlank())

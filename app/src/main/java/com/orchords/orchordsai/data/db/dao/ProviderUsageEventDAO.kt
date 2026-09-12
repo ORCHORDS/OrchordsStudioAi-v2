@@ -28,7 +28,8 @@ interface ProviderUsageEventDAO {
             COALESCE(SUM(prompt_tokens), 0) AS promptTokens,
             COALESCE(SUM(completion_tokens), 0) AS completionTokens,
             COALESCE(SUM(cached_tokens), 0) AS cachedTokens,
-            COALESCE(SUM(CASE WHEN prompt_tokens IS NULL OR completion_tokens IS NULL THEN 1 ELSE 0 END), 0) AS unknownUsageEvents
+            COALESCE(SUM(CASE WHEN prompt_tokens IS NULL OR completion_tokens IS NULL THEN 1 ELSE 0 END), 0) AS unknownUsageEvents,
+            COALESCE(SUM(CASE WHEN cost_total IS NULL THEN 1 ELSE 0 END), 0) AS unknownCostEvents
         FROM provider_usage_event"""
     )
     suspend fun aggregateLifetime(): ProviderUsageAggregate
@@ -43,4 +44,5 @@ data class ProviderUsageAggregate(
     @ColumnInfo("completionTokens") val completionTokens: Long = 0,
     @ColumnInfo("cachedTokens") val cachedTokens: Long = 0,
     @ColumnInfo("unknownUsageEvents") val unknownUsageEvents: Long = 0,
+    @ColumnInfo("unknownCostEvents") val unknownCostEvents: Long = 0,
 )

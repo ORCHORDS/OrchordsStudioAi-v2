@@ -19,6 +19,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import com.orchords.ai.core.MessageRole
+import com.orchords.ai.core.TokenUsage
+import com.orchords.ai.ui.StreamChunk
 import com.orchords.ai.core.Tool
 import com.orchords.ai.provider.Model
 import com.orchords.ai.provider.Provider
@@ -42,6 +44,8 @@ import com.orchords.orchordsai.data.ai.transformers.visualTransforms
 import com.orchords.orchordsai.data.ai.tools.buildMemoryTools
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.findProvider
+import com.orchords.orchordsai.data.db.dao.ProviderUsageEventDAO
+import com.orchords.orchordsai.data.db.entity.ProviderUsageEventEntity
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.model.AssistantMemory
 import com.orchords.orchordsai.data.repository.MemoryRepository
@@ -74,6 +78,7 @@ class GenerationHandler(
     private val providerManager: ProviderManager,
     private val json: Json,
     private val memoryRepo: MemoryRepository,
+    private val providerUsageEventDAO: ProviderUsageEventDAO,
 ) {
     fun generateText(
         settings: Settings,
@@ -456,6 +461,18 @@ class GenerationHandler(
                                 }
                                 attemptMessages = streamChunkHandler.handle(attemptMessages, chunk)
                                 onUpdateMessages(attemptMessages)
+                                if (chunk is StreamChunk.Usage) {
+                                    persistUsageEvent(
+                                        usage = chunk.usage,
+                                        usageSource = "stream_usage",
+                                        model = model,
+                                        provider = provider,
+                                        conversationId = conversationId,
+                                        messageId = attemptMessages.lastOrNull()?.id,
+                                        completedAt = Clock.System.now().toEpochMilliseconds(),
+                                        isPartial = true,
+                                    )
+                                }
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (error: Throwable) {
@@ -486,10 +503,54 @@ class GenerationHandler(
                 }
                 messages = messages.handleTextGenerationResult(result = result, model = model)
                 onUpdateMessages(messages)
+                persistUsageEvent(
+                    usage = result.usage,
+                    usageSource = "non_stream_result",
+                    model = model,
+                    provider = provider,
+                    conversationId = conversationId,
+                    messageId = result.message.id,
+                    completedAt = Clock.System.now().toEpochMilliseconds(),
+                    isPartial = false,
+                )
             }
         } finally {
             processingStatus.value = null
         }
+    }
+
+    private suspend fun persistUsageEvent(
+        usage: TokenUsage?,
+        usageSource: String,
+        model: Model,
+        provider: ProviderSetting,
+        conversationId: Uuid?,
+        messageId: Uuid?,
+        completedAt: Long,
+        isPartial: Boolean,
+    ) {
+        // Usage is accounting metadata only; do not persist prompts, completions, or credentials.
+        val eventId = Uuid.random().toString()
+        providerUsageEventDAO.insert(
+            ProviderUsageEventEntity(
+                usageEventId = eventId,
+                logicalRequestId = eventId,
+                attemptIndex = 0,
+                conversationId = conversationId?.toString(),
+                messageId = messageId?.toString(),
+                providerRouteId = provider.id.toString(),
+                providerLabel = provider.name,
+                modelId = model.modelId.ifBlank { model.id.toString() },
+                modelLabel = model.displayName.ifBlank { null },
+                operation = "text_generation",
+                completedAt = completedAt,
+                promptTokens = usage?.promptTokens,
+                completionTokens = usage?.completionTokens,
+                cachedTokens = usage?.cachedTokens,
+                usageSource = usageSource,
+                isPartial = isPartial,
+            )
+        )
     }
 
     private suspend fun <T> executeProviderRequestWithRetry(

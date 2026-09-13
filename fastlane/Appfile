@@ -1,0 +1,2 @@
+package_name("com.orchords.orchordsai")
+json_key_file(ENV.fetch("PLAY_STORE_JSON_KEY_FILE", "fastlane/play-store-key.json"))

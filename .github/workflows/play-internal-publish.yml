@@ -1,0 +1,86 @@
+name: Play Internal Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track"
+        required: true
+        default: "internal"
+        type: choice
+        options:
+          - internal
+          - closed
+          - open
+
+permissions: {}
+
+concurrency:
+  group: play-internal-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  internal:
+    name: Upload to Play internal track
+    runs-on: main-verification
+    timeout-minutes: 30
+    environment: play-internal
+    steps:
+      - name: Verify track input
+        shell: bash
+        run: |
+          set -euo pipefail
+          track="${{ inputs.track }}"
+          if [ "$track" != "internal" ]; then
+            echo "::error::Manual publish to '$track' is disabled in this workflow. Use the Play Console UI."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          clean: true
+
+      - name: Install private Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
+
+      - name: Materialize signing material
+        env:
+          KEY_BASE64: ${{ secrets.KEY_BASE64 }}
+          SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ] && [ -n "$PLAY_STORE_JSON_KEY" ] || {
+            echo "::error::Required secrets missing: KEY_BASE64, SIGNING_CONFIG, PLAY_STORE_JSON_KEY"
+            exit 1
+          }
+          printf '%s' "$KEY_BASE64" | base64 --decode > app/app.key
+          printf '%s' "$SIGNING_CONFIG" > local.properties
+          printf '%s' "$PLAY_STORE_JSON_KEY" > fastlane/play-store-key.json
+          chmod 600 app/app.key fastlane/play-store-key.json
+
+      - name: Download validated AAB artifact
+        uses: actions/download-artifact@3791be7c7e88e9d8f64764ed9d9d7e6c5027e94e # v7.0.1
+        with:
+          name: latest-apks
+          path: latest-apks
+
+      - name: Promote bundle through Fastlane
+        env:
+          PLAY_STORE_AAB: latest-apks/orchords-studio-ai.aab
+          PLAY_STORE_MAPPING: latest-apks/mapping.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$PLAY_STORE_AAB"
+          bundle exec fastlane PlayStore internal
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f app/app.key local.properties fastlane/play-store-key.json

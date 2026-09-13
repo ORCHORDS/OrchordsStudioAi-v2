@@ -1,0 +1,34 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build the signed Android App Bundle"
+  lane :bundle do
+    gradle(
+      task: "bundleRelease",
+      properties: {
+        "releaseVersionName" => ENV.fetch("RELEASE_VERSION_NAME"),
+        "releaseVersionCode" => ENV.fetch("RELEASE_VERSION_CODE"),
+      },
+    )
+  end
+
+  desc "Upload a validated bundle to internal testing"
+  lane :internal do
+    upload_to_play_store(
+      track: "internal",
+      aab: ENV.fetch("PLAY_STORE_AAB"),
+      mapping: ENV["PLAY_STORE_MAPPING"],
+      release_status: "completed",
+    )
+  end
+
+  desc "Promote the current internal release to production"
+  lane :promote do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      rollout: "0.1",
+      release_status: "completed",
+    )
+  end
+end

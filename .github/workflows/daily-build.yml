@@ -91,8 +91,9 @@ jobs:
           set -euo pipefail
           if [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
-            echo "gradle_task=assembleRelease" >> "$GITHUB_OUTPUT"
+            echo "gradle_task=buildAll" >> "$GITHUB_OUTPUT"
             echo "apk_dir=app/build/outputs/apk/release" >> "$GITHUB_OUTPUT"
+            echo "aab_path=app/build/outputs/bundle/release/app-release.aab" >> "$GITHUB_OUTPUT"
             echo "variant=release" >> "$GITHUB_OUTPUT"
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
@@ -206,11 +207,25 @@ jobs:
             exit 1
           }
 
+          aab="${{ steps.build_mode.outputs.aab_path }}"
+          if [ "${{ steps.build_mode.outputs.signed }}" = "true" ]; then
+            test -s "$aab" || { echo "::error::Expected signed AAB missing: $aab"; exit 1; }
+            aab_package="$("$apkanalyzer" manifest application-id "$aab" | tr -d '\r\n')"
+            aab_name="$("$apkanalyzer" manifest version-name "$aab" | tr -d '\r\n')"
+            aab_code="$("$apkanalyzer" manifest version-code "$aab" | tr -d '\r\n')"
+            test "$aab_package" = "com.orchords.orchordsai"
+            test "$aab_name" = "$APP_VERSION_NAME"
+            test "$aab_code" = "$APP_VERSION_CODE"
+          fi
+
           rm -rf release-assets
           mkdir -p release-assets
           cp "$APK_DIR/app-universal-$VARIANT.apk" release-assets/orchords-studio-ai-universal.apk
           cp "$APK_DIR/app-arm64-v8a-$VARIANT.apk" release-assets/orchords-studio-ai-arm64-v8a.apk
           cp "$APK_DIR/app-x86_64-$VARIANT.apk" release-assets/orchords-studio-ai-x86_64.apk
+          if [ "${{ steps.build_mode.outputs.signed }}" = "true" ]; then
+            cp "${{ steps.build_mode.outputs.aab_path }}" release-assets/orchords-studio-ai.aab
+          fi
 
       - name: Generate and verify SHA-256 checksums
         if: steps.gate.outputs.should_build == 'true'

@@ -10,6 +10,8 @@ local.properties
 *.keystore
 **/google-services.json
 secrets/
+fastlane/play-store-key.json
+fastlane/.bundle/
 .env
 .env.*
 !.env.example

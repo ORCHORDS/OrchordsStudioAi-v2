@@ -1,0 +1,8 @@
+{
+  "package_name": "com.orchords.orchordsai",
+  "track": "internal",
+  "skip_upload_apk": true,
+  "skip_upload_aab": false,
+  "skip_upload_metadata": true,
+  "skip_upload_images": true
+}

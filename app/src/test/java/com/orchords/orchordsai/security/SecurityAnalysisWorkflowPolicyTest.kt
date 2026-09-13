@@ -17,21 +17,26 @@ class SecurityAnalysisWorkflowPolicyTest {
         repoRoot().resolve(".github/workflows/security-analysis.yml").readText()
 
     @Test
-    fun `osv scanner is installed from the official release tarball`() {
+    fun `osv scanner is installed from the official release binary`() {
         val source = workflow()
         val installBlock = source.substringAfter("name: Install OSV Scanner")
             .substringBefore("name: Scan dependency manifests and lockfiles")
         assertTrue(
-            "OSV install must download the prebuilt Linux tarball, not rely on go",
-            installBlock.contains("osv-scanner_Linux_x86_64.tar.gz"),
+            "OSV install must download the prebuilt Linux amd64 binary, not rely on go",
+            installBlock.contains("osv-scanner_linux_amd64"),
         )
         assertTrue(
-            "OSV install must extract to /tmp and install into the runner temp dir",
-            installBlock.contains("tar xz -C /tmp") && installBlock.contains("RUNNER_TEMP/osv-scanner"),
+            "OSV install must place the binary in RUNNER_TEMP and mark it executable",
+            installBlock.contains("RUNNER_TEMP/osv-scanner") &&
+                installBlock.contains("install -m 0755"),
         )
         assertFalse(
             "OSV install must not require the Go toolchain on the runner",
             installBlock.contains("go install"),
+        )
+        assertFalse(
+            "OSV v2.x publishes a raw binary, not a tarball; tar extraction must not be used",
+            installBlock.contains("tar xz"),
         )
     }
 

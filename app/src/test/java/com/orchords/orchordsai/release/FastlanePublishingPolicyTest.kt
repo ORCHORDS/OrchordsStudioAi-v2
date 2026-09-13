@@ -93,8 +93,9 @@ class FastlanePublishingPolicyTest {
         assertTrue(source.contains("SIGNING_CONFIG"))
         assertTrue(source.contains("Remove signing material"))
         assertTrue(source.contains("Manual publish to"))
-        val trackLiteral = "track=" + "\"" + "$" + "{{" + " inputs.track " + "}}" + "\""
-        assertTrue(source.contains(trackLiteral))
+        assertTrue(source.contains("TRACK_INPUT"))
+        val inputsLiteral = "inputs" + "." + "track"
+        assertTrue(source.contains(inputsLiteral))
     }
 
     @Test

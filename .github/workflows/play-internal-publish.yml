@@ -28,11 +28,12 @@ jobs:
     steps:
       - name: Verify track input
         shell: bash
+        env:
+          TRACK_INPUT: ${{ inputs.track }}
         run: |
           set -euo pipefail
-          track="${{ inputs.track }}"
-          if [ "$track" != "internal" ]; then
-            echo "::error::Manual publish to '$track' is disabled in this workflow. Use the Play Console UI."
+          if [ "$TRACK_INPUT" != "internal" ]; then
+            echo "::error::Manual publish to '$TRACK_INPUT' is disabled in this workflow. Use the Play Console UI."
             exit 1
           fi
 

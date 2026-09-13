@@ -202,9 +202,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -sSfL -o "$RUNNER_TEMP/osv-scanner" \
+          curl -sSfL -o /tmp/osv-scanner \
             "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          install -m 0755 "$RUNNER_TEMP/osv-scanner" "$RUNNER_TEMP/osv-scanner"
+          install -m 0755 /tmp/osv-scanner "$RUNNER_TEMP/osv-scanner"
       - name: Scan dependency manifests and lockfiles
         shell: bash
         run: |

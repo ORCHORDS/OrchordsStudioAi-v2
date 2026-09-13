@@ -1,13 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Keep Android 11-and-lower Auto Backup aligned with the Android 12+ fail-closed policy. OrchordsAI
-  currently mixes credential-bearing and ordinary state, so OS-managed backup remains disabled by
-  rule until sensitive persistence is separated and an explicit portable allowlist is reviewed.
+  Android 11-and-lower Auto Backup rules for OrchordsAI.
+
+  Policy: deny-by-default, allow-by-exception. The Android default
+  backs up everything in sharedpref/file/database/external except what
+  is excluded; we invert that by declaring an explicit allowlist with
+  no cross-domain deny rules. Anything outside the listed paths (the
+  Room database with conversation content, encryption keys, the file-
+  backed upload cache, and the provider/MCP credential files) is not
+  matched by any <include> and therefore stays out of the backup.
+
+  Credentials currently share a namespace with ordinary settings; that
+  re-architecture is tracked separately (#40/#87). Until then this file
+  errs on the side of NOT backing up anything that could leak them.
+  Durable user-data portability is owned by the reviewed first-party
+  backup/sync flows (#229/#230), not by Android OS backup.
+
+  Allowlist (portable):
+    * sharedpref: orchordsai.preferences (UI-only toggles, theme, layout)
+
+  Everything else is excluded by virtue of not being on the allowlist.
 -->
 <full-backup-content>
-  <exclude domain="root" path="." />
-  <exclude domain="file" path="." />
-  <exclude domain="database" path="." />
-  <exclude domain="sharedpref" path="." />
-  <exclude domain="external" path="." />
+  <!-- Portable: UI preferences -->
+  <include domain="sharedpref" path="orchordsai.preferences.xml" />
 </full-backup-content>

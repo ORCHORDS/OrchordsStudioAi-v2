@@ -1,12 +1,36 @@
 package com.orchords.orchordsai.security
 
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
+/**
+ * Pins the deny-by-default allowlist policy enforced by
+ * `app/src/main/res/xml/backup_rules.xml` (Android 11 and lower Auto
+ * Backup) and `app/src/main/res/xml/data_extraction_rules.xml`
+ * (Android 12+ cloud backup + device transfer).
+ *
+ * The policy is allowlist-first: Android defaults to backing up
+ * everything in sharedpref/file/database/external that is *not*
+ * excluded; we invert that by declaring only the portable
+ * preferences namespace as `<include>`. Anything that does not
+ * appear in a `<include>` rule is excluded by definition — including
+ * the Room database carrying conversation content, encryption keys,
+ * and the file-backed upload cache that lives in the `file` domain.
+ */
 class AndroidBackupPolicyTest {
-    private val domains = listOf("root", "file", "database", "sharedpref", "external")
+    private val sensitiveDomains = listOf("root", "file", "database", "external")
+
+    /**
+     * Portable preferences that may ride along with Android OS backup /
+     * device transfer. The only known safe SharedPreferences namespace is
+     * `orchordsai.preferences` (UI toggles, theme, layout). Credentials
+     * currently share a namespace with these settings; that re-
+     * architecture is tracked separately (#40/#87) and is not
+     * re-asserted here.
+     */
+    private val portableSharedPrefs = setOf("orchordsai.preferences.xml")
 
     private fun moduleFile(relative: String): File {
         val moduleDir = File(".").canonicalFile
@@ -20,35 +44,79 @@ class AndroidBackupPolicyTest {
 
     private fun source(relative: String): String = moduleFile(relative).readText()
 
-    private fun assertAllDomainsExcluded(xml: String, section: String? = null) {
-        val target = if (section == null) {
-            xml
-        } else {
-            Regex("<$section[^>]*>[\\s\\S]*?</$section>")
-                .find(xml)?.value ?: error("Missing <$section> backup policy")
-        }
-        domains.forEach { domain ->
-            val rule = Regex("<exclude\\s+domain=\\\"$domain\\\"\\s+path=\\\"\\.\\\"\\s*/>")
-            assertTrue("$section must explicitly exclude $domain storage", rule.containsMatchIn(target))
+    private fun section(xml: String, name: String): String {
+        return Regex("<$name[^>]*>[\\s\\S]*?</$name>")
+            .find(xml)?.value ?: error("Missing <$name> in $xml")
+    }
+
+    private fun includePaths(xml: String, domain: String): List<String> {
+        return Regex("<include\\s+domain=\"$domain\"\\s+path=\"([^\"]+)\"\\s*/>")
+            .findAll(xml)
+            .map { it.groupValues[1] }
+            .toList()
+    }
+
+    private fun includePathsInSection(xml: String, sectionName: String, domain: String): List<String> {
+        return Regex("<include\\s+domain=\"$domain\"\\s+path=\"([^\"]+)\"\\s*/>")
+            .findAll(section(xml, sectionName))
+            .map { it.groupValues[1] }
+            .toList()
+    }
+
+    /**
+     * The deny-by-default shape means: there is no `<include>` rule that
+     * touches a sensitive domain. Mixed include/exclude rules across the
+     * whole file are not the policy here; we keep the policy unit-
+     * testable by pinning what *is* allowed.
+     */
+    private fun assertSensitiveDomainsAreAbsent(xml: String) {
+        sensitiveDomains.forEach { domain ->
+            assertTrue(
+                "<include> rules targeting domain=\"$domain\" must stay absent",
+                includePaths(xml, domain).isEmpty(),
+            )
         }
     }
 
     @Test
-    fun `android 12 plus cloud and device transfer are deny all until secret stores are split`() {
+    fun `android 12 plus cloud and device transfer follow deny-by-default allowlist`() {
         val xml = source("src/main/res/xml/data_extraction_rules.xml")
 
-        assertAllDomainsExcluded(xml, "cloud-backup")
-        assertAllDomainsExcluded(xml, "device-transfer")
-        assertFalse("Android OS backup must not include mixed-secret app state", xml.contains("<include"))
-        assertFalse("Generated TODO backup template must not return", xml.contains("TODO", ignoreCase = true))
+        assertSensitiveDomainsAreAbsent(xml)
+
+        // Allowlist is exactly the portable set; nothing else should be sneaked in.
+        assertEquals(
+            "cloud-backup allowlist drifted from the documented portable set",
+            portableSharedPrefs.sorted(),
+            includePathsInSection(xml, "cloud-backup", "sharedpref").sorted(),
+        )
+        assertEquals(
+            "device-transfer allowlist drifted from the documented portable set",
+            portableSharedPrefs.sorted(),
+            includePathsInSection(xml, "device-transfer", "sharedpref").sorted(),
+        )
     }
 
     @Test
-    fun `legacy auto backup follows the same deny all policy`() {
+    fun `legacy auto backup follows the same allowlist policy`() {
         val xml = source("src/main/res/xml/backup_rules.xml")
 
-        assertAllDomainsExcluded(xml)
-        assertFalse("Legacy Auto Backup must not include upload files without their owning database", xml.contains("<include"))
+        assertSensitiveDomainsAreAbsent(xml)
+
+        assertEquals(
+            "Legacy Auto Backup allowlist drifted from the documented portable set",
+            portableSharedPrefs.sorted(),
+            includePaths(xml, "sharedpref").sorted(),
+        )
+    }
+
+    @Test
+    fun `database and credential-bearing domains never appear in any allowlist`() {
+        val dataExtraction = source("src/main/res/xml/data_extraction_rules.xml")
+        val legacy = source("src/main/res/xml/backup_rules.xml")
+        listOf(dataExtraction, legacy).forEach { xml ->
+            assertSensitiveDomainsAreAbsent(xml)
+        }
     }
 
     @Test

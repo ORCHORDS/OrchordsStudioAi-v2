@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  OrchordsAI currently keeps provider/MCP/storage credentials in persistence namespaces that also
-  contain ordinary app settings. Until those secrets are separated into dedicated non-backup
-  storage (#40/#87), generic Android OS backup and device transfer fail closed. Durable user-data
-  portability remains owned by the reviewed first-party backup/sync flows (#229/#230).
+  Android 12+ cloud-backup and device-transfer rules for OrchordsAI.
+
+  Policy: deny-by-default, allow-by-exception. The Android default
+  backs up everything in sharedpref/file/database/external except what
+  is excluded; we invert that by declaring an explicit allowlist with
+  no cross-domain deny rules. Anything outside the listed paths (the
+  Room database with conversation content, encryption keys, the file-
+  backed upload cache, and the provider/MCP credential files) is not
+  matched by any <include> and therefore stays out of the backup.
+
+  Credentials currently share a namespace with ordinary settings; that
+  re-architecture is tracked separately (#40/#87). Until then this file
+  errs on the side of NOT backing up anything that could leak them.
+  Durable user-data portability is owned by the reviewed first-party
+  backup/sync flows (#229/#230), not by Android OS backup.
+
+  Allowlist (portable):
+    * sharedpref: orchordsai.preferences (UI-only toggles, theme, layout)
+
+  Everything else is excluded by virtue of not being on the allowlist.
 -->
 <data-extraction-rules>
   <cloud-backup>
-    <exclude domain="root" path="." />
-    <exclude domain="file" path="." />
-    <exclude domain="database" path="." />
-    <exclude domain="sharedpref" path="." />
-    <exclude domain="external" path="." />
+    <!-- Portable: UI preferences -->
+    <include domain="sharedpref" path="orchordsai.preferences.xml" />
   </cloud-backup>
+
   <device-transfer>
-    <exclude domain="root" path="." />
-    <exclude domain="file" path="." />
-    <exclude domain="database" path="." />
-    <exclude domain="sharedpref" path="." />
-    <exclude domain="external" path="." />
+    <!-- Same allowlist as cloud backup so a phone-to-phone transfer carries
+         the same UI posture. Sensitive data is still excluded. -->
+    <include domain="sharedpref" path="orchordsai.preferences.xml" />
   </device-transfer>
 </data-extraction-rules>

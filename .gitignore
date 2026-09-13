@@ -32,6 +32,12 @@ web-ui/.react-router/
 .cursor/
 .history/
 .mimosa/
+.zcode/
 *.log
 hs_err_pid*
 replay_pid*
+
+# Local team-2 session scaffolding (parsed list / helpers, not source)
+parse_team2.py
+team2_all.json
+team2_snapshot.txt

@@ -130,9 +130,11 @@ Build, and Security Analysis.
 ### 4.1 Internal track (smoke test)
 
 1. Wait for a green Daily Build on `main`. The signed build produces
-   `release-assets/orchords-studio-ai.aab`, validated by `apkanalyzer`
-   for package id `com.orchords.orchordsai`, matching version-name and
-   version-code, and SHA-256 checksummed.
+   `app/build/outputs/bundle/release/app-release.aab`, validated by
+   `apkanalyzer` for package id `com.orchords.orchordsai`, matching
+   version-name and version-code, and SHA-256 checksummed. The same
+   build copies the AAB to `release-assets/orchords-studio-ai.aab` for
+   the publishing workflow to download.
 2. In GitHub → Actions → *Play Internal Publish* → *Run workflow*,
    leave the `track` input as `internal`. The workflow:
    - Re-checks the AAB checksum.
@@ -218,15 +220,15 @@ Before triggering the *Play Internal Publish* workflow, confirm:
 
 - [ ] The Daily Build SHA on `main` has **Main Verification**,
       **Daily Build**, and **Security Analysis** all green.
-- [ ] `release-assets/orchords-studio-ai.aab` exists in that build's
-      artifacts with the matching `orchords-studio-ai.aab.sha256`.
-- [ ] `fastlane-publishing-policy` focused tests are green (run via
-      `./gradlew :app:testDebugUnitTest --tests "com.orchords.orchordsai.release.*"`).
+- [ ] `docs/LISTING_ASSETS.md` lists zero TODO rows for the *internal*
+      track (the 512×512 hi-res icon is the last blocker; PLAY-10).
+- [ ] The `:app:testDebugUnitTest` suite is green on the same SHA.
+- [ ] `releaseVersionName` is a semantic-version bump (no `-SNAPSHOT`).
+- [ ] `docs/PRIVACY.md` URL resolves to an HTTPS host that returns 200
+      and the Play Console *Privacy policy* field is set to that URL.
 - [ ] GitHub Actions secrets `KEY_BASE64`, `SIGNING_CONFIG`, and
       `PLAY_STORE_JSON_KEY` are present on the environment used by the
       workflow (`play-internal`).
-- [ ] `docs/PRIVACY.md` URL resolves to an HTTPS host that returns 200
-      and the Play Console *Privacy policy* field is set to that URL.
 
 Production publication additionally requires the listing-asset gates
 in §4.3.

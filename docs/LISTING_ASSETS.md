@@ -3,7 +3,7 @@
 **App:** OrchordsAI (`com.orchords.orchordsai`)
 **Source of truth:** `app/src/main/AndroidManifest.xml`,
 `app/src/main/res/mipmap-*/`, `app/build.gradle.kts`, `docs/*.md`.
-**Last code-source review:** `git rev 1062932` (2026-09-13)
+**Last code-source review:** `git rev ffa6127` (2026-09-14)
 
 This document lists every asset that Google Play Console expects to see
 on the store listing, where it lives in the repository (if it already
@@ -38,12 +38,14 @@ listing. It is *not* part of the APK.
 
 | Asset | Format | Size | Current state |
 | --- | --- | --- | --- |
-| Feature graphic | PNG or JPEG | exactly 1024×500 px, ≤ 1 MB | **TODO** — not in repo. Compose from `app/src/main/assets/banner/banner-1.png` (1024×500 already) or re-render from `drawable/orchords_wordmark_blue.png` + tagline |
+| Feature graphic | PNG or JPEG | exactly 1024×500 px, ≤ 1 MB | **TODO** — not in repo. The shipped `app/src/main/assets/banner/banner-1.png`, `banner-2.png`, `banner-3.png` are 1536×1024 (in-app marketing banners), not the 1024×500 Play Console feature-graphic slot. Resize one of them to 1024×500 or compose a new asset from `drawable/orchords_wordmark_blue.png` + tagline. |
 
 The `banner-1.png`, `banner-2.png`, `banner-3.png` in
-`app/src/main/assets/banner/` are already 1024×500 and can be reused as
-in-app marketing banners; one of them can be promoted to the feature
-graphic if the visual style matches the listing copy.
+`app/src/main/assets/banner/` are 1536×1024 (verified on HEAD `ffa6127`
+with `file app/src/main/assets/banner/banner-*.png`) and can be reused
+as in-app marketing banners. None of them is already at the 1024×500
+Play feature-graphic size; a separate resize or new composition is
+required before upload.
 
 ---
 

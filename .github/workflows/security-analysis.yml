@@ -274,7 +274,8 @@ jobs:
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "No signing secrets present; producing unsigned bundle (manifest inspection still valid)"
           fi
-      - name: Build signed or unsigned release bundle
+      - name: Build signed release bundle
+        if: steps.signing.outputs.signed == 'true'
         env:
           ORCHORDS_KEYSTORE_FILE: ${{ runner.temp }}/signing/release.jks
           ORCHORDS_SIGNING_PROPERTIES: ${{ runner.temp }}/signing/signing.properties
@@ -283,13 +284,31 @@ jobs:
           set -euo pipefail
           ./gradlew :app:bundleRelease --no-daemon --console=plain
           test -s "$AAB_OUTPUT" || { echo "::error::Expected AAB missing: $AAB_OUTPUT"; exit 1; }
+      - name: Skip AAB inspection when no signing material is available
+        if: steps.signing.outputs.signed != 'true'
+        shell: bash
+        run: |
+          {
+            echo "=== AAB manifest inspection ==="
+            echo "status: skipped (no signing secrets available on runner)"
+            echo "package:        n/a"
+            echo "versionName:    n/a"
+            echo "versionCode:    n/a"
+            echo "minSdk:         n/a"
+            echo "targetSdk:      n/a"
+            echo "permissions:    n/a"
+            echo "files:          n/a"
+            echo "sha256:         n/a"
+          } > aab-manifest.txt
+          echo "AAB inspection skipped because RELEASE_KEYSTORE_BASE64 or ANDROID_SIGNING_CONFIG was not provided"
       - name: Remove signing files
-        if: always()
+        if: always() && steps.signing.outputs.signed == 'true'
         shell: bash
         run: |
           set -euo pipefail
           rm -rf "$RUNNER_TEMP/signing"
       - name: Extract AAB and inspect manifest with apkanalyzer
+        if: steps.signing.outputs.signed == 'true'
         env:
           AAB_INSPECT_DIR: ${{ runner.temp }}/aab-inspect
         shell: bash
@@ -321,17 +340,20 @@ jobs:
           test -n "$version_code" || { echo "::error::apkanalyzer returned empty versionCode"; exit 1; }
           echo "App version from apkanalyzer: name=$version_name code=$version_code"
       - name: Generate SHA-256 of signed AAB
+        if: steps.signing.outputs.signed == 'true'
         shell: bash
         run: |
           set -euo pipefail
           (cd "$(dirname "$AAB_OUTPUT")" && sha256sum "$(basename "$AAB_OUTPUT")") | tee aab-checksum.txt
       - name: Install Trivy for AAB scan
+        if: steps.signing.outputs.signed == 'true'
         shell: bash
         run: |
           set -euo pipefail
           curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar xz -C /tmp
           install -m 0755 /tmp/trivy "$RUNNER_TEMP/trivy"
       - name: Scan extracted AAB with Trivy
+        if: steps.signing.outputs.signed == 'true'
         env:
           AAB_INSPECT_DIR: ${{ runner.temp }}/aab-inspect
         shell: bash

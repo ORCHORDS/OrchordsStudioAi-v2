@@ -36,6 +36,7 @@ import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV1Migrati
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV2Migration
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV3Migration
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV4Migration
+import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV5Migration
 import com.orchords.orchordsai.data.extensions.toModeInjection
 import com.orchords.orchordsai.data.extensions.toLorebook
 import com.orchords.orchordsai.data.model.Assistant
@@ -45,6 +46,8 @@ import com.orchords.orchordsai.data.model.Lorebook
 import com.orchords.orchordsai.data.model.PromptInjection
 import com.orchords.orchordsai.data.model.QuickMessage
 import com.orchords.orchordsai.data.model.Tag
+import com.orchords.orchordsai.data.security.ProviderCredentialStore
+import com.orchords.orchordsai.data.security.ProviderSecretCodec
 import com.orchords.orchordsai.data.sync.s3.S3Config
 import com.orchords.orchordsai.ui.theme.CustomTheme
 import com.orchords.orchordsai.ui.theme.PresetThemes
@@ -67,6 +70,8 @@ private val Context.settingsStore by preferencesDataStore(
             PreferenceStoreV2Migration(),
             PreferenceStoreV3Migration(),
             PreferenceStoreV4Migration(),
+            // V5: move provider apiKey values into ProviderCredentialStore (#428).
+            PreferenceStoreV5Migration(context),
         )
     }
 )
@@ -74,6 +79,7 @@ private val Context.settingsStore by preferencesDataStore(
 class SettingsStore(
     context: Context,
     scope: AppScope,
+    private val credentialStore: ProviderCredentialStore,
 ) : KoinComponent {
     companion object {
         val VERSION = intPreferencesKey("data_version")
@@ -328,7 +334,18 @@ class SettingsStore(
                 modeInjections = settings.modeInjections.distinctBy { it.id },
                 lorebooks = settings.lorebooks.distinctBy { it.id },
                 quickMessages = settings.quickMessages.distinctBy { it.id },
-            )
+            ).let { hydrated ->
+                // #428: populate each provider's `apiKey` from
+                // ProviderCredentialStore. Must run last so every consumer
+                // of `settings.providers` (UI, balance checks, importers)
+                // sees the live key transparently.
+                hydrated.copy(
+                    providers = ProviderSecretCodec.hydrateProvidersFromStore(
+                        providers = hydrated.providers,
+                        store = credentialStore,
+                    ),
+                )
+            }
         }
         .onEach {
             get<PebbleEngine>().templateCache.invalidateAll()
@@ -367,7 +384,10 @@ class SettingsStore(
             return
         }
         val settings = newSettings.enforceFirstPartyModelPolicy()
-        settingsFlow.value = settings
+        val redactedProviders = ProviderSecretCodec.redactProvidersForWrite(
+            providers = settings.providers,
+            store = credentialStore,
+        ) ?: throw IllegalStateException("Encrypted credential store unavailable; refusing settings update")
         dataStore.edit { preferences ->
             preferences[DYNAMIC_COLOR] = settings.dynamicColor
             preferences[THEME_ID] = settings.themeId
@@ -392,7 +412,14 @@ class SettingsStore(
             preferences[COMPRESS_MODEL] = settings.compressModelId.toString()
             preferences[COMPRESS_PROMPT] = settings.compressPrompt
 
-            preferences[PROVIDERS] = JsonInstant.encodeToString(settings.providers)
+            // #428: provider apiKey values must not be written to DataStore.
+            // The codec copies the live key into ProviderCredentialStore
+            // (EncryptedSharedPreferences) and returns a redacted list with
+            // every apiKey field blanked. A `null` return means the
+            // encrypted store is unavailable AND a real key is present —
+            // we already early-threw above before entering edit{}, so this
+            // block simply persists the redacted list.
+            preferences[PROVIDERS] = JsonInstant.encodeToString(redactedProviders)
 
             preferences[ASSISTANTS] = JsonInstant.encodeToString(settings.assistants)
             preferences[SELECT_ASSISTANT] = settings.assistantId.toString()

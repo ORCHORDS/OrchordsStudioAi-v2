@@ -71,6 +71,13 @@ sealed class ProviderSetting {
 
     abstract val builtIn: Boolean
     abstract val description: @Composable() () -> Unit
+    /**
+     * Chat-LLM provider credential. Persisted only via
+     * [com.orchords.orchordsai.data.security.ProviderCredentialStore]
+     * (EncryptedSharedPreferences, #428); the on-disk Settings DataStore
+     * JSON does not carry this value. Subtypes override with `@Transient`.
+     */
+    abstract var apiKey: String
     abstract val shortDescription: @Composable() () -> Unit
 
     abstract fun addModel(model: Model): ProviderSetting
@@ -99,7 +106,10 @@ sealed class ProviderSetting {
         @Transient override val builtIn: Boolean = false,
         @Transient override val description: @Composable (() -> Unit) = {},
         @Transient override val shortDescription: @Composable (() -> Unit) = {},
-        var apiKey: String = "",
+        // Persisted only via ProviderCredentialStore (#428); the on-disk
+        // PROVIDERS JSON must never carry a plaintext apiKey. Hydration happens
+        // in ProviderSecretCodec.hydrateProvidersFromStore.
+        @Transient override var apiKey: String = "",
         var baseUrl: String = "https://api.openai.com/v1",
         var chatCompletionsPath: String = "/chat/completions",
         var useResponseApi: Boolean = false,
@@ -171,7 +181,8 @@ sealed class ProviderSetting {
         @Transient override val builtIn: Boolean = false,
         @Transient override val description: @Composable (() -> Unit) = {},
         @Transient override val shortDescription: @Composable (() -> Unit) = {},
-        var apiKey: String = "",
+        // Persisted only via ProviderCredentialStore (#428); see OpenAI subtype.
+        @Transient override var apiKey: String = "",
         var baseUrl: String = "https://generativelanguage.googleapis.com/v1beta",
         var vertexAI: Boolean = false,
         var useServiceAccount: Boolean = false,
@@ -246,7 +257,8 @@ sealed class ProviderSetting {
         @Transient override val builtIn: Boolean = false,
         @Transient override val description: @Composable (() -> Unit) = {},
         @Transient override val shortDescription: @Composable (() -> Unit) = {},
-        var apiKey: String = "",
+        // Persisted only via ProviderCredentialStore (#428); see OpenAI subtype.
+        @Transient override var apiKey: String = "",
         var baseUrl: String = "https://api.anthropic.com/v1",
         var promptCaching: Boolean = false,
         var promptCacheTtl: ClaudePromptCacheTtl = ClaudePromptCacheTtl.FIVE_MINUTES,

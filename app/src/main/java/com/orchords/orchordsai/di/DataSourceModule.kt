@@ -21,6 +21,7 @@ import com.orchords.orchordsai.data.ai.GenerationHandler
 import com.orchords.orchordsai.data.ai.TranslationHandler
 import com.orchords.orchordsai.data.ai.transformers.TemplateTransformer
 import com.orchords.orchordsai.data.datastore.SettingsStore
+import com.orchords.orchordsai.data.security.ProviderCredentialStore
 import com.orchords.orchordsai.data.db.AppDatabase
 import com.orchords.orchordsai.data.db.fts.MessageFtsManager
 import com.orchords.orchordsai.data.db.fts.SimpleDictManager
@@ -50,8 +51,14 @@ import java.util.concurrent.atomic.AtomicReference
 private val BACKUP_HTTP_CLIENT = named("backup_http_client")
 
 val dataSourceModule = module {
+    single { ProviderCredentialStore(context = get()) }
+
     single {
-        SettingsStore(context = get(), scope = get())
+        SettingsStore(
+            context = get(),
+            scope = get(),
+            credentialStore = get(),
+        )
     }
 
     single {

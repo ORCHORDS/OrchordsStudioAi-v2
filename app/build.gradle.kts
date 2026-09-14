@@ -230,6 +230,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // Encrypted credential storage for provider apiKey values (#428).
+    implementation(libs.androidx.security.crypto)
+
     // Image metadata extractor
     // https://github.com/drewnoakes/metadata-extractor
     implementation(libs.metadata.extractor)

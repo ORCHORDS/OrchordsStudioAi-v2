@@ -87,12 +87,26 @@ fun ShareSheet(
 }
 
 fun ProviderSetting.encodeForShare(): String {
+    // #428 marked `apiKey` as `@Transient` on `ProviderSetting`, so the normal
+    // JsonInstant path drops it. For the share-sheet we re-attach it in a
+    // side-car object: the on-the-wire payload keeps the standard polymorphic
+    // ProviderSetting envelope plus a `apiKey` field. We do NOT keep the key
+    // anywhere else — the share-sheet string is the only on-disk carrier of
+    // this credential and it stays in the user's clipboard for that one share.
+    val stripped = JsonInstant.encodeToString(this.copyProvider(models = emptyList()))
+    val obj = kotlinx.serialization.json.Json.parseToJsonElement(stripped).let {
+        (it as kotlinx.serialization.json.JsonObject).toMutableMap()
+    }
+    obj["apiKey"] = kotlinx.serialization.json.JsonPrimitive(apiKey)
+    val withKey = kotlinx.serialization.json.JsonObject(obj)
+    val withKeyJson = kotlinx.serialization.json.Json.encodeToString(
+        kotlinx.serialization.json.JsonObject.serializer(),
+        withKey,
+    )
     return buildString {
         append("ai-provider:")
         append("v1:")
-
-        val value = JsonInstant.encodeToString(this@encodeForShare.copyProvider(models = emptyList()))
-        append(Base64.encode(value.encodeToByteArray()))
+        append(Base64.encode(withKeyJson.encodeToByteArray()))
     }
 }
 
@@ -104,7 +118,22 @@ fun decodeProviderSetting(value: String): ProviderSetting {
     val jsonBytes = Base64.decode(base64Str)
     val jsonStr = jsonBytes.decodeToString()
 
-    return JsonInstant.decodeFromString<ProviderSetting>(jsonStr)
+    val obj = kotlinx.serialization.json.Json.parseToJsonElement(jsonStr) as kotlinx.serialization.json.JsonObject
+    val keyElement = obj["apiKey"]
+    val key = keyElement?.let { (it as kotlinx.serialization.json.JsonPrimitive).content } ?: ""
+    val withoutKey = kotlinx.serialization.json.JsonObject(obj.filterKeys { it != "apiKey" })
+    val withoutKeyJson = kotlinx.serialization.json.Json.encodeToString(
+        kotlinx.serialization.json.JsonObject.serializer(),
+        withoutKey,
+    )
+    val decoded = JsonInstant.decodeFromString<ProviderSetting>(withoutKeyJson)
+    return decoded.withApiKey(key)
+}
+
+private fun ProviderSetting.withApiKey(value: String): ProviderSetting = when (this) {
+    is ProviderSetting.OpenAI -> this.also { this.apiKey = value }
+    is ProviderSetting.Google -> this.also { this.apiKey = value }
+    is ProviderSetting.Claude -> this.also { this.apiKey = value }
 }
 
 class ShareSheetState {

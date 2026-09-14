@@ -255,18 +255,6 @@ jobs:
           set -euo pipefail
           mkdir -p ~/.gradle
           tar --warning=no-file-changed -xzf "$RUNNER_TEMP/gradle-cache.tar.gz" -C ~/.gradle || true
-      - name: Resolve app version metadata
-        id: app_version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version_name="$(grep '^versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -n1)"
-          version_code="$(grep '^versionCode' app/build.gradle.kts | sed -E 's/.*([0-9]+).*/\1/' | head -n1)"
-          test -n "$version_name" || { echo "::error::Could not resolve versionName"; exit 1; }
-          test -n "$version_code" || { echo "::error::Could not resolve versionCode"; exit 1; }
-          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
-          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
-          echo "App version resolved: name=$version_name code=$version_code"
       - name: Prepare signing files when secrets are present
         id: signing
         env:
@@ -327,8 +315,11 @@ jobs:
             "$apkanalyzer" files list "$AAB_OUTPUT" | sort | head -n 25 | sed 's/^/  /'
           } | tee aab-manifest.txt
           grep -q "com.orchords.orchordsai" aab-manifest.txt
-          grep -q "${{ steps.app_version.outputs.version_name }}" aab-manifest.txt
-          grep -q "${{ steps.app_version.outputs.version_code }}" aab-manifest.txt
+          version_name="$("$apkanalyzer" manifest version-name "$AAB_OUTPUT" | tr -d '\r\n')"
+          version_code="$("$apkanalyzer" manifest version-code "$AAB_OUTPUT" | tr -d '\r\n')"
+          test -n "$version_name" || { echo "::error::apkanalyzer returned empty versionName"; exit 1; }
+          test -n "$version_code" || { echo "::error::apkanalyzer returned empty versionCode"; exit 1; }
+          echo "App version from apkanalyzer: name=$version_name code=$version_code"
       - name: Generate SHA-256 of signed AAB
         shell: bash
         run: |
@@ -355,9 +346,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p aab-evidence
-          cp aab-manifest.txt aab-evidence/
-          cp aab-checksum.txt aab-evidence/
-          ls -la aab-evidence
+          for f in aab-manifest.txt aab-checksum.txt; do
+            if [ -s "$f" ]; then cp "$f" aab-evidence/; fi
+          done
+          ls -la aab-evidence || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

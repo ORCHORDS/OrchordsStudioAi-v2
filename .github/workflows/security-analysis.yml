@@ -232,3 +232,133 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/trivy" fs --scanners misconfig,secret --severity HIGH,CRITICAL --exit-code 1 .
+
+  aab-artifact:
+    name: Signed AAB Manifest Inspection
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: main-verification
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      AAB_OUTPUT: app/build/outputs/bundle/release/app-release.aab
+      AAB_INSPECT_DIR: ${{ runner.temp }}/aab-inspect
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Set up private Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
+      - name: Restore Gradle build cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.gradle
+          tar --warning=no-file-changed -xzf "$RUNNER_TEMP/gradle-cache.tar.gz" -C ~/.gradle || true
+      - name: Resolve app version metadata
+        id: app_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_name="$(grep '^versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -n1)"
+          version_code="$(grep '^versionCode' app/build.gradle.kts | sed -E 's/.*([0-9]+).*/\1/' | head -n1)"
+          test -n "$version_name" || { echo "::error::Could not resolve versionName"; exit 1; }
+          test -n "$version_code" || { echo "::error::Could not resolve versionCode"; exit 1; }
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "App version resolved: name=$version_name code=$version_code"
+      - name: Prepare signing files when secrets are present
+        id: signing
+        env:
+          KEY_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          SIGNING_CONFIG: ${{ secrets.ANDROID_SIGNING_CONFIG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            key_dir="$RUNNER_TEMP/signing"
+            mkdir -p "$key_dir"
+            echo "$KEY_BASE64" | base64 -d > "$key_dir/release.jks"
+            echo "signing.properties" > "$key_dir/.placeholder"
+            echo "Signed release build will be produced"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No signing secrets present; producing unsigned bundle (manifest inspection still valid)"
+          fi
+      - name: Build signed or unsigned release bundle
+        env:
+          ORCHORDS_KEYSTORE_FILE: ${{ runner.temp }}/signing/release.jks
+          ORCHORDS_SIGNING_PROPERTIES: ${{ runner.temp }}/signing/signing.properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app:bundleRelease --no-daemon --console=plain
+          test -s "$AAB_OUTPUT" || { echo "::error::Expected AAB missing: $AAB_OUTPUT"; exit 1; }
+      - name: Remove signing files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/signing"
+      - name: Extract AAB and inspect manifest with apkanalyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          apkanalyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$apkanalyzer" || { echo "::error::apkanalyzer not found"; exit 1; }
+          rm -rf "$AAB_INSPECT_DIR"
+          mkdir -p "$AAB_INSPECT_DIR"
+          cd "$AAB_INSPECT_DIR"
+          unzip -q "$GITHUB_WORKSPACE/$AAB_OUTPUT"
+          cd "$GITHUB_WORKSPACE"
+          {
+            echo "=== AAB manifest inspection ==="
+            echo "package:        $("$apkanalyzer" manifest application-id "$AAB_OUTPUT" | tr -d '\r\n')"
+            echo "versionName:    $("$apkanalyzer" manifest version-name   "$AAB_OUTPUT" | tr -d '\r\n')"
+            echo "versionCode:    $("$apkanalyzer" manifest version-code   "$AAB_OUTPUT" | tr -d '\r\n')"
+            echo "minSdk:         $("$apkanalyzer" manifest min-sdk        "$AAB_OUTPUT" | tr -d '\r\n')"
+            echo "targetSdk:      $("$apkanalyzer" manifest target-sdk     "$AAB_OUTPUT" | tr -d '\r\n')"
+            echo "permissions:"
+            "$apkanalyzer" manifest permissions "$AAB_OUTPUT" | sed 's/^/  /'
+            echo "files (top 25):"
+            "$apkanalyzer" files list "$AAB_OUTPUT" | sort | head -n 25 | sed 's/^/  /'
+          } | tee aab-manifest.txt
+          grep -q "com.orchords.orchordsai" aab-manifest.txt
+          grep -q "${{ steps.app_version.outputs.version_name }}" aab-manifest.txt
+          grep -q "${{ steps.app_version.outputs.version_code }}" aab-manifest.txt
+      - name: Generate SHA-256 of signed AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd "$(dirname "$AAB_OUTPUT")" && sha256sum "$(basename "$AAB_OUTPUT")") | tee aab-checksum.txt
+      - name: Install Trivy for AAB scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar xz -C /tmp
+          install -m 0755 /tmp/trivy "$RUNNER_TEMP/trivy"
+      - name: Scan extracted AAB with Trivy
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/trivy" fs --scanners vuln,misconfig,secret \
+            --severity HIGH,CRITICAL --exit-code 0 \
+            "$AAB_INSPECT_DIR"
+      - name: Upload AAB inspection evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p aab-evidence
+          cp aab-manifest.txt aab-evidence/
+          cp aab-checksum.txt aab-evidence/
+          ls -la aab-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: aab-inspection-evidence
+          path: aab-evidence
+          if-no-files-found: warn
+          retention-days: 14

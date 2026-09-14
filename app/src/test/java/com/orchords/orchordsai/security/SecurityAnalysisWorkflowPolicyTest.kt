@@ -61,7 +61,7 @@ class SecurityAnalysisWorkflowPolicyTest {
         val source = workflow()
         val jobRegex = Regex("\n {2}([a-z][a-z0-9_-]*):")
         val matches = jobRegex.findAll(source).toList()
-        listOf("osv", "configuration").forEach { jobName ->
+        listOf("osv", "configuration", "aab-artifact").forEach { jobName ->
             val jobMatch = matches.firstOrNull { it.groupValues[1] == jobName }
                 ?: error("Could not locate job '$jobName' in workflow")
             val nextMatch = matches.firstOrNull { it.range.first > jobMatch.range.first }
@@ -73,5 +73,57 @@ class SecurityAnalysisWorkflowPolicyTest {
                     jobBlock.contains("github.event_name == 'workflow_dispatch'"),
             )
         }
+    }
+
+    @Test
+    fun `aab-artifact job builds inspects and scans the release bundle`() {
+        val source = workflow()
+        // Locate the aab-artifact job block.
+        val jobRegex = Regex("\n {2}([a-z][a-z0-9_-]*):")
+        val matches = jobRegex.findAll(source).toList()
+        val jobMatch = matches.firstOrNull { it.groupValues[1] == "aab-artifact" }
+            ?: error("Could not locate aab-artifact job in workflow")
+        val nextMatch = matches.firstOrNull { it.range.first > jobMatch.range.first }
+        val jobBlock = if (nextMatch == null) source.substring(jobMatch.range.first)
+        else source.substring(jobMatch.range.first, nextMatch.range.first)
+
+        assertTrue(
+            "aab-artifact must run on the self-hosted Android runner",
+            jobBlock.contains("runs-on: main-verification"),
+        )
+        assertTrue(
+            "aab-artifact must build the release bundle",
+            jobBlock.contains(":app:bundleRelease"),
+        )
+        assertTrue(
+            "aab-artifact must inspect package via apkanalyzer",
+            jobBlock.contains("manifest application-id"),
+        )
+        assertTrue(
+            "aab-artifact must inspect version via apkanalyzer",
+            jobBlock.contains("manifest version-name") &&
+                jobBlock.contains("manifest version-code"),
+        )
+        assertTrue(
+            "aab-artifact must enumerate APK contents via apkanalyzer",
+            jobBlock.contains("files list"),
+        )
+        assertTrue(
+            "aab-artifact must generate a SHA-256 checksum of the AAB",
+            jobBlock.contains("sha256sum"),
+        )
+        assertTrue(
+            "aab-artifact must install Trivy from the official tarball",
+            jobBlock.contains("trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz") ||
+                jobBlock.contains("trivy_${'$'}{TRIVY_VERSION}_Linux-64bit.tar.gz"),
+        )
+        assertTrue(
+            "aab-artifact must scan the extracted AAB with Trivy",
+            jobBlock.contains("AAB_INSPECT_DIR"),
+        )
+        assertTrue(
+            "aab-artifact must remove signing material after build",
+            jobBlock.contains("Remove signing files"),
+        )
     }
 }

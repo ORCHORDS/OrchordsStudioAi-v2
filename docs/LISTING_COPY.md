@@ -39,10 +39,11 @@ provider you configure).
 >
 > Configure an AI provider (OpenAI, Anthropic, Google, a local Ollama
 > endpoint, or any provider that speaks the OpenAI or Anthropic HTTP
-> API). Your key is stored in app-private encrypted storage and is
-> never logged. When you send a message, OrchordsAI talks directly to
-> that provider over HTTPS. Orchords.com does not proxy or inspect the
-> traffic.
+> API). Your provider API key is stored in Android Keystore-backed
+> `EncryptedSharedPreferences` on the device and is never logged.
+> Non-secret provider settings live in DataStore. When you send a
+> message, OrchordsAI talks directly to that provider over HTTPS.
+> Orchords.com does not proxy or inspect the traffic.
 >
 > What you can do:
 >
@@ -56,7 +57,9 @@ provider you configure).
 >   on-device web server, gated by a pairing token you see in-app.
 > • Add Model Context Protocol (MCP) servers and OAuth-protected MCP
 >   integrations; refresh tokens live in app-private storage.
-> • Export your data and clear everything through Settings.
+> • Export your data through Settings; per-conversation delete and
+>   provider removal wipe the encrypted credential immediately. A
+>   one-tap global wipe is planned — see `docs/DATA_DELETION.md`.
 >
 > What OrchordsAI does not do:
 >

@@ -3,7 +3,7 @@
 **App:** OrchordsAI (`com.orchords.orchordsai`)
 **Source of truth:** `docs/PRIVACY.md`, `docs/DATA_DELETION.md`,
 `app/src/main/AndroidManifest.xml`.
-**Last code-source review:** `git rev 0054798` (2026-09-13)
+**Last code-source review:** `git rev 16bce6c` (2026-09-14)
 
 This document lists the answers the Play Console **Data Safety** form
 expects. Each section below maps to a section of the Play Console
@@ -56,8 +56,14 @@ must be updated first.
 - App-private storage on Android is encrypted by the device-level file-
   based encryption (FBE) that ships on every Android 6+ device OrchordsAI
   supports (`minSdk = 26`).
-- We do not implement a separate at-rest encryption layer; the OS-level
-  FBE is the contract.
+- Provider API keys are additionally protected in an Android Keystore-
+  backed `EncryptedSharedPreferences` file
+  (`app/src/main/java/com/orchords/orchordsai/data/security/ProviderCredentialStore.kt`,
+  AES-256 GCM via `MasterKey`). Non-secret provider settings remain in
+  ordinary DataStore/JSON.
+- Conversation content, voice transcripts, generated media, and the
+  provider/MCP credential files are stored in app-private storage
+  protected by OS-level FBE only.
 
 ### User can delete data
 
@@ -89,9 +95,13 @@ operate a backend that receives user content.
 - The app does not contain ads.
 - The app does not contain in-app purchases.
 - `targetSdk = 37`, `compileSdk = 37`, `minSdk = 26` (meets Play target-API policy).
-- Android Auto Backup and device transfer are explicitly disabled
-  (`backup_rules.xml`, `data_extraction_rules.xml`) so provider API keys
-  and MCP OAuth tokens are not silently uploaded to Google Drive.
+- Android Auto Backup and device transfer are allowlist-only
+  (`backup_rules.xml`, `data_extraction_rules.xml`): only UI-only
+  `orchordsai.preferences` are marked portable. Conversation data,
+  generated media, the provider-key encrypted store, and the
+  provider/MCP credential files are not matched by any `<include>` and
+  are therefore not uploaded to Google Drive or carried across to a new
+  device.
 
 ---
 

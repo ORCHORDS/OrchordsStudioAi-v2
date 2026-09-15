@@ -35,19 +35,23 @@ Read-only inspection recorded: branch `main` tracks `origin/main`; working tree 
 
 ### Permissions and sensitive access
 
-- [ ] **Pending:** justify and test each manifest permission, including camera, microphone, calendar, notifications, foreground-service types, local-network access, and alarm access; remove permissions not required for the shipped feature set.
+- [x] **Manifest inventory captured (HEAD `16bce6c`):** `app/src/main/AndroidManifest.xml` declares **16** `uses-permission` lines (INTERNET, CAMERA, RECORD_AUDIO, SET_ALARM, WRITE_EXTERNAL_STORAGE maxSdk=28, POST_NOTIFICATIONS, POST_PROMOTED_NOTIFICATIONS, ACCESS_WIFI_STATE, CHANGE_WIFI_MULTICAST_STATE, FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC, FOREGROUND_SERVICE_SPECIAL_USE, ACCESS_LOCAL_NETWORK, PACKAGE_USAGE_STATS, READ_CALENDAR, WRITE_CALENDAR) plus **2** `uses-feature` entries (`android.hardware.camera`, `android.hardware.camera.autofocus`, both `required="false"`). `docs/PERMISSIONS.md` and `docs/PRIVACY.md §3` already map each permission to a feature rationale.
+- [ ] **Pending:** justify and test each manifest permission at the Console level (least-privilege review); remove any permission not required for the shipped feature set. Current evidence only covers declaration inventory, not per-permission runtime behavior.
 - [ ] **Pending:** verify runtime rationale, denial behavior, revocation behavior, and least-privilege handling for every dangerous permission.
 - [ ] **Pending:** confirm any restricted API declaration or Play Console declaration required by the final permission set.
 
 ### AI content, reporting, and safety
 
-- [ ] **Pending:** document AI-generated content safeguards, user-facing disclosure where appropriate, and an accessible in-app reporting/flagging route for offensive or prohibited output.
+- [x] **No third-party AI / safety SDKs in the build:** `app/build.gradle.kts` + `gradle/libs.versions.toml` contain no `play-services-ads`, `play-services-analytics`, `firebase`, `crashlytics`, `com.android.billingclient`, or equivalent dependency. App content is local-first and routes only to the AI provider the user configured.
+- [ ] **Pending:** document AI-generated content safeguards, user-facing disclosure where appropriate, and an accessible in-app reporting/flagging route for offensive or prohibited output. `grep` for `reportAbuse` / `flagMessage` / `abuseReport` / `moderation` against `app/src/main` returned no production matches — no flagging UI exists today.
 - [ ] **Pending:** define moderation/escalation handling and test that reports reach the responsible operator; no policy compliance is inferred from the presence of chat functionality.
 
 ### Billing, audience, rating, and ads
 
-- [ ] **Pending:** verify whether any paid digital feature exists. If so, integrate and declare Google Play Billing where required; do not rely on the current documentation claim that there are no in-app purchases without Console/product verification.
-- [ ] **Pending:** complete target audience, age/content declarations, and the IARC/content-rating questionnaire from the actual release build.
+- [x] **No ads, no telemetry SDKs (HEAD `16bce6c`):** `grep -rEn 'analytics|crashlytics|firebase|google-services|play-services-ads|play-services-analytics|adId' app/build.gradle.kts gradle/libs.versions.toml app/src/main` returns zero production hits. There is no ad SDK and no Firebase/Crashlytics analytics; `docs/PRIVACY.md §1` already declares "we do not collect".
+- [x] **No Google Play Billing in the build:** `grep -rln 'com.android.billingclient\|BillingClient' app/build.gradle.kts gradle/libs.versions.toml app/src/main` returns zero hits. No in-app purchases are wired today; no Play Billing dependency needs to be declared in Console.
+- [x] **Content rating draft (HEAD `0054798`):** `docs/CONTENT_RATING.md` answers the IARC questionnaire with the expected **ESRB: Everyone / PEGI: 3 / IARC: 3+** label on the basis that the app contains no media, no UGC moderation surface, and no advertising. Final questionnaire values still require Play Console review against the actual release build.
+- [ ] **Pending:** complete target audience, age/content declarations, and the IARC/content-rating questionnaire from the actual release build (the draft exists but is not yet a Console submission).
 - [ ] **Pending:** declare ads accurately and verify that ad SDK behavior matches the Data Safety form (current docs say no ads; this remains unverified).
 - [ ] **Pending:** verify app access instructions for reviewers, including provider setup, offline/local mode, test data, and any gated functionality.
 
@@ -76,11 +80,13 @@ Read-only inspection recorded: branch `main` tracks `origin/main`; working tree 
 1. Listing assets and descriptions remain TODO in `docs/LISTING_ASSETS.md` (PLAY-10). The repo has launcher icons across all densities (`mipmap-mdpi` … `mipmap-xxxhdpi`), three 1536×1024 banners under `app/src/main/assets/banner/`, and a 900×271 wordmark in `app/src/main/res/drawable/orchords_wordmark_blue.png`. Missing: a 512×512 hi-res Play Console icon export, a 1024×500 feature graphic, 2–8 phone screenshots, en-US short/full description text. Per standing rule these must not be fabricated; they remain external blockers until produced.
 2. Credential encryption still in progress for non-provider secrets; issue #428 shipped the provider apiKey path (PRIVACY.md §4 now accurate). #229/#242/#87 leave additional secret surfaces (MCP/WebDAV/S3/proxy credentials) unresolved.
 3. Data Safety/privacy/deletion answers have not been revalidated against the current build and all SDK/provider flows.
-4. Permission, AI reporting, billing, audience/rating, ads, app-access, signing, ABI/page-size, pre-launch, vitals, and Console declaration checks remain pending evidence.
+4. Per-permission runtime justification, AI content reporting/flagging surface, billing declaration, audience/content rating finalization, app-access reviewer instructions, signing key custody, 16 KB page-size native libraries, pre-launch / vitals, and full Play Console declaration set remain pending evidence. Inventory-only evidence has now been recorded (see `### Permissions and sensitive access` and `### Billing, audience, rating, and ads` above); the per-permission and per-questionnaire Console work is not yet done.
 5. Play Console app registration, service-account **Release manager** grant, release keystore upload (`KEY_BASE64` + `SIGNING_CONFIG` secrets), and pre-launch report review remain external to this repository.
 
 ## Numeric evidence
 
 - Markdown files outside `web-ui/node_modules` were counted with `find ... -name '*.md' | wc -l`: **20** (count captured 2026-09-13).
-- Manifest permission declarations were counted from `app/src/main/AndroidManifest.xml` on HEAD `16bce6c`: **16 lines matching `uses-permission`** (including multiline declarations; exact permission names require final manifest review).
+- Manifest permission declarations were counted from `app/src/main/AndroidManifest.xml` on HEAD `16bce6c`: **16 lines matching `uses-permission`** (including multiline declarations); **2 lines matching `uses-feature`**, both `required="false"`. Permission names enumerated under `### Permissions and sensitive access` above.
+- Manifest permission declarations were counted from `app/src/main/AndroidManifest.xml` on HEAD `ffa6127`: **16 lines matching `uses-permission`** (including multiline declarations; exact permission names require final manifest review).
+- Ad / analytics / billing SDK hits against `app/build.gradle.kts`, `gradle/libs.versions.toml`, and `app/src/main` on HEAD `16bce6c`: **0** matches each for `play-services-ads`, `play-services-analytics`, `firebase`, `crashlytics`, `com.android.billingclient`, `BillingClient`. Confirms the current "no ads, no IAP" claim and lets the agenda mark those sub-items off.
 - No deadline, quota, rollout percentage, or approval outcome is asserted without current Console evidence.

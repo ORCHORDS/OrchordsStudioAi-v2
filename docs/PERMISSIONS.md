@@ -3,7 +3,7 @@
 **App:** OrchordsAI (`com.orchords.orchordsai`)
 **Source of truth:** `app/src/main/AndroidManifest.xml`,
 `docs/PRIVACY.md §3`.
-**Last code-source review:** `git rev 0054798` (2026-09-13)
+**Last code-source review:** `git rev 16bce6c` (2026-09-14)
 
 Google Play Console asks for a justification for every declared
 permission. The text below is a copy/paste-ready sentence per
@@ -68,6 +68,13 @@ user-initiated long-running work.
 Optional. The app uses it to schedule a reminder the assistant set up
 through the in-app calendar/reminder tool. The user must explicitly
 configure a reminder before this permission is exercised.
+
+### `android.permission.WRITE_EXTERNAL_STORAGE` (declared with `maxSdkVersion="28"`)
+Legacy storage write permission used only on Android 9 and below for
+exports the user explicitly invokes (e.g. sharing a generated file).
+On Android 10+ the app uses scoped storage via `FileProvider` and
+`MediaStore`, so this permission is not declared on modern Android.
+No shared storage access is performed automatically.
 
 ---
 

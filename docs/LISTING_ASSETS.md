@@ -3,7 +3,7 @@
 **App:** OrchordsAI (`com.orchords.orchordsai`)
 **Source of truth:** `app/src/main/AndroidManifest.xml`,
 `app/src/main/res/mipmap-*/`, `app/build.gradle.kts`, `docs/*.md`.
-**Last code-source review:** `git rev 16bce6c` (2026-09-14)
+**Last code-source review:** `git rev 7115142` (2026-09-15)
 
 This document lists every asset that Google Play Console expects to see
 on the store listing, where it lives in the repository (if it already

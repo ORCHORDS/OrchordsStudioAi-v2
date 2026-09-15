@@ -10,8 +10,6 @@ on:
         type: choice
         options:
           - internal
-          - closed
-          - open
 
 permissions: {}
 

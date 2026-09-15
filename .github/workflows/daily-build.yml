@@ -243,6 +243,7 @@ jobs:
           name: latest-apks
           path: |
             release-assets/*.apk
+            release-assets/*.aab
             release-assets/SHA256SUMS
           if-no-files-found: error
           retention-days: 7

@@ -2,7 +2,7 @@
 
 **Effective date:** 2026-09-13
 **App package:** `com.orchords.orchordsai`
-**Last code-source review:** `git rev 89954f6` (2026-09-14)
+**Last code-source review:** `git rev 16bce6c` (2026-09-14)
 
 This policy describes how OrchordsAI handles your data. The statements
 below are grounded in what the Android application actually does and

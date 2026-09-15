@@ -79,8 +79,11 @@ or accessibility-service permission is requested.
 ## 4. AI provider and MCP data
 
 When you configure an AI provider (OpenAI, Anthropic, Google, Ollama,
-etc.) the app stores your API key, base URL, and custom headers in
-**app-private** DataStore/JSON on your device. The key is never logged.
+etc.) the app stores your provider API key in Android Keystore-backed
+`EncryptedSharedPreferences` (AES-256 GCM) and writes a blanked
+placeholder to the same DataStore/JSON record (`@Transient`).
+Non-secret provider settings (base URL, headers, model selection)
+remain in app-private DataStore/JSON. The API key is never logged.
 
 When you send a message, the app sends:
 

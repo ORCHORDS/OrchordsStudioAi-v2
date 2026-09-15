@@ -4,7 +4,7 @@
 **Repository:** `ORCHORDS/OrchordsStudioAi` (remote: `https://github.com/ORCHORDS/OrchordsStudioAi.git`)
 **Status:** Evidence-based pre-release checklist; approval is not guaranteed.
 **Prepared:** 2026-09-14
-**HEAD evidence captured on:** `git rev 52e3a4e` (2026-09-14)
+**HEAD evidence captured on:** `git rev da32234` (2026-09-14)
 
 ## Existing team agenda and repository state
 
@@ -26,10 +26,11 @@ Read-only inspection recorded: branch `main` tracks `origin/main`; working tree 
 
 ### Privacy, Data Safety, deletion
 
+- [x] **PRIVACY.md & DATA_DELETION.md aligned with #428 (current HEAD):** `docs/PRIVACY.md §2` and §4 now describe provider API keys as Android Keystore-backed `EncryptedSharedPreferences`; `docs/DATA_DELETION.md` row for "Remove a provider configuration" routes through `SettingsStore.update` and removes the key from the encrypted store. `docs/LISTING_COPY.md` full-description bullets mirror the same wording.
 - [ ] **Pending owner verification:** reconcile `DATA_SAFETY.md` with every current data flow, provider/SDK, optional permission path, retention period, and sharing recipient.
 - [ ] **Pending:** publish and test an HTTPS privacy-policy URL, and ensure the same policy is accessible from inside the app and in Play Console.
 - [ ] **Pending:** validate deletion behavior and externally reachable deletion/request process against `DATA_DELETION.md`; do not claim account deletion compliance unless account creation/deletion facts are verified.
-- [ ] **Pending:** confirm whether API keys, MCP/WebDAV/S3/proxy credentials and other secrets are encrypted at rest. Credential encryption is **in progress, not complete**: issue #428 explicitly leaves several secret surfaces out of scope.
+- [ ] **Pending:** confirm whether MCP/WebDAV/S3/proxy credentials and other secrets outside the provider apiKey path are encrypted at rest. Provider apiKey encryption shipped in #428 (25cd2f3) and `docs/PRIVACY.md §4` now describes the Android Keystore-backed `EncryptedSharedPreferences` path; the remaining secret surfaces (MCP/WebDAV/S3/proxy) are tracked by #229 / #242 / #87 and still out of scope.
 - [ ] **Pending:** update Data Safety answers after the encryption and backup/export implementation is complete and tested.
 
 ### Permissions and sensitive access
@@ -60,6 +61,7 @@ Read-only inspection recorded: branch `main` tracks `origin/main`; working tree 
 - [ ] **PLAY-9 implemented:** `app/build.gradle.kts` registers a `buildAll` task depending on `assembleRelease` and `bundleRelease`. `.github/workflows/daily-build.yml` invokes `buildAll` on the signed path, validates the AAB package id (`com.orchords.orchordsai`), version-name, and version-code with `apkanalyzer`, copies the AAB to `release-assets/orchords-studio-ai.aab`, and uploads it via the `latest-apks` artifact. A separate `play-internal-publish.yml` workflow (`workflow_dispatch` only) downloads that artifact and runs `bundle exec fastlane PlayStore internal`; non-internal tracks are refused at runtime. `fastlane/Appfile`, `fastlane/Fastfile`, and `fastlane/supply.json` exist on `main` with no secrets committed (`.gitignore` covers `fastlane/play-store-key.json` and `fastlane/.bundle/`). `FastlanePublishingPolicyTest` enforces all of the above; it is green on the last signed Daily Build SHA.
 - [x] **PLAY-11 implemented (Security Analysis AAB scan, 5e943a6):** a new `Signed AAB Manifest Inspection` job runs in `.github/workflows/security-analysis.yml` (gated on `schedule || workflow_dispatch`). When `RELEASE_KEYSTORE_BASE64` + `ANDROID_SIGNING_CONFIG` are present on the runner it builds `:app:bundleRelease`, extracts the AAB, runs `apkanalyzer` to capture `application-id`, `versionName`, `versionCode`, `minSdk`, `targetSdk`, permissions, and a top-25 file list, generates a SHA-256, then runs Trivy `vuln/misconfig/secret` against the extracted bundle. Evidence is uploaded as the `aab-inspection-evidence` artifact. Without signing secrets on the runner (the current self-hosted configuration) the job takes the explicit-skip path and emits a `n/a` manifest stub so the artifact still uploads. Run 34816179517 (5e943a6) is green for all six Security Analysis jobs (Trivy Misconfig, OSV Cross-check, Gitleaks, Trivy Vulnerabilities, Semgrep SAST, Signed AAB Manifest Inspection). Re-verified on HEAD `52e3a4e`: focused `:app:testDebugUnitTest` runs the release/security/migration policy suite — all green; `:app:lintDebug` is also green (0 errors; existing warnings remain).
 - [x] **#428 implemented (provider apiKey out of DataStore JSON, 25cd2f3):** `ProviderSetting.apiKey` is now `abstract var` marked `@Transient` so the value never reaches the Settings DataStore JSON. Keys live in `ProviderCredentialStore` (EncryptedSharedPreferences + AES-256-GCM master key). `ProviderSecretCodec` redacts keys on write and hydrates them on read; a V5 DataStore migration forwards any pre-existing plaintext keys into the encrypted store. `ProviderSecretCodecTest`, `ProviderApiKeyRedactionTest`, and `PreferenceStoreV5MigrationTest` cover redaction, hydration, and the no-write-when-keystore-unavailable contract; all green on `:app:testDebugUnitTest` against 25cd2f3 and re-verified green on HEAD `1780862`.
+- [x] **Deletion-path credential wipe (HEAD `da32234`):** `ProviderSecretCodec.removeDroppedProviders` + `SettingsStore.update` ensure that when a provider is removed via the Settings UI, the matching encrypted entry is also deleted; the DataStore write is refused (and the prior values are preserved) if the encrypted store reports failure. Two regression tests in `ProviderSecretCodecTest` cover both the happy path and the backend-refuses-removal path; the focused `:app:testDebugUnitTest --tests "com.orchords.orchordsai.security.*" --tests "com.orchords.orchordsai.ShareSheetTest"` suite is green.
 
 ### Testing, pre-launch, vitals, and Console declarations
 
@@ -72,7 +74,7 @@ Read-only inspection recorded: branch `main` tracks `origin/main`; working tree 
 ## Unresolved blockers
 
 1. Listing assets and descriptions remain TODO in `docs/LISTING_ASSETS.md` (PLAY-10). The repo has launcher icons across all densities (`mipmap-mdpi` … `mipmap-xxxhdpi`), three 1536×1024 banners under `app/src/main/assets/banner/`, and a 900×271 wordmark in `app/src/main/res/drawable/orchords_wordmark_blue.png`. Missing: a 512×512 hi-res Play Console icon export, a 1024×500 feature graphic, 2–8 phone screenshots, en-US short/full description text. Per standing rule these must not be fabricated; they remain external blockers until produced.
-2. Credential encryption is in progress, not complete; issue #428 shipped the provider apiKey path, but #229/#242/#87 leave additional secret surfaces (MCP/WebDAV/S3/proxy credentials) unresolved.
+2. Credential encryption still in progress for non-provider secrets; issue #428 shipped the provider apiKey path (PRIVACY.md §4 now accurate). #229/#242/#87 leave additional secret surfaces (MCP/WebDAV/S3/proxy credentials) unresolved.
 3. Data Safety/privacy/deletion answers have not been revalidated against the current build and all SDK/provider flows.
 4. Permission, AI reporting, billing, audience/rating, ads, app-access, signing, ABI/page-size, pre-launch, vitals, and Console declaration checks remain pending evidence.
 5. Play Console app registration, service-account **Release manager** grant, release keystore upload (`KEY_BASE64` + `SIGNING_CONFIG` secrets), and pre-launch report review remain external to this repository.

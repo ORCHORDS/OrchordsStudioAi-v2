@@ -384,6 +384,23 @@ class SettingsStore(
             return
         }
         val settings = newSettings.enforceFirstPartyModelPolicy()
+        // #428 deletion-path: when the new provider list drops an id that
+        // the previous list contained, the encrypted credential for that
+        // id must be wiped immediately — otherwise a "Settings →
+        // Providers → Remove" action leaves a stale apiKey on disk under
+        // the old Uuid. We must run this BEFORE redactProvidersForWrite
+        // (which only handles "blank an existing provider's key", not
+        // "remove the provider entirely") and BEFORE dataStore.edit so
+        // that a removal failure refuses the write.
+        val previousProviderIds = settingsFlow.value.providers.mapTo(HashSet()) { it.id }
+        if (!ProviderSecretCodec.removeDroppedProviders(
+                previousIds = previousProviderIds,
+                newProviders = settings.providers,
+                store = credentialStore,
+            )
+        ) {
+            throw IllegalStateException("Encrypted credential store rejected removal of a dropped provider; refusing settings update")
+        }
         val redactedProviders = ProviderSecretCodec.redactProvidersForWrite(
             providers = settings.providers,
             store = credentialStore,

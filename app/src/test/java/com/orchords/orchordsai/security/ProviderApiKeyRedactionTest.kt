@@ -209,6 +209,54 @@ class ProviderApiKeyRedactionTest {
     }
 
     @Test
+    fun `settings datastore write path wipes encrypted apiKey for dropped provider ids`() {
+        // Settings → Providers → Remove must scrub the encrypted apiKey for
+        // any provider id that disappears from `settings.providers`. If
+        // `ProviderSecretCodec.removeDroppedProviders` is not called before
+        // `dataStore.edit`, a Remove action leaves the previous key
+        // resident in the encrypted file under the dropped Uuid — the
+        // exact behaviour Play Console flags as "unnecessary data
+        // collection". The wipe must run *before* redactProvidersForWrite
+        // and *before* dataStore.edit so a removal failure refuses the
+        // settings update instead of leaking the stale key.
+        val preferencesStore = source(
+            "app/src/main/java/com/orchords/orchordsai/data/datastore/PreferencesStore.kt"
+        )
+        assertTrue(
+            "SettingsStore.update must derive previousIds from settingsFlow.value.providers " +
+                "so a Remove action detects the dropped id (#428 deletion-path).",
+            "previousProviderIds = settingsFlow.value.providers.mapTo(HashSet())" in preferencesStore,
+        )
+        assertTrue(
+            "SettingsStore.update must call ProviderSecretCodec.removeDroppedProviders " +
+                "with the derived previousIds before writing DataStore (#428 deletion-path).",
+            "ProviderSecretCodec.removeDroppedProviders(" in preferencesStore,
+        )
+        // Order matters: the wipe site must sit above both redactProvidersForWrite
+        // and dataStore.edit so a removal failure aborts the write.
+        val wipeIdx = preferencesStore.indexOf("ProviderSecretCodec.removeDroppedProviders(")
+        val redactIdx = preferencesStore.indexOf("ProviderSecretCodec.redactProvidersForWrite(")
+        val editIdx = preferencesStore.indexOf("dataStore.edit { preferences ->")
+        assertTrue(
+            "SettingsStore.update must call removeDroppedProviders before redactProvidersForWrite (#428 deletion-path).",
+            wipeIdx in 0 until redactIdx,
+        )
+        assertTrue(
+            "SettingsStore.update must call removeDroppedProviders before dataStore.edit (#428 deletion-path).",
+            wipeIdx in 0 until editIdx,
+        )
+        assertTrue(
+            "SettingsStore.update must throw when removeDroppedProviders refuses to wipe a dropped " +
+                "provider; refusing the settings update keeps the stale key out of DataStore (#428 deletion-path).",
+            // The throw site uses the literal "refusing settings update" string
+            // — both spellings (encrypted credential store / Removing dropped
+            // providers) satisfy the contract.
+            preferencesStore.contains("Removing dropped providers") ||
+                preferencesStore.contains("refusing settings update", ignoreCase = true),
+        )
+    }
+
+    @Test
     fun `security-crypto dependency is declared in the version catalog and consumed by app`() {
         val catalog = source("gradle/libs.versions.toml")
         assertTrue(

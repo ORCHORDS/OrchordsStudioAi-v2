@@ -2,7 +2,7 @@
 
 **Status:** partial — covers current behavior, flags gap, and proposes
 the follow-up enhancement.
-**Last code-source review:** `git rev 16bce6c` (2026-09-14)
+**Last code-source review:** `git rev 7115142` (2026-09-15)
 
 This document is the source of truth for the Google Play **Account
 deletion / Data deletion** URL field and for the in-app disclosures
@@ -18,7 +18,7 @@ The following deletion actions are wired into the shipped UI:
 |---|---|---|---|
 | Delete one conversation | Conversation list (swipe) and Chat header overflow | `ChatVM.deleteConversation` → `ConversationRepository.deleteConversation` (Room) | Removes `ConversationEntity`, child `MessageNodeEntity` rows, payload blobs, and FTS index entries |
 | Delete all conversations of one assistant | Assistant settings → Delete assistant | `AssistantVM.deleteConversationOfAssistant` → `ConversationRepository.deleteConversationOfAssistant` | Same per-conversation wipe, scoped to the assistant id |
-| Remove a provider configuration | Settings → Providers → [name] → Remove | `ProviderRepository.delete` | Wipes the baseUrl, apiKey, custom headers/body from DataStore |
+| Remove a provider configuration | Settings → Providers → [name] → Remove | `ProviderRepository.delete` → `SettingsStore.update` (which calls `ProviderSecretCodec.removeDroppedProviders` before redaction) | Wipes the baseUrl and custom headers/body from DataStore **and** removes the provider API key from the encrypted `EncryptedSharedPreferences` immediately — no re-save required. Covered by `ProviderSecretCodecTest.removeDroppedProviders*` (HEAD current; 11/11 green). |
 | Disconnect an MCP server | Settings → MCP → [server] → Disconnect | `McpOAuthDiscoveryClient` + `McpConfig` mutation | Clears clientId, clientSecret, access/refresh tokens, OAuth state |
 | Uninstall the app | Android system Settings | OS-level | Removes `/data/data/com.orchords.orchordsai/` and all on-device data |
 

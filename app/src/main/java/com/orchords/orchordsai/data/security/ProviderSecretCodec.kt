@@ -61,6 +61,38 @@ object ProviderSecretCodec {
         provider.withApiKey(store.get(provider.id) ?: "")
     }
 
+    /**
+     * Delete every entry from [store] whose provider id is in [previousIds]
+     * but no longer appears in [newProviders]. Used by the deletion path
+     * (`SettingsStore.update` removes a provider outright rather than
+     * blanking its apiKey) so a removed provider leaves no stale
+     * ciphertext behind.
+     *
+     * Returns `true` when the store was either unavailable (nothing to do)
+     * or every targeted removal succeeded. Returns `false` if the store
+     * is available but any removal failed — the caller must refuse the
+     * pending DataStore write so we never persist a redacted list while
+     * a key for a removed provider still exists on disk.
+     *
+     * Only targets ids that actually exist in [store] to avoid spurious
+     * "unavailable-keystore" failures for legacy installs that never had
+     * an entry under that id.
+     */
+    fun removeDroppedProviders(
+        previousIds: Set<Uuid>,
+        newProviders: List<ProviderSetting>,
+        store: ProviderSecretBackend,
+    ): Boolean {
+        if (!store.isAvailable()) return true
+        val stored = store.storedProviderIds()
+        val newIds = newProviders.mapTo(HashSet(newProviders.size)) { it.id }
+        val dropped = (previousIds intersect stored) - newIds
+        for (id in dropped) {
+            if (!store.remove(id)) return false
+        }
+        return true
+    }
+
     private fun ProviderSetting.withApiKey(value: String): ProviderSetting = when (this) {
         is ProviderSetting.OpenAI -> copy(apiKey = value)
         is ProviderSetting.Google -> copy(apiKey = value)

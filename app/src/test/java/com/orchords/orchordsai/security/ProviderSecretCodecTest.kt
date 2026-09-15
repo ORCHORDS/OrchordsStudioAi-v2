@@ -4,8 +4,10 @@ import com.orchords.ai.provider.ProviderSetting
 import com.orchords.orchordsai.data.security.ProviderSecretBackend
 import com.orchords.orchordsai.data.security.ProviderSecretCodec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.uuid.Uuid
 
@@ -154,6 +156,86 @@ class ProviderSecretCodecTest {
         assertNull(
             "A removal failure must abort the redacted write so the DataStore JSON is not overwritten.",
             redacted,
+        )
+    }
+
+    @Test
+    fun `removeDroppedProviders no-ops when the encrypted store is unavailable`() {
+        // The deletion path must never refuse a Settings update just
+        // because Android Keystore isn't reachable; on legacy installs
+        // without an encrypted store there's nothing to delete, so a
+        // successful no-op is the right answer (#428 deletion-path).
+        val store = FakeCredentialStore(available = false)
+        val kept = Uuid.random()
+        val dropped = Uuid.random()
+        val newProviders = listOf(ProviderSetting.OpenAI(id = kept, apiKey = ""))
+
+        val ok = ProviderSecretCodec.removeDroppedProviders(
+            previousIds = setOf(kept, dropped),
+            newProviders = newProviders,
+            store = store,
+        )
+
+        assertTrue("An unavailable store is a successful no-op", ok)
+    }
+
+    @Test
+    fun `removeDroppedProviders wipes only stored-and-dropped ids and keeps retained ones`() {
+        // The deletion path must remove exactly the provider ids that
+        // are present in the encrypted store AND absent from the new
+        // provider list. A provider that's still in the new list must
+        // keep its key; an id that's only in `previousIds` but never
+        // had a key in the store is a no-op. This is the regression
+        // gate for "Settings → Providers → Remove" leaving stale
+        // apiKey ciphertext behind (#428 deletion-path).
+        val store = FakeCredentialStore(available = true)
+        val kept = Uuid.random()
+        val droppedStored = Uuid.random()
+        val droppedNeverStored = Uuid.random()
+        store.put(kept, "sk-keep-me")
+        store.put(droppedStored, "sk-leak-risk")
+        // droppedNeverStored is intentionally never put() into the store.
+
+        val newProviders = listOf(ProviderSetting.OpenAI(id = kept, apiKey = ""))
+
+        val ok = ProviderSecretCodec.removeDroppedProviders(
+            previousIds = setOf(kept, droppedStored, droppedNeverStored),
+            newProviders = newProviders,
+            store = store,
+        )
+
+        assertTrue("Removal of stored-and-dropped ids must succeed", ok)
+        assertEquals("Retained provider must still carry its key", "sk-keep-me", store.get(kept))
+        assertNull("Stored-and-dropped provider must be wiped from the encrypted store", store.get(droppedStored))
+        assertEquals("store should retain exactly the kept provider", 1, store.storedCount)
+    }
+
+    @Test
+    fun `removeDroppedProviders refuses when the backend rejects a delete`() {
+        // If the encrypted store fails to remove a dropped provider, the
+        // deletion path must surface that as a refusal so SettingsStore
+        // aborts before overwriting the DataStore JSON. Otherwise the
+        // stale ciphertext would survive the user-visible delete (#428
+        // deletion-path).
+        val store = PutOnlyFakeCredentialStore()
+        val kept = Uuid.random()
+        val dropped = Uuid.random()
+        store.put(kept, "sk-keep")
+        store.put(dropped, "sk-leak-risk")
+
+        val newProviders = listOf(ProviderSetting.OpenAI(id = kept, apiKey = ""))
+
+        val ok = ProviderSecretCodec.removeDroppedProviders(
+            previousIds = setOf(kept, dropped),
+            newProviders = newProviders,
+            store = store,
+        )
+
+        assertFalse("A removal failure must refuse the deletion path", ok)
+        assertEquals(
+            "The dropped provider must still be in the store after a refused removal.",
+            "sk-leak-risk",
+            store.get(dropped),
         )
     }
 }

@@ -24,11 +24,15 @@ platform :android do
 
   desc "Promote the current internal release to production"
   lane :promote do
+    # A staged rollout (fraction < 1.0) must be released as
+    # `inProgress`; `completed` is only valid for a full rollout.
+    rollout_fraction = ENV.fetch("PLAY_STORE_ROLLOUT", "0.1").to_f
+    release_status = if rollout_fraction >= 1.0 then "completed" else "inProgress" end
     upload_to_play_store(
       track: "internal",
       track_promote_to: "production",
-      rollout: "0.1",
-      release_status: "completed",
+      rollout: rollout_fraction,
+      release_status: release_status,
     )
   end
 end

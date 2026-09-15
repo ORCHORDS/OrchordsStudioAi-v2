@@ -6,7 +6,7 @@
 `.github/workflows/play-internal-publish.yml`,
 `docs/LISTING_ASSETS.md`, `docs/PRIVACY.md`, `docs/DATA_SAFETY.md`,
 `docs/PERMISSIONS.md`, `docs/CONTENT_RATING.md`.
-**Last code-source review:** PLAY-9 implementation, 2026-09-13.
+**Last code-source review:** `git rev 16bce6c` (2026-09-14).
 
 This document describes the end-to-end path from a green Daily Build to
 a release published on the Google Play Console *internal* track. It is
@@ -95,11 +95,15 @@ platform :android do
 
   desc "Promote the current internal release to production"
   lane :promote do
+    # A staged rollout (fraction < 1.0) must be released as
+    # `inProgress`; `completed` is only valid for a full rollout.
+    rollout_fraction = ENV.fetch("PLAY_STORE_ROLLOUT", "0.1").to_f
+    release_status = if rollout_fraction >= 1.0 then "completed" else "inProgress" end
     upload_to_play_store(
       track: "internal",
       track_promote_to: "production",
-      rollout: "0.1",
-      release_status: "completed",
+      rollout: rollout_fraction,
+      release_status: release_status,
     )
   end
 end
@@ -178,9 +182,13 @@ Play Console UI confirms:
    upload) has been reviewed.
 
 If those gates are met, an operator with `release` access can run
-`bundle exec fastlane PlayStore promote` locally to roll the internal
-build out to production at 10%, then increase to 25%, 50%, 100% over
-the following 24–72 hours.
+`bundle exec fastlane PlayStore promote` locally with
+`PLAY_STORE_ROLLOUT=0.1` (defaults to `0.1`) to roll the internal
+build out to production at 10%; the lane automatically switches
+`release_status` to `inProgress` for any staged rollout and to
+`completed` only when `PLAY_STORE_ROLLOUT=1.0`. Operators then
+increase to 25%, 50%, 100% over the following 24–72 hours by re-running
+the lane with a higher `PLAY_STORE_ROLLOUT`.
 
 ---
 

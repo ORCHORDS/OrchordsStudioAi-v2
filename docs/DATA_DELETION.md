@@ -2,7 +2,7 @@
 
 **Status:** partial — covers current behavior, flags gap, and proposes
 the follow-up enhancement.
-**Last code-source review:** `git rev 420300e` (2026-09-13)
+**Last code-source review:** `git rev 16bce6c` (2026-09-14)
 
 This document is the source of truth for the Google Play **Account
 deletion / Data deletion** URL field and for the in-app disclosures

@@ -3,7 +3,7 @@
 **App:** OrchordsAI (`com.orchords.orchordsai`)
 **Source of truth:** `docs/PRIVACY.md`, `docs/PERMISSIONS.md`,
 `app/src/main/AndroidManifest.xml`.
-**Last code-source review:** `git rev 0054798` (2026-09-13)
+**Last code-source review:** `git rev 16bce6c` (2026-09-14)
 
 The Play Console asks the IARC questionnaire to determine the
 content-rating label that appears on the listing. The expected rating
@@ -88,8 +88,10 @@ directly to the AI provider.
 ## Category: Target audience
 
 **Q: What is the target age group?**
-A: **Everyone, including children 13+.** See "Children" section of
-`docs/PRIVACY.md`: the app is not directed to children under 13.
+A: **Everyone — app is not directed to children under 13.** See the
+"Children" section of `docs/PRIVACY.md`. The listing should declare the
+app is not designed primarily for children; the configured AI provider
+may produce unfiltered content, so parental supervision is required.
 
 ---
 

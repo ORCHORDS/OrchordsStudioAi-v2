@@ -200,25 +200,17 @@ fun ProviderConnectionTester(
                                             customBody = model!!.customBodies
                                         )
                                     )
-                                    val message = result.message
-                                    val toolCall = message.parts
+                                    val toolCall = result.message.parts
                                         .filterIsInstance<UIMessagePart.Tool>()
                                         .firstOrNull()
-                                    val resultText = if (toolCall != null) {
-                                        resources.getString(
-                                            R.string.setting_provider_page_test_tool_called,
-                                            toolCall.toolName,
-                                            toolCall.input
-                                        )
-                                    } else {
-                                        val text = message.parts
-                                            .filterIsInstance<UIMessagePart.Text>()
-                                            .joinToString("") { it.text }
-                                        resources.getString(
-                                            R.string.setting_provider_page_test_tool_not_called,
-                                            text
-                                        )
+                                    check(toolCall != null) {
+                                        "Tool-call test completed without a tool call"
                                     }
+                                    val resultText = resources.getString(
+                                        R.string.setting_provider_page_test_tool_called,
+                                        toolCall.toolName,
+                                        toolCall.input,
+                                    )
                                     toolsState = UiState.Success(resultText)
                                 }.onFailure { toolsState = UiState.Error(it) }
                             }

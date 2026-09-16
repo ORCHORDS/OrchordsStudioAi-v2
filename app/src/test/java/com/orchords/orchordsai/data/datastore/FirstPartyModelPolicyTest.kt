@@ -66,6 +66,16 @@ class FirstPartyModelPolicyTest {
     }
 
     @Test
+    fun `empty migrated assistant state is repaired before chat startup`() {
+        val effective = Settings(assistants = emptyList()).enforceFirstPartyModelPolicy()
+
+        assertTrue(effective.assistants.isNotEmpty())
+        assertEquals(effective.assistants.first().id, effective.assistantId)
+        assertEquals(ORCHORDS_MODEL_UUID, effective.assistants.first().chatModelId)
+        assertEquals(effective.assistants.first(), effective.getCurrentAssistant())
+    }
+
+    @Test
     fun `canonical route cannot be retargeted but keeps its gateway credential`() {
         val stored = (DEFAULT_PROVIDERS.single() as ProviderSetting.OpenAI).copy(
             apiKey = "protected-key",

@@ -1,6 +1,8 @@
 package com.orchords.orchordsai.security
 
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV6Migration
+import com.orchords.orchordsai.data.security.SecondarySecretBackend
+import com.orchords.orchordsai.data.security.SecondarySecretKey
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

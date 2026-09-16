@@ -5,6 +5,7 @@ import java.net.URI
 const val GITHUB_MCP_REMOTE_ENDPOINT = "https://api.githubcopilot.com/mcp/"
 private const val GITHUB_MCP_REMOTE_HOST = "api.githubcopilot.com"
 private const val HEADER_AUTHORIZATION = "Authorization"
+private const val HEADER_TOOLSETS = "X-MCP-Toolsets"
 private const val HEADER_READONLY = "X-MCP-Readonly"
 private const val HEADER_LOCKDOWN = "X-MCP-Lockdown"
 
@@ -23,7 +24,7 @@ fun githubMcpPreset(): McpServerConfig.StreamableHTTPServer =
             name = "GitHub",
             headers = listOf(
                 HEADER_AUTHORIZATION to "",
-                "X-MCP-Toolsets" to "repos,issues,pull_requests",
+                HEADER_TOOLSETS to "repos,issues,pull_requests",
                 HEADER_READONLY to "true",
                 HEADER_LOCKDOWN to "true",
             ),
@@ -35,6 +36,12 @@ internal fun isOfficialGitHubMcpRemote(config: McpServerConfig): Boolean =
     runCatching { URI(config.serverUrl).host?.equals(GITHUB_MCP_REMOTE_HOST, ignoreCase = true) == true }
         .getOrDefault(false)
 
+internal fun isGitHubManagedHeader(name: String): Boolean =
+    name.equals(HEADER_AUTHORIZATION, ignoreCase = true) ||
+        name.equals(HEADER_TOOLSETS, ignoreCase = true) ||
+        name.equals(HEADER_READONLY, ignoreCase = true) ||
+        name.equals(HEADER_LOCKDOWN, ignoreCase = true)
+
 internal fun isGitHubMcpReadOnly(config: McpServerConfig): Boolean {
     if (!isOfficialGitHubMcpRemote(config)) return false
     val path = runCatching { URI(config.serverUrl).path.orEmpty().lowercase() }.getOrDefault("")
@@ -44,6 +51,15 @@ internal fun isGitHubMcpReadOnly(config: McpServerConfig): Boolean {
 
 internal fun isGitHubMcpLockdown(config: McpServerConfig): Boolean =
     isOfficialGitHubMcpRemote(config) && githubBooleanHeader(config, HEADER_LOCKDOWN)
+
+internal fun githubMcpToolsets(config: McpServerConfig): String {
+    if (!isOfficialGitHubMcpRemote(config)) return ""
+    return config.commonOptions.headers
+        .lastOrNull { (name, _) -> name.equals(HEADER_TOOLSETS, ignoreCase = true) }
+        ?.second
+        ?.trim()
+        .orEmpty()
+}
 
 internal fun githubMcpPat(config: McpServerConfig): String {
     if (!isOfficialGitHubMcpRemote(config)) return ""
@@ -55,12 +71,33 @@ internal fun githubMcpPat(config: McpServerConfig): String {
     return value.removePrefix("Bearer ").removePrefix("bearer ").trim()
 }
 
+internal fun hasGitHubMcpAuthentication(config: McpServerConfig): Boolean =
+    githubMcpPat(config).isNotBlank() || config.commonOptions.oauth?.isAuthorized == true
+
 internal fun McpServerConfig.withGitHubMcpPat(pat: String): McpServerConfig {
     if (!isOfficialGitHubMcpRemote(this)) return this
     val normalized = pat.trim()
     return withGitHubHeader(
         HEADER_AUTHORIZATION,
         if (normalized.isEmpty()) "" else "Bearer $normalized",
+    )
+}
+
+internal fun McpServerConfig.withGitHubMcpToolsets(toolsets: String): McpServerConfig {
+    if (!isOfficialGitHubMcpRemote(this)) return this
+    val normalized = toolsets.split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .distinct()
+        .joinToString(",")
+    return withGitHubHeader(HEADER_TOOLSETS, normalized)
+}
+
+internal fun McpServerConfig.withGitHubMcpDisconnected(): McpServerConfig {
+    if (!isOfficialGitHubMcpRemote(this)) return this
+    val withoutPat = withGitHubMcpPat("")
+    return withoutPat.clone(
+        commonOptions = withoutPat.commonOptions.copy(oauth = null),
     )
 }
 

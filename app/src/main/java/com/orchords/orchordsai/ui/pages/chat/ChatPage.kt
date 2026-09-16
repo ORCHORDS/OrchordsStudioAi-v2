@@ -60,6 +60,8 @@ import me.orchid.hugeicons.stroke.LeftToRightListBullet
 import me.orchid.hugeicons.stroke.Menu03
 import me.orchid.hugeicons.stroke.MessageAdd01
 import com.orchords.orchordsai.R
+import com.orchords.orchordsai.data.ai.planning.isPlanningModeEnabled
+import com.orchords.orchordsai.data.ai.planning.withPlanningMode
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.datastore.findProvider
 import com.orchords.orchordsai.data.datastore.getCurrentAssistant
@@ -148,34 +150,24 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     LaunchedEffect(files, text) {
         if (files.isNotEmpty()) {
             val localFiles = filesManager.createChatFilesByContents(files)
-            val contentTypes = files.mapNotNull { file ->
-                filesManager.getFileMimeType(file)
-            }
+            val contentTypes = files.mapNotNull { file -> filesManager.getFileMimeType(file) }
             val parts = buildList {
                 localFiles.forEachIndexed { index, file ->
                     val type = contentTypes.getOrNull(index)
-                    if (type?.startsWith("image/") == true) {
-                        add(UIMessagePart.Image(url = file.toString()))
-                    } else if (type?.startsWith("video/") == true) {
-                        add(UIMessagePart.Video(url = file.toString()))
-                    } else if (type?.startsWith("audio/") == true) {
-                        add(UIMessagePart.Audio(url = file.toString()))
-                    }
+                    if (type?.startsWith("image/") == true) add(UIMessagePart.Image(url = file.toString()))
+                    else if (type?.startsWith("video/") == true) add(UIMessagePart.Video(url = file.toString()))
+                    else if (type?.startsWith("audio/") == true) add(UIMessagePart.Audio(url = file.toString()))
                 }
             }
             inputState.messageContent = parts
         }
         text?.base64Decode()?.let { decodedText ->
-            if (decodedText.isNotEmpty()) {
-                inputState.setMessageText(decodedText)
-            }
+            if (decodedText.isNotEmpty()) inputState.setMessageText(decodedText)
         }
     }
 
     val chatListState = rememberLazyListState()
-    var followPolicy by remember(id) {
-        mutableStateOf(ViewportFollowPolicy(id.toString()))
-    }
+    var followPolicy by remember(id) { mutableStateOf(ViewportFollowPolicy(id.toString())) }
     LaunchedEffect(conversation.id) {
         followPolicy = followPolicy.onConversationChanged(conversation.id.toString()).policy
     }
@@ -183,9 +175,7 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
         if (!vm.chatListInitialized && conversation.messageNodes.isNotEmpty()) {
             if (nodeId != null) {
                 val index = conversation.messageNodes.indexOfFirst { it.id == nodeId }
-                if (index >= 0) {
-                    chatListState.scrollToItem(index)
-                }
+                if (index >= 0) chatListState.scrollToItem(index)
             } else {
                 chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
             }
@@ -194,76 +184,34 @@ fun ChatPage(id: Uuid, text: String?, files: List<Uri>, nodeId: Uuid? = null) {
     }
 
     when {
-        isBigScreen -> {
-            PermanentNavigationDrawer(
-                drawerContent = {
-                    ChatDrawerContent(
-                        navController = navController,
-                        current = conversation,
-                        vm = vm,
-                        settings = setting
-                    )
-                }
-            ) {
-                ChatPageContent(
-                    inputState = inputState,
-                    loadingJob = loadingJob,
-                    processingStatus = processingStatus,
-                    setting = setting,
-                    conversation = conversation,
-                    drawerState = drawerState,
-                    navController = navController,
-                    vm = vm,
-                    chatListState = chatListState,
-                    enableWebSearch = enableWebSearch,
-                    currentChatModel = currentChatModel,
-                    bigScreen = true,
-                    errors = errors,
-                    onDismissError = { vm.dismissError(it) },
-                    onClearAllErrors = { vm.clearAllErrors() },
-                    followPolicy = followPolicy,
-                    onFollowPolicyChange = { followPolicy = it },
-                    temporary = isTemporary,
-                )
+        isBigScreen -> PermanentNavigationDrawer(
+            drawerContent = {
+                ChatDrawerContent(navController, conversation, vm, setting)
             }
+        ) {
+            ChatPageContent(
+                inputState, loadingJob, processingStatus, setting, true, conversation,
+                drawerState, navController, vm, chatListState, enableWebSearch, currentChatModel,
+                errors, { vm.dismissError(it) }, { vm.clearAllErrors() }, followPolicy,
+                { followPolicy = it }, isTemporary,
+            )
         }
 
         else -> {
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = {
-                    ChatDrawerContent(
-                        navController = navController,
-                        current = conversation,
-                        vm = vm,
-                        settings = setting
-                    )
+                    ChatDrawerContent(navController, conversation, vm, setting)
                 }
             ) {
                 ChatPageContent(
-                    inputState = inputState,
-                    loadingJob = loadingJob,
-                    processingStatus = processingStatus,
-                    setting = setting,
-                    conversation = conversation,
-                    drawerState = drawerState,
-                    navController = navController,
-                    vm = vm,
-                    chatListState = chatListState,
-                    enableWebSearch = enableWebSearch,
-                    currentChatModel = currentChatModel,
-                    bigScreen = false,
-                    errors = errors,
-                    onDismissError = { vm.dismissError(it) },
-                    onClearAllErrors = { vm.clearAllErrors() },
-                    followPolicy = followPolicy,
-                    onFollowPolicyChange = { followPolicy = it },
-                    temporary = isTemporary,
+                    inputState, loadingJob, processingStatus, setting, false, conversation,
+                    drawerState, navController, vm, chatListState, enableWebSearch, currentChatModel,
+                    errors, { vm.dismissError(it) }, { vm.clearAllErrors() }, followPolicy,
+                    { followPolicy = it }, isTemporary,
                 )
             }
-            BackHandler(drawerState.isOpen) {
-                scope.launch { drawerState.close() }
-            }
+            BackHandler(drawerState.isOpen) { scope.launch { drawerState.close() } }
         }
     }
 }
@@ -318,10 +266,7 @@ private fun ChatPageContent(
 
     TTSAutoPlay(vm = vm, setting = setting, conversation = conversation)
 
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         AssistantBackground(setting = setting, modifier = Modifier.hazeSource(hazeState))
         Scaffold(
             topBar = {
@@ -332,18 +277,10 @@ private fun ChatPageContent(
                     drawerState = drawerState,
                     previewMode = previewMode,
                     temporary = temporary,
-                    onNewChat = {
-                        navigateToChatPage(navController)
-                    },
-                    onNewTemporaryChat = {
-                        navigateToTemporaryChatPage(navController)
-                    },
-                    onClickMenu = {
-                        previewMode = !previewMode
-                    },
-                    onUpdateTitle = {
-                        vm.updateTitle(it)
-                    }
+                    onNewChat = { navigateToChatPage(navController) },
+                    onNewTemporaryChat = { navigateToTemporaryChatPage(navController) },
+                    onClickMenu = { previewMode = !previewMode },
+                    onUpdateTitle = { vm.updateTitle(it) }
                 )
             },
             bottomBar = {
@@ -353,9 +290,7 @@ private fun ChatPageContent(
                     settings = setting,
                     hazeState = hazeState,
                     completionProviders = completionProviders,
-                    onCancelClick = {
-                        vm.stopGeneration()
-                    },
+                    onCancelClick = { vm.stopGeneration() },
                     enableSearch = enableWebSearch,
                     onUpdateSearchMode = { mode ->
                         val current = setting.getCurrentAssistant()
@@ -363,29 +298,28 @@ private fun ChatPageContent(
                         vm.updateSettings(
                             setting.copy(
                                 assistants = setting.assistants.map { assistant ->
-                                    if (assistant.id == current.id) {
-                                        assistant.copy(enableWebSearch = mode == SearchMode.LOCAL)
-                                    } else {
-                                        assistant
-                                    }
+                                    if (assistant.id == current.id) assistant.copy(enableWebSearch = mode == SearchMode.LOCAL)
+                                    else assistant
                                 },
-                                providers = if (model == null) {
-                                    setting.providers
-                                } else {
-                                    setting.providers.map { provider ->
-                                        provider.editModel(
-                                            model.copy(
-                                                tools = if (mode == SearchMode.BUILT_IN) {
-                                                    model.tools + BuiltInTools.Search
-                                                } else {
-                                                    model.tools - BuiltInTools.Search
-                                                }
-                                            )
+                                providers = if (model == null) setting.providers else setting.providers.map { provider ->
+                                    provider.editModel(
+                                        model.copy(
+                                            tools = if (mode == SearchMode.BUILT_IN) model.tools + BuiltInTools.Search
+                                            else model.tools - BuiltInTools.Search
                                         )
-                                    }
+                                    )
                                 },
                             )
                         )
+                    },
+                    planningModeEnabled = conversation.modeInjectionIds.isPlanningModeEnabled(),
+                    onUpdatePlanningMode = { enabled ->
+                        vm.updateConversation(
+                            conversation.copy(
+                                modeInjectionIds = conversation.modeInjectionIds.withPlanningMode(enabled)
+                            )
+                        )
+                        vm.saveConversationAsync()
                     },
                     onSendClick = {
                         if (currentChatModel == null) {
@@ -394,10 +328,7 @@ private fun ChatPageContent(
                         }
                         onFollowPolicyChange(followPolicy.onSend())
                         if (inputState.isEditing()) {
-                            vm.handleMessageEdit(
-                                parts = inputState.getContents(),
-                                messageId = inputState.editingMessage!!,
-                            )
+                            vm.handleMessageEdit(inputState.getContents(), inputState.editingMessage!!)
                         } else {
                             vm.handleMessageSend(inputState.getContents())
                             scope.launch {
@@ -410,44 +341,21 @@ private fun ChatPageContent(
                     onLongSendClick = {
                         onFollowPolicyChange(followPolicy.onSend())
                         if (inputState.isEditing()) {
-                            vm.handleMessageEdit(
-                                parts = inputState.getContents(),
-                                messageId = inputState.editingMessage!!,
-                            )
+                            vm.handleMessageEdit(inputState.getContents(), inputState.editingMessage!!)
                         } else {
                             vm.handleMessageSend(content = inputState.getContents(), answer = false)
-                            scope.launch {
-                                chatListState.requestScrollToItem(conversation.currentMessages.size + 5)
-                            }
+                            scope.launch { chatListState.requestScrollToItem(conversation.currentMessages.size + 5) }
                         }
                         inputState.clearInput()
                     },
-                    onUpdateChatModel = {
-                        vm.setChatModel(assistant = setting.getCurrentAssistant(), model = it)
-                    },
+                    onUpdateChatModel = { vm.setChatModel(setting.getCurrentAssistant(), it) },
                     onUpdateAssistant = {
-                        vm.updateSettings(
-                            setting.copy(
-                                assistants = setting.assistants.map { assistant ->
-                                    if (assistant.id == it.id) {
-                                        it
-                                    } else {
-                                        assistant
-                                    }
-                                }
-                            )
-                        )
+                        vm.updateSettings(setting.copy(assistants = setting.assistants.map { assistant -> if (assistant.id == it.id) it else assistant }))
                     },
                     onUpdateSearchService = { index ->
-                        vm.updateSettings(
-                            setting.copy(
-                                searchServiceSelected = index
-                            )
-                        )
+                        vm.updateSettings(setting.copy(searchServiceSelected = index))
                     },
-                    onMoreClick = {
-                        showFilesSheet = true
-                    },
+                    onMoreClick = { showFilesSheet = true },
                 )
             },
             containerColor = Color.Transparent,
@@ -466,64 +374,41 @@ private fun ChatPageContent(
                 onClearAllErrors = onClearAllErrors,
                 followPolicy = followPolicy,
                 onFollowPolicyChange = onFollowPolicyChange,
-                onRegenerate = {
-                    vm.regenerateAtMessage(it)
-                },
+                onRegenerate = { vm.regenerateAtMessage(it) },
                 onEdit = {
                     inputState.editingMessage = it.id
                     inputState.setContents(it.parts)
                 },
                 onForkMessage = {
                     scope.launch {
-                        val fork = vm.forkMessage(message = it)
+                        val fork = vm.forkMessage(it)
                         navigateToChatPage(navController, chatId = fork.id)
                     }
                 },
                 onDelete = {
-                    if (loadingJob != null) {
-                        vm.showDeleteBlockedWhileGeneratingError()
-                    } else {
-                        vm.deleteMessage(it)
-                    }
+                    if (loadingJob != null) vm.showDeleteBlockedWhileGeneratingError() else vm.deleteMessage(it)
                 },
                 onUpdateMessage = { newNode ->
                     vm.updateConversation(
                         conversation.copy(
-                            messageNodes = conversation.messageNodes.map { node ->
-                                if (node.id == newNode.id) {
-                                    newNode
-                                } else {
-                                    node
-                                }
-                            }
-                        ))
+                            messageNodes = conversation.messageNodes.map { node -> if (node.id == newNode.id) newNode else node }
+                        )
+                    )
                     vm.saveConversationAsync()
                 },
                 onClickSuggestion = { suggestion ->
                     inputState.editingMessage = null
                     inputState.setMessageText(suggestion)
                 },
-                onTranslate = { message, locale ->
-                    vm.translateMessage(message, locale)
-                },
-                onClearTranslation = { message ->
-                    vm.clearTranslationField(message.id)
-                },
+                onTranslate = { message, locale -> vm.translateMessage(message, locale) },
+                onClearTranslation = { message -> vm.clearTranslationField(message.id) },
                 onJumpToMessage = { index ->
                     previewMode = false
-                    scope.launch {
-                        chatListState.requestScrollToItem(index)
-                    }
+                    scope.launch { chatListState.requestScrollToItem(index) }
                 },
-                onToolApproval = { toolCallId, approved, reason ->
-                    vm.handleToolApproval(toolCallId, approved, reason)
-                },
-                onToolAnswer = { toolCallId, answer ->
-                    vm.handleToolAnswer(toolCallId, answer)
-                },
-                onToggleFavorite = { node ->
-                    vm.toggleMessageFavorite(node)
-                },
+                onToolApproval = { toolCallId, approved, reason -> vm.handleToolApproval(toolCallId, approved, reason) },
+                onToolAnswer = { toolCallId, answer -> vm.handleToolAnswer(toolCallId, answer) },
+                onToggleFavorite = { node -> vm.toggleMessageFavorite(node) },
                 onConversationSystemPromptChange = { newPrompt ->
                     vm.updateConversation(conversation.copy(customSystemPrompt = newPrompt))
                     vm.saveConversationAsync()
@@ -533,12 +418,7 @@ private fun ChatPageContent(
 
         if (showFilesSheet) {
             ChatFilesPickerSheet(
-                inputState = inputState,
-                setting = setting,
-                conversation = conversation,
-                assistant = assistant,
-                vm = vm,
-                attachmentPickerActions = attachmentPickerActions,
+                inputState, setting, conversation, assistant, vm, attachmentPickerActions,
                 onDismiss = { showFilesSheet = false },
             )
         }
@@ -581,17 +461,7 @@ private fun ChatFilesPickerSheet(
                 vm.handleCompressContext(additionalPrompt, targetTokens, keepRecentMessages)
             },
             onUpdateAssistant = {
-                vm.updateSettings(
-                    setting.copy(
-                        assistants = setting.assistants.map { assistant ->
-                            if (assistant.id == it.id) {
-                                it
-                            } else {
-                                assistant
-                            }
-                        }
-                    )
-                )
+                vm.updateSettings(setting.copy(assistants = setting.assistants.map { assistant -> if (assistant.id == it.id) it else assistant }))
             },
             onUpdateConversation = {
                 vm.updateConversation(it)
@@ -626,19 +496,13 @@ private fun TopBar(
 ) {
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
-    val titleState = useEditState<String> {
-        onUpdateTitle(it)
-    }
+    val titleState = useEditState<String> { onUpdateTitle(it) }
 
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         navigationIcon = {
             if (!bigScreen) {
-                IconButton(
-                    onClick = {
-                        scope.launch { drawerState.open() }
-                    }
-                ) {
+                IconButton(onClick = { scope.launch { drawerState.open() } }) {
                     Icon(HugeIcons.Menu03, "Messages")
                 }
             }
@@ -647,25 +511,19 @@ private fun TopBar(
             val editTitleWarning = stringResource(R.string.chat_page_edit_title_warning)
             Surface(
                 onClick = {
-                    if (conversation.messageNodes.isNotEmpty()) {
-                        titleState.open(conversation.title)
-                    } else {
-                        toaster.show(editTitleWarning, type = ToastType.Warning)
-                    }
+                    if (conversation.messageNodes.isNotEmpty()) titleState.open(conversation.title)
+                    else toaster.show(editTitleWarning, type = ToastType.Warning)
                 },
                 color = Color.Transparent,
             ) {
                 Column {
                     val assistant = settings.getCurrentAssistant()
                     val model = settings.getCurrentChatModel()
-                    val provider = model?.findProvider(providers = settings.providers, checkOverwrite = false)
+                    val provider = model?.findProvider(settings.providers, checkOverwrite = false)
                     Text(
                         text = conversation.title.ifBlank {
-                            if (temporary) {
-                                stringResource(R.string.chat_page_temporary_chat)
-                            } else {
-                                stringResource(R.string.chat_page_new_chat)
-                            }
+                            if (temporary) stringResource(R.string.chat_page_temporary_chat)
+                            else stringResource(R.string.chat_page_new_chat)
                         },
                         maxLines = 1,
                         style = MaterialTheme.typography.bodyMedium,
@@ -685,51 +543,30 @@ private fun TopBar(
                             overflow = TextOverflow.Ellipsis,
                             maxLines = 1,
                             color = LocalContentColor.current.copy(0.65f),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 8.sp,
-                            )
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp)
                         )
                     }
                 }
             }
         },
         actions = {
-            IconButton(
-                onClick = {
-                    onClickMenu()
-                }
-            ) {
+            IconButton(onClick = onClickMenu) {
                 Icon(if (previewMode) HugeIcons.Cancel01 else HugeIcons.LeftToRightListBullet, "Chat Options")
             }
-
             if (!temporary) {
-                IconButton(
-                    onClick = onNewTemporaryChat,
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_page_temporary_badge),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+                IconButton(onClick = onNewTemporaryChat) {
+                    Text(stringResource(R.string.chat_page_temporary_badge), style = MaterialTheme.typography.labelSmall)
                 }
             }
-
-            IconButton(
-                onClick = {
-                    onNewChat()
-                }
-            ) {
+            IconButton(onClick = onNewChat) {
                 Icon(HugeIcons.MessageAdd01, "New Message")
             }
         },
     )
     titleState.EditStateContent { title, onUpdate ->
         AlertDialog(
-            onDismissRequest = {
-                titleState.dismiss()
-            },
-            title = {
-                Text(stringResource(R.string.chat_page_edit_title))
-            },
+            onDismissRequest = { titleState.dismiss() },
+            title = { Text(stringResource(R.string.chat_page_edit_title)) },
             text = {
                 OutlinedTextField(
                     value = title,
@@ -739,20 +576,12 @@ private fun TopBar(
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        titleState.confirm()
-                    }
-                ) {
+                TextButton(onClick = { titleState.confirm() }) {
                     Text(stringResource(R.string.chat_page_save))
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        titleState.dismiss()
-                    }
-                ) {
+                TextButton(onClick = { titleState.dismiss() }) {
                     Text(stringResource(R.string.chat_page_cancel))
                 }
             }

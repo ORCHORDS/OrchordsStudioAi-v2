@@ -1,5 +1,6 @@
 package com.orchords.orchordsai.data.ai.mcp
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,6 +36,21 @@ class GitHubMcpSafetyTest {
         assertTrue(headers["X-MCP-Toolsets"] == "repos,issues,pull_requests")
         assertTrue(headers["X-MCP-Readonly"] == "false")
         assertTrue(headers["X-MCP-Lockdown"] == "false")
+    }
+
+    @Test
+    fun `GitHub PAT helper owns bearer syntax without exposing it to the user`() {
+        val configured = githubMcpPreset().withGitHubMcpPat(" github_pat_example ")
+
+        assertEquals("github_pat_example", githubMcpPat(configured))
+        assertEquals(
+            "Bearer github_pat_example",
+            configured.commonOptions.headers.toMap()["Authorization"],
+        )
+
+        val cleared = configured.withGitHubMcpPat("")
+        assertEquals("", githubMcpPat(cleared))
+        assertEquals("", cleared.commonOptions.headers.toMap()["Authorization"])
     }
 
     @Test

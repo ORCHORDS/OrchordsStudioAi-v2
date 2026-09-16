@@ -1,5 +1,6 @@
 package com.orchords.orchordsai.data.extensions
 
+import com.orchords.orchordsai.data.ai.planning.PLANNING_MODE_ID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,11 +15,23 @@ class LibraryCatalogPreviewTest {
         val originalSkills = builtInEngineeringSkills() + builtInProductivitySkills()
         assertEquals(originalSkills, catalog.skills.take(originalSkills.size))
         val items = libraryPreviewItems(catalog)
-        assertEquals(100, items.size)
+        assertEquals(101, items.size)
         assertEquals(items.size, items.map { it.id }.distinct().size)
-        assertEquals(24, items.count { it.kind == LibraryContentKind.MODE })
+        assertEquals(25, items.count { it.kind == LibraryContentKind.MODE })
         assertEquals(16, items.count { it.kind == LibraryContentKind.LOREBOOK })
         assertEquals(60, items.count { it.kind == LibraryContentKind.SKILL })
+    }
+
+    @Test
+    fun `planning mode is a single stable built-in and append is idempotent`() {
+        val planningId = PLANNING_MODE_ID.toString()
+        val planning = BuiltInLibrary.catalog.modes.single { it.id == planningId }
+        val first = appendMissingById(emptyList(), listOf(planning)) { it.id }
+        val second = appendMissingById(first, listOf(planning)) { it.id }
+
+        assertEquals(listOf(planning), first)
+        assertEquals(first, second)
+        assertEquals(1, second.count { it.id == planningId })
     }
 
     @Test

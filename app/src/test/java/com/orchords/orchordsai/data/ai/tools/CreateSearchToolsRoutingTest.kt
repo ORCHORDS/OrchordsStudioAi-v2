@@ -3,6 +3,7 @@ package com.orchords.orchordsai.data.ai.tools
 import com.orchords.ai.core.Tool
 import com.orchords.ai.provider.ProviderSetting
 import com.orchords.orchordsai.data.datastore.ORCHORDS_GATEWAY_BASE_URL
+import com.orchords.orchordsai.data.datastore.ORCHORDS_SEARCH_BASE_URL
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.search.OrchordsAISearchService
 import com.orchords.search.SearchService
@@ -17,19 +18,47 @@ import org.junit.Test
 /** Locks the product contract: web search uses Orchords Search only. */
 class CreateSearchToolsRoutingTest {
     @Test
-    fun `default search selection resolves to OrchordsAI`() {
+    fun `default settings resolve to a usable canonical Orchords Search route`() {
         val settings = Settings()
+        val effective = settings.activeSearchOptions()
         val tools: Set<Tool> = createSearchTools(settings)
         val search = tools.firstOrNull { it.name == "search_web" }
+
+        assertEquals(ORCHORDS_SEARCH_BASE_URL, effective.baseUrl)
         assertNotNull(search)
         assertNotNull(search!!.parameters())
-        assertSame(OrchordsAISearchService, SearchService.getService(SearchServiceOptions.OrchordsAIOptions()))
+        assertSame(OrchordsAISearchService, SearchService.getService(effective))
+    }
+
+    @Test
+    fun `blank first-party search URL is repaired at runtime`() {
+        val configured = SearchServiceOptions.OrchordsAIOptions(baseUrl = "")
+        val settings = Settings(searchServices = listOf(configured))
+
+        val effective = settings.activeSearchOptions()
+
+        assertEquals(configured.id, effective.id)
+        assertEquals(ORCHORDS_SEARCH_BASE_URL, effective.baseUrl)
+    }
+
+    @Test
+    fun `stale first-party Orchords origin path is normalized to canonical search route`() {
+        val configured = SearchServiceOptions.OrchordsAIOptions(
+            baseUrl = "https://api.orchords.com/v1/legacy-search",
+            depth = "deep",
+        )
+        val settings = Settings(searchServices = listOf(configured))
+
+        val effective = settings.activeSearchOptions()
+
+        assertEquals(ORCHORDS_SEARCH_BASE_URL, effective.baseUrl)
+        assertEquals("deep", effective.depth)
     }
 
     @Test
     fun `legacy search provider records cannot take over runtime routing`() {
         val configured = SearchServiceOptions.OrchordsAIOptions(
-            baseUrl = "https://api.orchords.com/v1/search",
+            baseUrl = ORCHORDS_SEARCH_BASE_URL,
             depth = "deep",
             apiKey = "legacy-search-key",
         )
@@ -71,6 +100,7 @@ class CreateSearchToolsRoutingTest {
         val effective = settings.activeSearchOptions()
 
         assertEquals("search-only-key", effective.apiKey)
+        assertEquals(configured.baseUrl, effective.baseUrl)
         assertFalse(configured.baseUrl.canReceiveOrchordsGatewayCredential())
     }
 
@@ -91,6 +121,7 @@ class CreateSearchToolsRoutingTest {
         )
 
         assertEquals("search-only-key", settings.activeSearchOptions().apiKey)
+        assertEquals(configured.baseUrl, settings.activeSearchOptions().baseUrl)
         assertFalse(configured.baseUrl.canReceiveOrchordsGatewayCredential())
     }
 
@@ -111,13 +142,14 @@ class CreateSearchToolsRoutingTest {
         )
 
         assertEquals("search-only-key", settings.activeSearchOptions().apiKey)
+        assertEquals(configured.baseUrl, settings.activeSearchOptions().baseUrl)
         assertFalse(configured.baseUrl.canReceiveOrchordsGatewayCredential())
     }
 
     @Test
     fun `canonical HTTPS Orchords origin may reuse gateway credential`() {
         val configured = SearchServiceOptions.OrchordsAIOptions(
-            baseUrl = "https://api.orchords.com/v1/search",
+            baseUrl = ORCHORDS_SEARCH_BASE_URL,
             apiKey = "search-fallback-key",
         )
         val settings = Settings(
@@ -139,7 +171,7 @@ class CreateSearchToolsRoutingTest {
     @Test
     fun `existing Orchords search key remains a migration fallback when gateway key is absent`() {
         val configured = SearchServiceOptions.OrchordsAIOptions(
-            baseUrl = "https://api.orchords.com/v1/search",
+            baseUrl = ORCHORDS_SEARCH_BASE_URL,
             apiKey = "existing-search-key",
         )
         val settings = Settings(

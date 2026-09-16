@@ -9,8 +9,8 @@ class ReleaseWorkflowPolicyTest {
     private fun repoRoot(): File = File("..").canonicalFile
 
     private fun workflowSource(): String {
-        val workflow = repoRoot().resolve(".github/workflows/daily-build.yml")
-        require(workflow.isFile) { "daily-build.yml not found from ${File(".").canonicalPath}" }
+        val workflow = repoRoot().resolve(".github/workflows/release.yml")
+        require(workflow.isFile) { "release.yml not found from ${File(".").canonicalPath}" }
         return workflow.readText()
     }
 
@@ -20,64 +20,90 @@ class ReleaseWorkflowPolicyTest {
         return buildFile.readText()
     }
 
-    @Test
-    fun `daily build publishes a real GitHub latest release`() {
-        val source = workflowSource()
-        assertTrue(source.contains("tag_name: latest"))
-        assertTrue(source.contains("prerelease: false"))
-        assertTrue(source.contains("make_latest: true"))
-        assertTrue(source.contains("releases/latest"))
+    private fun gradleProperties(): String {
+        val properties = repoRoot().resolve("gradle.properties")
+        require(properties.isFile) { "gradle.properties not found from ${File(".").canonicalPath}" }
+        return properties.readText()
     }
 
     @Test
-    fun `latest release contains the complete configured apk matrix`() {
+    fun `release publishes a versioned GitHub latest release`() {
+        val source = workflowSource()
+        assertTrue(source.contains("tag_name: \${{ steps.version.outputs.tag }}"))
+        assertTrue(source.contains("prerelease: false"))
+        assertTrue(source.contains("make_latest: true"))
+        assertTrue(source.contains("releases/tags/\$RELEASE_TAG"))
+        assertTrue(source.contains("Verify Releases contains only current release"))
+    }
+
+    @Test
+    fun `release contains the complete signed binary matrix`() {
         val source = workflowSource()
         listOf(
             "orchords-studio-ai-universal.apk",
             "orchords-studio-ai-arm64-v8a.apk",
             "orchords-studio-ai-x86_64.apk",
+            "orchords-studio-ai.aab",
         ).forEach { name ->
             assertTrue("Missing release asset contract for $name", source.contains(name))
         }
         assertTrue(source.contains("Expected exactly 3 APK outputs"))
         assertTrue(source.contains("SHA256SUMS"))
+        assertTrue(source.contains("A GitHub Release must be a signed release build"))
     }
 
     @Test
-    fun `published apk version advances with each new Daily Build run`() {
+    fun `canonical app version lives in gradle properties and is validated by build`() {
         val workflow = workflowSource()
         val build = appBuildSource()
+        val properties = gradleProperties()
 
-        assertTrue(workflow.contains("RUN_NUMBER: \${{ github.run_number }}"))
-        assertTrue(workflow.contains("version_name=\"0.1.\${RUN_NUMBER}\""))
-        assertTrue(workflow.contains("version_code=\$((1000000 + RUN_NUMBER))"))
-        assertTrue(workflow.contains("-PreleaseVersionName=\"\$APP_VERSION_NAME\""))
-        assertTrue(workflow.contains("-PreleaseVersionCode=\"\$APP_VERSION_CODE\""))
-
+        assertTrue(properties.contains("releaseVersionName=0.1.2"))
+        assertTrue(properties.contains("releaseVersionCode=1000002"))
+        assertTrue(workflow.contains("releaseVersionName"))
+        assertTrue(workflow.contains("releaseVersionCode"))
+        assertTrue(workflow.contains("2100000000"))
         assertTrue(build.contains("providers.gradleProperty(\"releaseVersionName\")"))
         assertTrue(build.contains("providers.gradleProperty(\"releaseVersionCode\")"))
-        assertTrue(build.contains("versionCode = releaseVersionCode ?: 1000"))
-        assertTrue(build.contains("versionName = releaseVersionName ?: \"0.1.0\""))
     }
 
     @Test
-    fun `release verifies version embedded in every apk before publishing`() {
+    fun `release verifies version embedded in every apk and aab before publishing`() {
         val source = workflowSource()
         assertTrue(source.contains("cmdline-tools/latest/bin/apkanalyzer"))
         assertTrue(source.contains("manifest version-name"))
         assertTrue(source.contains("manifest version-code"))
         assertTrue(source.contains("APK versionName mismatch"))
         assertTrue(source.contains("APK versionCode mismatch"))
-        assertTrue(source.contains("Release notes version mismatch"))
-        assertTrue(source.contains("Release notes versionCode mismatch"))
+        assertTrue(source.contains("manifest application-id"))
+        assertTrue(source.contains("sha256sum --check SHA256SUMS"))
         assertTrue(source.contains("asset.get('state') == 'uploaded'"))
+    }
+
+    @Test
+    fun `release uses current main and refuses version tag reuse for different source`() {
+        val source = workflowSource()
+        assertTrue(source.contains("ref: main"))
+        assertTrue(source.contains("Refuse to reuse a version tag for different source"))
+        assertTrue(source.contains("Bump releaseVersionName/releaseVersionCode before publishing new source"))
+    }
+
+    @Test
+    fun `release publishes new build before deleting older releases`() {
+        val source = workflowSource()
+        val publish = source.indexOf("Publish versioned GitHub Release")
+        val verify = source.indexOf("Verify new Release before cleanup")
+        val cleanup = source.indexOf("Remove every older GitHub Release")
+        assertTrue(publish >= 0)
+        assertTrue(verify > publish)
+        assertTrue(cleanup > verify)
     }
 
     @Test
     fun `release packaging keeps abi splits enabled`() {
         val source = workflowSource()
-        assertFalse(source.contains("./gradlew -PciVerify"))
-        assertTrue(source.contains("\"\$GRADLE_TASK\""))
+        assertFalse(source.contains("-PciVerify"))
+        assertTrue(source.contains(":app:buildAll"))
     }
 
     @Test
@@ -85,7 +111,7 @@ class ReleaseWorkflowPolicyTest {
         val source = workflowSource()
         assertFalse(source.contains("actions/attest@"))
         assertFalse(source.contains("attestations: write"))
-        assertTrue(source.contains("SHA-256 checksums"))
+        assertTrue(source.contains("SHA-256"))
     }
 
     @Test

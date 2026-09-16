@@ -27,9 +27,6 @@ internal const val MCP_OAUTH_REDIRECT_URI =
     "http://127.0.0.1:$MCP_OAUTH_CALLBACK_PORT$MCP_OAUTH_CALLBACK_PATH"
 private val OAUTH_CALLBACK_TIMEOUT = 5.minutes
 
-/**
- *
- */
 internal class McpOAuthCoordinator(
     private val settingsStore: SettingsStore,
     private val appScope: AppScope,
@@ -51,7 +48,7 @@ internal class McpOAuthCoordinator(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "OAuth authorization failed for ${config.commonOptions.name}", e)
+                Log.e(TAG, "OAuth authorization failed for ${config.commonOptions.name}: ${e::class.simpleName}")
                 updateStatus(config.id, McpStatus.Error.from(e, fallbackMessage = "OAuth authorization failed"))
             }
         }
@@ -75,8 +72,6 @@ internal class McpOAuthCoordinator(
             ?: config.clone(commonOptions = config.commonOptions.copy(oauth = null))
     }
 
-    /**
-     */
     suspend fun ensureFreshToken(configInput: McpServerConfig): McpServerConfig {
         val lock = refreshLocks.computeIfAbsent(configInput.id) { Mutex() }
         return lock.withLock {
@@ -108,11 +103,29 @@ internal class McpOAuthCoordinator(
                     expiresAt = computeExpiry(token.expiresIn),
                     scope = token.scope ?: oauth.scope,
                 )
+                // SettingsStore writes the access/refresh set through one atomic
+                // encrypted-store replacement before committing DataStore metadata.
                 persistOAuthState(config.id, updated)
                 config.clone(commonOptions = config.commonOptions.copy(oauth = updated))
-            }.getOrElse {
-                Log.w(TAG, "Token refresh failed for ${config.commonOptions.name}: ${it.message}")
-                config
+            }.getOrElse { error ->
+                if (looksInvalidGrant(error)) {
+                    val cleared = oauth.copy(
+                        accessToken = null,
+                        refreshToken = null,
+                        expiresAt = 0L,
+                    )
+                    // A rejected refresh token is no longer usable. Persist the
+                    // clear before exposing the re-authorization state; failure to
+                    // wipe is intentionally surfaced rather than leaving stale
+                    // credentials silently active.
+                    persistOAuthState(config.id, cleared)
+                    updateStatus(config.id, McpStatus.NeedsAuthorization)
+                    Log.i(TAG, "OAuth refresh rejected for ${config.commonOptions.name}; authorization required")
+                    config.clone(commonOptions = config.commonOptions.copy(oauth = cleared))
+                } else {
+                    Log.w(TAG, "Token refresh failed for ${config.commonOptions.name}: ${error::class.simpleName}")
+                    config
+                }
             }
         }
     }
@@ -124,7 +137,7 @@ internal class McpOAuthCoordinator(
         }
         return runCatching { discoveryClient.discoverProtectedResource(config.serverUrl) }
             .onFailure {
-                Log.i(TAG, "OAuth probe failed for ${config.commonOptions.name}: ${it.message}")
+                Log.i(TAG, "OAuth probe failed for ${config.commonOptions.name}: ${it::class.simpleName}")
             }
             .isSuccess
     }
@@ -263,14 +276,25 @@ internal class McpOAuthCoordinator(
         }
 
     private fun looksUnauthorized(error: Throwable): Boolean {
-        val message = generateSequence(error) { it.cause }
-            .mapNotNull { it.message }
-            .joinToString(" ")
-            .lowercase()
+        val message = errorChainText(error)
         return message.contains("401") ||
             message.contains("unauthorized") ||
             message.contains("invalid_token") ||
             message.contains("invalid access token") ||
             message.contains("missing or invalid")
     }
+
+    private fun looksInvalidGrant(error: Throwable): Boolean {
+        val message = errorChainText(error)
+        return message.contains("invalid_grant") ||
+            message.contains("refresh token is invalid") ||
+            message.contains("refresh token expired") ||
+            message.contains("refresh token revoked")
+    }
+
+    private fun errorChainText(error: Throwable): String =
+        generateSequence(error) { it.cause }
+            .mapNotNull { it.message }
+            .joinToString(" ")
+            .lowercase()
 }

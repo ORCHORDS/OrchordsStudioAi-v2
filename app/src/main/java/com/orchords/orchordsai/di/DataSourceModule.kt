@@ -167,6 +167,10 @@ val dataSourceModule = module {
     }
 
     single {
+        get<AppDatabase>().providerUsageEventDao()
+    }
+
+    single {
         MessageFtsManager(get())
     }
 

@@ -73,4 +73,46 @@ class PlanningModeTest {
         assertFalse(disabled.contains(PLANNING_MODE_ID))
         assertTrue(disabled.contains(other))
     }
+
+    @Test
+    fun `planning-only conversation change may toggle planning while preserving all other ids`() {
+        val otherMode = Uuid.random()
+        val lorebook = Uuid.random()
+        val currentModes = setOf(otherMode)
+        val requestedModes = currentModes + PLANNING_MODE_ID
+
+        assertTrue(
+            isPlanningOnlyConversationInjectionChange(
+                currentModeInjectionIds = currentModes,
+                currentLorebookIds = setOf(lorebook),
+                requestedModeInjectionIds = requestedModes,
+                requestedLorebookIds = setOf(lorebook),
+            )
+        )
+    }
+
+    @Test
+    fun `planning-only conversation change rejects unrelated mode or lorebook changes`() {
+        val existingMode = Uuid.random()
+        val otherMode = Uuid.random()
+        val existingLorebook = Uuid.random()
+        val otherLorebook = Uuid.random()
+
+        assertFalse(
+            isPlanningOnlyConversationInjectionChange(
+                currentModeInjectionIds = setOf(existingMode),
+                currentLorebookIds = setOf(existingLorebook),
+                requestedModeInjectionIds = setOf(existingMode, otherMode, PLANNING_MODE_ID),
+                requestedLorebookIds = setOf(existingLorebook),
+            )
+        )
+        assertFalse(
+            isPlanningOnlyConversationInjectionChange(
+                currentModeInjectionIds = setOf(existingMode),
+                currentLorebookIds = setOf(existingLorebook),
+                requestedModeInjectionIds = setOf(existingMode, PLANNING_MODE_ID),
+                requestedLorebookIds = setOf(existingLorebook, otherLorebook),
+            )
+        )
+    }
 }

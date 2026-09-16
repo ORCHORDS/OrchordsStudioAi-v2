@@ -68,20 +68,23 @@ class FastlanePublishingPolicyTest {
     }
 
     @Test
-    fun `bundleRelease task is wired through buildAll and release validates signed aab`() {
+    fun `release keeps signed aab path and a verified debug fallback`() {
         val gradle = gradleKts()
         assertTrue("buildAll must depend on bundleRelease", gradle.contains("dependsOn(\"assembleRelease\", \"bundleRelease\")"))
 
         val workflow = releaseWorkflow()
-        assertTrue("release path must invoke buildAll", workflow.contains(":app:buildAll"))
+        assertTrue("signed release path must invoke buildAll", workflow.contains(":app:buildAll"))
+        assertTrue("debug fallback must assemble an installable APK", workflow.contains(":app:assembleDebug"))
         assertTrue(
-            "Release must validate the AAB package id with apkanalyzer",
+            "Signed release path must validate the AAB package id with apkanalyzer",
             workflow.contains("app/build/outputs/bundle/release/app-release.aab"),
         )
         assertTrue(workflow.contains("manifest application-id"))
         assertTrue(workflow.contains("com.orchords.orchordsai"))
         assertTrue(workflow.contains("release-assets/orchords-studio-ai.aab"))
-        assertTrue(workflow.contains("A GitHub Release must be a signed release build"))
+        assertTrue(workflow.contains("Signing secrets unavailable; publishing verified debug APKs."))
+        assertTrue(workflow.contains("Publish GitHub Release (signed)"))
+        assertTrue(workflow.contains("Publish GitHub Release (debug fallback)"))
     }
 
     @Test

@@ -35,6 +35,19 @@ jobs:
           persist-credentials: false
           clean: true
 
+      - name: Resolve checked out source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Unable to resolve checked out main SHA"
+            exit 1
+          }
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "Building source $source_sha"
+
       - name: Install pinned Android toolchain
         uses: ./.github/actions/setup-private-android-toolchain
 
@@ -170,14 +183,16 @@ jobs:
           [ "$("$apkanalyzer" manifest version-name "$aab" | tr -d '\r\n')" = "$APP_VERSION_NAME" ]
           [ "$("$apkanalyzer" manifest version-code "$aab" | tr -d '\r\n')" = "$APP_VERSION_CODE" ]
 
+          mapping='app/build/outputs/mapping/release/mapping.txt'
+          test -s "$mapping" || { echo '::error::R8 mapping.txt missing from release build'; exit 1; }
+
           rm -rf release-assets
           mkdir -p release-assets
           cp "${expected[0]}" release-assets/orchords-studio-ai-universal.apk
           cp "${expected[1]}" release-assets/orchords-studio-ai-arm64-v8a.apk
           cp "${expected[2]}" release-assets/orchords-studio-ai-x86_64.apk
           cp "$aab" release-assets/orchords-studio-ai.aab
-          mapping='app/build/outputs/mapping/release/mapping.txt'
-          if [ -s "$mapping" ]; then cp "$mapping" release-assets/mapping.txt; fi
+          cp "$mapping" release-assets/mapping.txt
 
           cd release-assets
           sha256sum -- *.apk *.aab > SHA256SUMS
@@ -188,7 +203,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
-          BUILD_SHA: ${{ github.sha }}
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -212,8 +227,10 @@ jobs:
         with:
           name: latest-apks
           path: |
-            release-assets/*.apk
-            release-assets/*.aab
+            release-assets/orchords-studio-ai-universal.apk
+            release-assets/orchords-studio-ai-arm64-v8a.apk
+            release-assets/orchords-studio-ai-x86_64.apk
+            release-assets/orchords-studio-ai.aab
             release-assets/mapping.txt
             release-assets/SHA256SUMS
           if-no-files-found: error
@@ -223,7 +240,7 @@ jobs:
         env:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
-          BUILD_SHA: ${{ github.sha }}
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -256,7 +273,7 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ steps.source.outputs.sha }}
           name: ORCHORDS Studio AI v${{ steps.version.outputs.name }}
           prerelease: false
           make_latest: true
@@ -277,7 +294,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
-          BUILD_SHA: ${{ github.sha }}
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -305,12 +322,11 @@ jobs:
           names={asset.get('name') for asset in release.get('assets', [])}
           assert release.get('draft') is False
           assert release.get('prerelease') is False
-          assert expected.issubset(names), (names, expected)
+          assert expected == names, (names, expected)
           for asset in release.get('assets', []):
               assert asset.get('state') == 'uploaded', asset
               assert int(asset.get('size', 0)) > 0, asset
           assert tag.get('object', {}).get('sha') == os.environ['BUILD_SHA'], tag
-          print(release['id'])
           PY
           release_id="$(python3 -c 'import json; print(json.load(open("/tmp/new-release.json"))["id"])')"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
@@ -366,5 +382,6 @@ jobs:
           release=releases[0]
           assert int(release['id']) == int(os.environ['KEEP_RELEASE_ID'])
           assert release['tag_name'] == os.environ['RELEASE_TAG']
+          assert release.get('draft') is False and release.get('prerelease') is False
           print('Verified exactly one current GitHub Release')
           PY

@@ -3,6 +3,7 @@ import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 
+import { PLANNING_MODE_ID, setPlanningModeEnabled } from "~/components/input/planning-mode-state";
 import { Button } from "~/components/ui/button";
 import { useCurrentAssistant } from "~/hooks/use-current-assistant";
 import { safeStringArray } from "~/lib/type-guards";
@@ -11,15 +12,7 @@ import api from "~/services/api";
 import { useChatInputStore } from "~/stores";
 import type { ConversationDto } from "~/types";
 
-export const PLANNING_MODE_ID = "164b9a03-828e-434e-8aa9-82c0e019a7fb";
-
 const EMPTY_ID_LIST: string[] = [];
-
-export function setPlanningModeEnabled(ids: string[], enabled: boolean): string[] {
-  const next = ids.filter((id, index) => id !== PLANNING_MODE_ID && ids.indexOf(id) === index);
-  if (enabled) next.push(PLANNING_MODE_ID);
-  return next;
-}
 
 export interface PlanningModeButtonProps {
   disabled?: boolean;

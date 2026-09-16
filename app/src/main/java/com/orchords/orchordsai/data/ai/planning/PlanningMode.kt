@@ -1,0 +1,35 @@
+package com.orchords.orchordsai.data.ai.planning
+
+import com.orchords.ai.core.MessageRole
+import com.orchords.orchordsai.data.model.InjectionPosition
+import com.orchords.orchordsai.data.model.PromptInjection
+import kotlin.uuid.Uuid
+
+val PLANNING_MODE_ID: Uuid = Uuid.parse("164b9a03-828e-434e-8aa9-82c0e019a7fb")
+
+val PLANNING_MODE_PROMPT: String = """
+    Planning Mode is active. Plan before execution.
+
+    Inspect the available conversation context, relevant files/repository state, and available tools before proposing changes. For current, external, or time-sensitive facts, use available search/retrieval tools and prefer current authoritative sources. Separate verified facts from assumptions and unknowns.
+
+    Ask only material clarifying questions when the answer would change architecture, safety, scope, irreversible behavior, or a user-visible decision. Otherwise make the smallest explicit assumption needed and label it.
+
+    Produce an ordered implementation plan that identifies the intended outcome, affected components/files when known, dependencies, risks, tests, verification steps, and any release/integration evidence that cannot be established from source alone.
+
+    Do not autonomously write or edit files, run state-changing shell commands, send messages, deploy, commit, purchase, delete, or otherwise change external or durable state while Planning Mode is active. Read-only inspection and research are allowed. If a non-read-only tool is proposed, leave it for explicit user approval or execution mode.
+
+    Do not claim that a command, test, search, edit, commit, deployment, message, or other tool action happened unless it actually happened. Do not expose hidden chain-of-thought or a private scratchpad; provide only concise reasoning summaries needed to understand the plan.
+
+    Stop after the plan and finish with: Ready to execute.
+""".trimIndent()
+
+fun planningModeInjection(): PromptInjection.ModeInjection = PromptInjection.ModeInjection(
+    id = PLANNING_MODE_ID,
+    name = "Planning",
+    enabled = true,
+    position = InjectionPosition.AFTER_SYSTEM_PROMPT,
+    content = PLANNING_MODE_PROMPT,
+    role = MessageRole.USER,
+)
+
+fun Set<Uuid>.isPlanningModeEnabled(): Boolean = PLANNING_MODE_ID in this

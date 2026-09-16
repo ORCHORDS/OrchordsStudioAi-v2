@@ -1,6 +1,9 @@
 package com.orchords.orchordsai.data.ai.mcp
 
+import java.net.URI
+
 const val GITHUB_MCP_REMOTE_ENDPOINT = "https://api.githubcopilot.com/mcp/"
+private const val GITHUB_MCP_REMOTE_HOST = "api.githubcopilot.com"
 
 /**
  * Safe first-use configuration for GitHub's official remote MCP server.
@@ -24,3 +27,28 @@ fun githubMcpPreset(): McpServerConfig.StreamableHTTPServer =
         ),
         url = GITHUB_MCP_REMOTE_ENDPOINT,
     )
+
+internal fun isOfficialGitHubMcpRemote(config: McpServerConfig): Boolean =
+    runCatching { URI(config.serverUrl).host?.equals(GITHUB_MCP_REMOTE_HOST, ignoreCase = true) == true }
+        .getOrDefault(false)
+
+internal fun isGitHubMcpReadOnly(config: McpServerConfig): Boolean {
+    if (!isOfficialGitHubMcpRemote(config)) return false
+    val path = runCatching { URI(config.serverUrl).path.orEmpty().lowercase() }.getOrDefault("")
+    if (path.split('/').any { it == "readonly" }) return true
+    val value = config.commonOptions.headers
+        .lastOrNull { (name, _) -> name.equals("X-MCP-Readonly", ignoreCase = true) }
+        ?.second
+        ?.trim()
+        ?.lowercase()
+        ?: return false
+    return value !in setOf("", "false", "f", "no", "n", "0", "off")
+}
+
+/**
+ * Do not trust server-supplied ToolAnnotations as an authorization boundary.
+ * Our own GitHub read-only configuration is deterministic: when it is off,
+ * every newly discovered GitHub tool starts approval-required.
+ */
+internal fun githubNewToolsNeedApproval(config: McpServerConfig): Boolean =
+    isOfficialGitHubMcpRemote(config) && !isGitHubMcpReadOnly(config)

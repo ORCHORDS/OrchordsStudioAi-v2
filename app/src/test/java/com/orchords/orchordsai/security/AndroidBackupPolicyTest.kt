@@ -106,7 +106,10 @@ class AndroidBackupPolicyTest {
         val legacy = source("src/main/res/xml/backup_rules.xml")
         listOf(dataExtraction, legacy).forEach { xml ->
             assertSensitiveDomainsAreAbsent(xml)
-            assertTrue("secondary secret store must stay out of backup allowlist", "orchordsai_secondary_secrets" !in xml.substringAfter("<data-extraction-rules>", xml))
+            assertTrue(
+                "secondary secret store must stay out of backup allowlist",
+                includePaths(xml, "sharedpref").none { it.contains("orchordsai_secondary_secrets") },
+            )
         }
     }
 

@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import com.orchords.orchordsai.AppScope
 import com.orchords.orchordsai.data.ai.tools.local.LocalTools
 import com.orchords.orchordsai.data.event.AppEventBus
+import com.orchords.orchordsai.data.safety.AiContentReportClient
 import com.orchords.orchordsai.service.ChatNotificationManager
 import com.orchords.orchordsai.service.ChatService
 import com.orchords.orchordsai.ui.pages.extensions.workspace.WorkspaceTerminalSessionManager
@@ -32,6 +33,10 @@ val appModule = module {
             client = get(),
             appScope = get(),
         )
+    }
+
+    single {
+        AiContentReportClient(httpClient = get())
     }
 
     single {

@@ -3,6 +3,7 @@ package com.orchords.orchordsai.data.ai.transformers
 import com.orchords.ai.core.MessageRole
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
+import com.orchords.orchordsai.data.ai.planning.PLANNING_MODE_ID
 import com.orchords.orchordsai.data.model.Assistant
 import com.orchords.orchordsai.data.model.InjectionPosition
 import com.orchords.orchordsai.data.model.PromptInjection
@@ -100,10 +101,11 @@ private fun collectInjectionCandidates(
     conversationModeInjectionIds: Set<Uuid>,
     conversationLorebookIds: Set<Uuid>,
 ): Sequence<PromptInjection> = sequence {
+    val planningConversationIds = conversationModeInjectionIds.filterTo(mutableSetOf()) { it == PLANNING_MODE_ID }
     val effectiveModeInjectionIds = if (assistant.allowConversationPromptInjection) {
         conversationModeInjectionIds
     } else {
-        assistant.modeInjectionIds
+        assistant.modeInjectionIds + planningConversationIds
     }
     val effectiveLorebookIds = if (assistant.allowConversationPromptInjection) {
         conversationLorebookIds

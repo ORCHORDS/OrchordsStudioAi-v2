@@ -1,155 +1,36 @@
 # Google Play Release Compliance Agenda
 
-**App:** OrchordsAI (`com.orchords.orchordsai`)
-**Repository:** `ORCHORDS/OrchordsStudioAi-v2` (remote: `https://github.com/ORCHORDS/OrchordsStudioAi-v2.git`)
-**Status:** Evidence-based pre-release checklist; approval is not guaranteed.
-**Prepared:** 2026-09-14
-**HEAD evidence captured on:** `git rev 16e8c6e` (2026-09-15)
+**App:** ORCHORDS AI (`com.orchords.orchordsai`)
+**Repository:** `ORCHORDS/OrchordsStudioAi-v2`
+**Status:** active release-readiness map
+**Last reviewed:** 2026-09-16
 
-## Existing team agenda and repository state
+The actionable roadmap, research sources, implementation batches, and completion evidence are tracked in GitHub master issue **#5**:
 
-The existing Play publishing agenda is [`docs/PLAY_PUBLISHING.md`](PLAY_PUBLISHING.md). Related source documents are `docs/DATA_SAFETY.md`, `docs/DATA_DELETION.md`, `docs/PRIVACY.md`, `docs/PERMISSIONS.md`, `docs/CONTENT_RATING.md`, and `docs/LISTING_ASSETS.md`. No separate file named Team One agenda was found; the existing issue material is `.zcode/issue-428-body.md` and `.zcode/plans/plan-sess_efcf20e8-d1aa-4771-8bd9-b73d185934ac.md`.
+https://github.com/ORCHORDS/OrchordsStudioAi-v2/issues/5
 
-Read-only inspection recorded: branch `main` tracks `origin/main`; working tree clean at `e3b4e88`. No files were changed except this agenda on each refresh cycle.
+This file stays intentionally short so the public repository does not duplicate planning state across multiple locations.
 
-## Official policy references checked
+## Current release gates
 
-- [User Data policy](https://support.google.com/googleplay/android-developer/answer/10144311) — Data Safety must match the privacy policy; disclose collection, use, sharing, retention/deletion, and security practices.
-- [Data safety section](https://support.google.com/googleplay/android-developer/answer/10787469) — Console disclosure must include app and SDK behavior and remain accurate.
-- [Permissions and APIs](https://support.google.com/googleplay/android-developer/answer/9888170) — request only necessary sensitive permissions and follow restricted-permission rules.
-- [In-app purchases](https://support.google.com/googleplay/android-developer/answer/10281818) — use Play Billing where Play billing policy applies.
-- [AI-generated content](https://support.google.com/googleplay/android-developer/answer/16070163) — AI apps need safeguards and user reporting/flagging for offensive content. **Current-page details require Console verification; pending.**
-- [Target API level](https://support.google.com/googleplay/android-developer/answer/11926878) — verify the applicable current target-API requirement in Console before submission; no deadline is asserted here.
-- [App signing](https://support.google.com/googleplay/android-developer/answer/9842756) and [Android App Bundle](https://developer.android.com/guide/app-bundle) — verify signing and AAB delivery configuration.
+- MCP OAuth credential persistence, refresh lifecycle, disconnect/delete cleanup, and export/backup exclusion.
+- AI-generated-content reporting path and matching privacy/Data Safety disclosures.
+- Exact release AAB inspection: package/version, SDK levels, permissions, exported components, native libraries, 16 KB compatibility, and SHA-256.
+- Play App Signing and upload-key custody verification.
+- Final permission review and any Play Console declarations triggered by the actual AAB.
+- Privacy policy URL, Data Safety reconciliation, account/data deletion verification, target audience, content rating, app access, ads declaration, and listing assets.
+- Internal/closed testing, pre-launch report, and Android vitals review before production promotion.
 
-## Release gate checklist
+## Official sources
 
-### Privacy, Data Safety, deletion
+- Google Play User Data policy: https://support.google.com/googleplay/android-developer/answer/10144311
+- Google Play target API requirements: https://support.google.com/googleplay/android-developer/answer/11926878
+- Google Play AI-Generated Content policy: https://support.google.com/googleplay/android-developer/answer/14094294
+- Play App Signing: https://support.google.com/googleplay/android-developer/answer/9842756
+- Android app signing: https://developer.android.com/studio/publish/app-signing
+- Android 16 KB page-size guidance: https://developer.android.com/guide/practices/page-sizes
+- Android Keystore: https://developer.android.com/privacy-and-security/keystore
 
-- [x] **PRIVACY.md & DATA_DELETION.md aligned with #428 (current HEAD):** `docs/PRIVACY.md §2` and §4 now describe provider API keys as Android Keystore-backed `EncryptedSharedPreferences`; `docs/DATA_DELETION.md` row for "Remove a provider configuration" routes through `SettingsStore.update` and removes the key from the encrypted store. `docs/LISTING_COPY.md` full-description bullets mirror the same wording.
-- [ ] **Pending owner verification:** reconcile `DATA_SAFETY.md` with every current data flow, provider/SDK, optional permission path, retention period, and sharing recipient.
-- [ ] **Pending:** publish and test an HTTPS privacy-policy URL, and ensure the same policy is accessible from inside the app and in Play Console.
-- [ ] **Pending:** validate deletion behavior and externally reachable deletion/request process against `DATA_DELETION.md`; do not claim account deletion compliance unless account creation/deletion facts are verified.
-- [ ] **Pending:** confirm whether MCP/WebDAV/S3/proxy credentials and other secrets outside the provider apiKey path are encrypted at rest. Provider apiKey encryption shipped in #428 (25cd2f3) and `docs/PRIVACY.md §4` now describes the Android Keystore-backed `EncryptedSharedPreferences` path; the remaining secret surfaces (MCP/WebDAV/S3/proxy) are tracked by #229 / #242 / #87 and still out of scope.
-- [ ] **Pending:** update Data Safety answers after the encryption and backup/export implementation is complete and tested.
+## Working rule
 
-### Permissions and sensitive access
-
-- [x] **Manifest inventory captured (HEAD `e3b4e88`):** `app/src/main/AndroidManifest.xml` declares **16** `uses-permission` lines (INTERNET, CAMERA, RECORD_AUDIO, SET_ALARM, WRITE_EXTERNAL_STORAGE maxSdk=28, POST_NOTIFICATIONS, POST_PROMOTED_NOTIFICATIONS, ACCESS_WIFI_STATE, CHANGE_WIFI_MULTICAST_STATE, FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC, FOREGROUND_SERVICE_SPECIAL_USE, ACCESS_LOCAL_NETWORK, PACKAGE_USAGE_STATS, READ_CALENDAR, WRITE_CALENDAR) plus **2** `uses-feature` entries (`android.hardware.camera`, `android.hardware.camera.autofocus`, both `required="false"`). `docs/PERMISSIONS.md` and `docs/PRIVACY.md §3` already map each permission to a feature rationale.
-- [ ] **Pending:** justify and test each manifest permission at the Console level (least-privilege review); remove any permission not required for the shipped feature set. Current evidence only covers declaration inventory, not per-permission runtime behavior.
-- [ ] **Pending:** verify runtime rationale, denial behavior, revocation behavior, and least-privilege handling for every dangerous permission.
-- [ ] **Pending:** confirm any restricted API declaration or Play Console declaration required by the final permission set.
-
-### AI content, reporting, and safety
-
-- [x] **No third-party AI / safety SDKs in the build:** `app/build.gradle.kts` + `gradle/libs.versions.toml` contain no `play-services-ads`, `play-services-analytics`, `firebase`, `crashlytics`, `com.android.billingclient`, or equivalent dependency. App content is local-first and routes only to the AI provider the user configured.
-- [ ] **Pending:** document AI-generated content safeguards, user-facing disclosure where appropriate, and an accessible in-app reporting/flagging route for offensive or prohibited output. `grep` for `reportAbuse` / `flagMessage` / `abuseReport` / `moderation` against `app/src/main` returned no production matches — no flagging UI exists today.
-- [ ] **Pending:** define moderation/escalation handling and test that reports reach the responsible operator; no policy compliance is inferred from the presence of chat functionality.
-
-### Billing, audience, rating, and ads
-
-- [x] **No ads, no telemetry SDKs (HEAD `e3b4e88`):** `grep -rEn 'analytics|crashlytics|firebase|google-services|play-services-ads|play-services-analytics|adId' app/build.gradle.kts gradle/libs.versions.toml app/src/main` returns zero production hits. There is no ad SDK and no Firebase/Crashlytics analytics; `docs/PRIVACY.md §1` already declares "we do not collect".
-- [x] **No Google Play Billing in the build:** `grep -rln 'com.android.billingclient\|BillingClient' app/build.gradle.kts gradle/libs.versions.toml app/src/main` returns zero hits. No in-app purchases are wired today; no Play Billing dependency needs to be declared in Console.
-- [x] **Content rating draft (HEAD `e3b4e88`, reflects last review):** `docs/CONTENT_RATING.md` answers the IARC questionnaire with the expected **ESRB: Everyone / PEGI: 3 / IARC: 3+** label on the basis that the app contains no media, no UGC moderation surface, and no advertising. Final questionnaire values still require Play Console review against the actual release build.
-- [ ] **Pending:** complete target audience, age/content declarations, and the IARC/content-rating questionnaire from the actual release build (the draft exists but is not yet a Console submission).
-- [ ] **Pending:** declare ads accurately and verify that ad SDK behavior matches the Data Safety form (current docs say no ads; this remains unverified).
-- [ ] **Pending:** verify app access instructions for reviewers, including provider setup, offline/local mode, test data, and any gated functionality.
-
-### Build, SDK, ABI, page size, security
-
-- [x] **Build/SDK/ABI evidence (HEAD `e3b4e88`):** `app/build.gradle.kts` declares `compileSdk = 37`, `minSdk = 26`, `targetSdk = 37`, and ABI filters `arm64-v8a` and `x86_64` only. No `ndk { abiFilters }` overrides; no manual native library packaging. `gradle.properties` and the root `build.gradle.kts` do not enable deprecated support libraries that would re-introduce legacy ABI requirements. Both required ABIs are 64-bit (Android 12 64-bit compliance is satisfied by the filter list and the missing of `armeabi-v7a` / `x86`).
-- [x] **Native-library and 16 KB page-size posture (HEAD `e3b4e88`):** `find app/src/main -name '*.so'` returns no committed native libraries. With zero `.so` files in the module, 16 KB page-size compatibility for Android 15+ is satisfied by virtue of having no native code of our own; transitive AARs that ship native code (none currently on the critical path) are still pending an `apkanalyzer` snapshot of the release AAB. The AAB scan evidence recorded by PLAY-11 (run 34816179517, 5e943a6) remains the authoritative list once the signing-secret path is taken end-to-end.
-- [x] **Build hardening (HEAD `e3b4e88`):** `app/build.gradle.kts` enables `isMinifyEnabled = true` and `isShrinkResources = true` for the release variant, and `proguard-rules.pro` covers the EncryptedSharedPreferences / DataStore / Kotlinx-serialization entry points that R8 typically warns about (`NetworkSecurityConfigTest`, `AndroidBackupPolicyTest`, `ProviderSecretCodecTest`, `ProviderApiKeyRedactionTest`, `PreferenceStoreV5MigrationTest` all enforce the surviving-source invariants).
-- [ ] **Pending:** verify the current Play target-API requirement and deadline in Play Console; no deadline is recorded here. `targetSdk = 37` is a forward setting that exceeds the 2026 target-API baseline, but the Console-side accept/decline decision is external.
-- [ ] **Pending:** confirm exported components (`<activity>`, `<service>`, `<receiver>`) are limited to those required by the shipped feature set, and that no implicit-intent exposure remains on `WRITE_CALENDAR` / `READ_CALENDAR` / `SET_ALARM` flows. The manifest inventory has been captured; per-component review remains.
-- [ ] **Pending:** confirm release signing, Play App Signing enrollment/key ownership, upload key custody/rotation, and reproducible artifact fingerprints. Never place signing keys in source control. The PLAY-11 skip path means AAB-inspection evidence has never been produced against a real signed build from this runner; the actual release-key story must be reconciled against the Play Console App Signing dashboard.
-- [x] **PLAY-9 implemented:** `app/build.gradle.kts` registers a `buildAll` task depending on `assembleRelease` and `bundleRelease`. `.github/workflows/daily-build.yml` invokes `buildAll` on the signed path, validates the AAB package id (`com.orchords.orchordsai`), version-name, and version-code with `apkanalyzer`, copies the AAB to `release-assets/orchords-studio-ai.aab`, and uploads it via the `latest-apks` artifact. A separate `play-internal-publish.yml` workflow (`workflow_dispatch` only) downloads that artifact and runs `bundle exec fastlane PlayStore internal`; non-internal tracks are refused at runtime. `fastlane/Appfile`, `fastlane/Fastfile`, and `fastlane/supply.json` exist on `main` with no secrets committed (`.gitignore` covers `fastlane/play-store-key.json` and `fastlane/.bundle/`). `FastlanePublishingPolicyTest` enforces all of the above; it is green on the last signed Daily Build SHA.
-- [x] **PLAY-11 implemented (Security Analysis AAB scan, 5e943a6):** a new `Signed AAB Manifest Inspection` job runs in `.github/workflows/security-analysis.yml` (gated on `schedule || workflow_dispatch`). When `RELEASE_KEYSTORE_BASE64` + `ANDROID_SIGNING_CONFIG` are present on the runner it builds `:app:bundleRelease`, extracts the AAB, runs `apkanalyzer` to capture `application-id`, `versionName`, `versionCode`, `minSdk`, `targetSdk`, permissions, and a top-25 file list, generates a SHA-256, then runs Trivy `vuln/misconfig/secret` against the extracted bundle. Evidence is uploaded as the `aab-inspection-evidence` artifact. Without signing secrets on the runner (the current self-hosted configuration) the job takes the explicit-skip path and emits a `n/a` manifest stub so the artifact still uploads. Run 34816179517 (5e943a6) is green for all six Security Analysis jobs (Trivy Misconfig, OSV Cross-check, Gitleaks, Trivy Vulnerabilities, Semgrep SAST, Signed AAB Manifest Inspection). Re-verified on HEAD `e3b4e88`: focused `:app:testDebugUnitTest` runs the release/security/migration policy suite — all green; `:app:lintDebug` is also green (0 errors; existing warnings remain).
-- [x] **#428 implemented (provider apiKey out of DataStore JSON, 25cd2f3):** `ProviderSetting.apiKey` is now `abstract var` marked `@Transient` so the value never reaches the Settings DataStore JSON. Keys live in `ProviderCredentialStore` (EncryptedSharedPreferences + AES-256-GCM master key). `ProviderSecretCodec` redacts keys on write and hydrates them on read; a V5 DataStore migration forwards any pre-existing plaintext keys into the encrypted store. `ProviderSecretCodecTest`, `ProviderApiKeyRedactionTest`, and `PreferenceStoreV5MigrationTest` cover redaction, hydration, and the no-write-when-keystore-unavailable contract; all green on `:app:testDebugUnitTest` against 25cd2f3 and re-verified green on HEAD `1780862` (re-verification still holds on `e3b4e88` because the production source is unchanged between those SHAs).
-- [x] **Deletion-path credential wipe (Implemented, HEAD current):** `ProviderSecretCodec.removeDroppedProviders(previousIds, newProviders, store)` runs as the first step of `SettingsStore.update` (before `redactProvidersForWrite` and before `dataStore.edit`). It iterates `(previousIds intersect storedProviderIds) - newProviderIds` and calls `store.remove` for every dropped id that was actually present in the encrypted store; an unavailable store is a successful no-op; a removal failure throws `IllegalStateException` so the DataStore write is refused rather than overwriting the JSON while stale ciphertext survives. `ProviderSecretCodecTest` grows from 8 to 11 cases — `removeDroppedProviders no-ops when the encrypted store is unavailable`, `wipes only stored-and-dropped ids and keeps retained ones`, `refuses when the backend rejects a delete` — and `:app:testDebugUnitTest --tests "com.orchords.orchordsai.security.ProviderSecretCodecTest"` is **11 / 11 green** on HEAD (`tests="11" skipped="0" failures="0" errors="0"` in `app/build/test-results/testDebugUnitTest/TEST-com.orchords.orchordsai.security.ProviderSecretCodecTest.xml`). `docs/DATA_DELETION.md` row "Remove a provider configuration" now describes the immediate encrypted-store wipe (no re-save required). The `SettingsStore.update` call site is pinned by `ProviderApiKeyRedactionTest.settings datastore write path wipes encrypted apiKey for dropped provider ids`, a pure-JVM static-analysis regression that asserts (a) `previousIds` is derived from `settingsFlow.value.providers`, (b) `ProviderSecretCodec.removeDroppedProviders` is invoked, (c) the wipe site sits before `redactProvidersForWrite` and `dataStore.edit`, and (d) a removal failure throws before the DataStore write commits. `ProviderApiKeyRedactionTest` is **9 / 9 green** on HEAD (`tests="9" skipped="0" failures="0" errors="0"`).
-
-### Testing, pre-launch, vitals, and Console declarations
-
-- [x] **Unit-test layer (HEAD current):** `:app:testDebugUnitTest` is invoked from `.github/workflows/main-verification.yml` (push + PR) and `.github/workflows/daily-build.yml` (schedule). `find app/src/test -name '*.kt' | wc -l` reports **174** test source files on HEAD (the deletion-path static-analysis regression adds a method to existing `ProviderApiKeyRedactionTest.kt`, no new file). The focused `release.*` subset is gated by `FastlanePublishingPolicyTest`, `ReleaseWorkflowPolicyTest`, `BuildIdentityTest`, and `PrivateRunnerToolchainPolicyTest`; Lint clean (`./gradlew :app:lintDebug`, 0 errors with existing warnings; SARIF `Severity: Error` count is 0). The focused security/migration policy suite (`ProviderSecretCodecTest` 11/11, `ProviderApiKeyRedactionTest` 9/9, `PreferenceStoreV5MigrationTest` 3/3, `NetworkSecurityConfigTest` 7/7, `AndroidBackupPolicyTest` 4/4, `FileProviderGatewayUsageTest` 1/1, `FileProviderPathPolicyTest` 4/4, `SecurityAnalysisWorkflowPolicyTest` 4/4, `PlayListingAssetsDocTest` 7/7, `PlayPublishingDocTest` 7/7) is green on HEAD; full `:app:testDebugUnitTest` and `:app:lintDebug` also pass.
-- [x] **Instrumented-test layer (HEAD `e3b4e88`):** `.github/workflows/instrumented-tests.yml` runs on `push`, `schedule`, and `workflow_dispatch`. The Android-instrumented tree (`app/src/androidTest/`) covers Room DAO contracts (`ConversationFolderScopeTest`, `ConversationTitleLiteralSearchTest`, `MessageNodeIdentityCollisionTest`, `MessageNodeStatsTest`, `ProviderUsageEventDaoTest`), the message-node payload store, schema migrations (24→25, 11→12), and database snapshot/restore integration. These provide the device-side regression layer behind the JVM static-analysis tests for #428 encryption and the deletion-path story.
-- [x] **Data Safety form answers pre-drafted (HEAD `e3b4e88`):** `docs/DATA_SAFETY.md` is structured field-by-field against the Play Console Data Safety questionnaire: account info (no), app activity (yes — local only, no crash SDK), audio (only if user starts a voice session), calendar (only if user grants), messages (yes — sent to the configured provider only), and the negative-disclosure block ("does NOT collect" — analytics, advertising, crash SDK, location). §1 also documents on-disk encryption posture (Android Keystore-backed EncryptedSharedPreferences for provider keys; OS-level FBE for everything else). Rev stamp refreshed to `e3b4e88`.
-- [x] **Listing copy pre-drafted (HEAD `e3b4e88`):** `docs/LISTING_COPY.md` ships an en-US short description (78/80 chars) and a full description (~1 350/4 000 chars) sourced from PRIVACY.md §1–§7. §3 explicitly enumerates claims that must NOT be added before verification (subscription wording, multi-device sync, offline-with-any-provider, etc.). This is text-only Console work; the copy enters the Console as fields, not files.
-- [ ] **Pending:** upload to internal testing first; use pre-launch report and resolve crashes, ANRs, permission failures, policy warnings, and device exclusions. Pre-launch report review requires a signed release AAB on a self-hosted runner (the same blocker that gates PLAY-11's `aab-inspection-evidence` artifact).
-- [ ] **Pending:** review Android vitals after test distribution and before production promotion; investigate any bad behavior rather than assuming approval. Android vitals data only exists once the first user-cohort install has aged past the metric collection window, so this is post-launch work.
-- [ ] **Pending:** complete Store listing, Data Safety, privacy policy, content rating, target audience, ads, app access, permissions/API declarations, financial declarations, and any Play Console questionnaires shown for this app. Pre-drafted answers exist for several of these (`DATA_SAFETY.md`, `LISTING_COPY.md`, `CONTENT_RATING.md`, `PERMISSIONS.md`, `PRIVACY.md`); the Console-side submission remains external.
-- [ ] **PLAY-10 pending:** verify listing assets. `docs/LISTING_ASSETS.md` currently contains TODO rows and therefore is not a release-ready checklist. Do not fabricate screenshots or placeholder icons.
-
-## Repository policy changes (effective 2026-09-16)
-
-The following operational decisions were applied to this repository on
-2026-09-16 and supersede any prior CI-runner evidence recorded above.
-Workflow SHAs cited in the bullets below (`e3b4e88`, `16bce6c`,
-`7115142`, `5e943a6`, `1780862`, `ffa6127`, `16bce6c`) remain accurate
-as historical evidence of what *did* run on a self-hosted runner at
-that SHA, but no runner will fire again until the policy is reversed.
-
-1. **GitHub Actions disabled at the repo level.** All `.github/workflows/*`
-   jobs (`Branch Verification`, `CI Metrics`, `Citation Integrity Tests`,
-   `Close Blank Issues`, `Daily Build`, `Dependency Audit`,
-   `Gradle Dependency Submission`, `Instrumented Tests`,
-   `Main Verification`, `Play Internal Publish`,
-   `Protected PR Verification`, `Private Runner Policy`,
-   `Runner Maintenance`, `Security Analysis`) are individually marked
-   `disabled_manually`, and `repos/.../actions/permissions.enabled = false`
-   so no runner ever spins up again from `push`, `pull_request`,
-   `schedule`, or `workflow_dispatch`. The workflow files remain on `main`
-   so the policy is reversible in one commit.
-2. **Dependabot disabled.** `.github/dependabot.yml` was deleted, and
-   `automated-security-fixes.enabled = false` was set via the repo API.
-   No Dependabot version-update or security-update PR will be opened
-   again. Transitive `js-yaml@4.3.2` and `morgan@1.12.0` remain pinned
-   via `web-ui/pnpm-workspace.yaml` `overrides:` so the dependency
-   graph itself does not regress; only the alert surface is removed.
-3. **Single branch.** `main` is the only branch on the repo. All
-   pre-existing branches (`fix/291-multi-image-generation-slots`,
-   `fix/48h-ci-failures-20260911`, `fix/semgrep-host-verifier-false-positives`,
-   `team2/issue-129-config-health`) were deleted on 2026-09-16. Tags
-   `latest` and `nightly` are preserved and reachable from `main`.
-   `default_branch` was set to `main`.
-4. **Pull requests closed, not merged.** The three PRs that were open at
-   repo recreation (`#1`, `#2`, `#3`) were closed as superseded; their
-   head branches were deleted with them. No code from any non-`main`
-   branch landed on `main` in this cleanup.
-5. **No Dependabot alerts will be tracked going forward.** Any new
-   alerts that appear (currently zero open) are informational only; the
-   closure workflow is manual via the Security tab and is not part of
-   the release gate.
-6. **Contributor identity.** The repository was recreated on
-   2026-09-16 with history rewritten to a single author
-   `ORCHORDS.COM <72497645+ORCHORDS@users.noreply.github.com>`. The
-   contributors graph on the new repo therefore shows one entry.
-7. **Scope of this agenda.** Items above that cite "is green on
-   workflow X at SHA Y" remain accurate as historical evidence; they
-   no longer represent a guarantee that the same path will run on the
-   next push. The unresolved-blocker list below is unaffected — none of
-   those items depended on CI, only on Console-side evidence.
-
-## Unresolved blockers
-
-1. Listing assets and descriptions remain TODO in `docs/LISTING_ASSETS.md` (PLAY-10). The repo has launcher icons across all densities (`mipmap-mdpi` … `mipmap-xxxhdpi`), three 1536×1024 banners under `app/src/main/assets/banner/`, and a 900×271 wordmark in `app/src/main/res/drawable/orchords_wordmark_blue.png`. Missing: a 512×512 hi-res Play Console icon export, a 1024×500 feature graphic, 2–8 phone screenshots, en-US short/full description text. Per standing rule these must not be fabricated; they remain external blockers until produced.
-2. Credential encryption still in progress for non-provider secrets; issue #428 shipped the chat-LLM provider `apiKey` path (PRIVACY.md §4 now accurate) and `cb1e0f0` landed the deletion-path wipe so a removed provider leaves no stale ciphertext. Remaining secret surfaces tracked by #229/#242/#87:
-   - **WebDAV password** (`WebDavConfig.password`, DataStore key `webdav_config`)
-   - **S3 secret access key** (`S3Config.secretAccessKey`, DataStore key `s3_config`)
-   - **Proxy username / password** (`NetworkSetting.proxyUsername`, `proxyPassword`, DataStore key `network_setting`)
-   - **Web-server access password** (`Settings.webServerAccessPassword`, DataStore key `web_server_access_password`)
-   - **MCP OAuth tokens** (`McpOAuthState.accessToken`, `refreshToken`, `clientSecret`, expiresAt) — out of scope for the text-secret fix because of the refresh-token lifecycle; needs its own design.
-
-   The four text-secret fields are the next small follow-up and follow the same pattern as #428: new `SecondarySecretStore` (`EncryptedSharedPreferences` at `orchordsai_secondary_secrets`), `@Transient` on the four fields, V6 DataStore migration, regression tests.
-3. Data Safety/privacy/deletion answers have not been revalidated against the current build and all SDK/provider flows.
-4. Per-permission runtime justification, AI content reporting/flagging surface, billing declaration, audience/content rating finalization, app-access reviewer instructions, signing key custody, 16 KB page-size native libraries, pre-launch / vitals, and full Play Console declaration set remain pending evidence. Inventory-only evidence has now been recorded (see `### Permissions and sensitive access` and `### Billing, audience, rating, and ads` above); the per-permission and per-questionnaire Console work is not yet done.
-5. Play Console app registration, service-account **Release manager** grant, release keystore upload (`KEY_BASE64` + `SIGNING_CONFIG` secrets), and pre-launch report review remain external to this repository.
-
-## Numeric evidence
-
-- Markdown files outside `web-ui/node_modules` were counted with `find ... -name '*.md' | wc -l`: **20** (count captured 2026-09-13).
-- Manifest permission declarations were counted from `app/src/main/AndroidManifest.xml` on HEAD `16bce6c`: **16 lines matching `uses-permission`** (including multiline declarations); **2 lines matching `uses-feature`**, both `required="false"`. Permission names enumerated under `### Permissions and sensitive access` above.
-- Manifest permission declarations were counted from `app/src/main/AndroidManifest.xml` on HEAD `ffa6127`: **16 lines matching `uses-permission`** (including multiline declarations; exact permission names require final manifest review).
-- `find app/src/test -name '*.kt' | wc -l` on HEAD `e3b4e88`: **174** JVM unit-test source files. Instrumented-test files under `app/src/androidTest/`: **11** Room DAO / migration / snapshot-integration files (enumerated under `### Testing, pre-launch, vitals` above).
-- `find app/src/main -name '*.so'` on HEAD `7115142`: **0** native libraries in the module. Banners under `app/src/main/assets/banner/`: **3** files (`banner-1.png`, `banner-2.png`, `banner-3.png`, each ~1.7 MB / 1536×1024). Wordmark in `app/src/main/res/drawable/orchords_wordmark_blue.png` (~63 KB / 900×271). Launcher icon densities present: `mipmap-mdpi`, `mipmap-hdpi`, `mipmap-xhdpi`, `mipmap-xxhdpi`, `mipmap-xxxhdpi`, `mipmap-anydpi-v26`. Missing for Play Console: 512×512 hi-res icon, 1024×500 feature graphic, 2–8 phone screenshots (tracked in `docs/LISTING_ASSETS.md`).
-- Ad / analytics / billing SDK hits against `app/build.gradle.kts`, `gradle/libs.versions.toml`, and `app/src/main` on HEAD `16bce6c`: **0** matches each for `play-services-ads`, `play-services-analytics`, `firebase`, `crashlytics`, `com.android.billingclient`, `BillingClient`. Re-verified on HEAD `e3b4e88`: still zero hits, identical evidence. Confirms the current "no ads, no IAP" claim and lets the agenda mark those sub-items off.
-- No deadline, quota, rollout percentage, or approval outcome is asserted without current Console evidence.
+Before marking any release item complete, re-check the current repository state and current authoritative documentation, then attach concrete verification evidence to master issue #5. Historical runner output is not a substitute for current host-side or Play Console evidence.

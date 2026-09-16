@@ -48,10 +48,30 @@ class OrchordsGatewayException(
  * error-body schema is not a confirmed product contract, so arbitrary JSON/HTML
  * cannot become exception/UI/log content. Status and Retry-After are safe HTTP
  * metadata and are sufficient for the currently verified classifications.
+ *
+ * OpenAI-compatible request builders apply user/model custom headers before the
+ * provider credential. If a stale custom Authorization header is present, OkHttp
+ * can otherwise send both values. For the first-party gateway we collapse only
+ * duplicate Authorization values to the final value, which is the provider
+ * credential added by the request builder. This keeps custom headers useful while
+ * preventing them from shadowing the persisted gateway credential.
  */
 internal class OrchordsGatewayErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        val original = chain.request()
+        val request = if (original.url.host == ORCHORDS_GATEWAY_HOST) {
+            val authorizationValues = original.headers.values("Authorization")
+            if (authorizationValues.size > 1) {
+                original.newBuilder()
+                    .header("Authorization", authorizationValues.last())
+                    .build()
+            } else {
+                original
+            }
+        } else {
+            original
+        }
+
         val response = chain.proceed(request)
         if (request.url.host != ORCHORDS_GATEWAY_HOST || response.isSuccessful) {
             return response

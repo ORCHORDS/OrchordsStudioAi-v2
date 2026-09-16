@@ -37,6 +37,17 @@ fun Set<Uuid>.isPlanningModeEnabled(): Boolean = PLANNING_MODE_ID in this
 fun Set<Uuid>.withPlanningMode(enabled: Boolean): Set<Uuid> =
     if (enabled) this + PLANNING_MODE_ID else this - PLANNING_MODE_ID
 
+/** Mirrors PromptInjectionTransformer's assistant/conversation selection semantics. */
+fun isPlanningModeActive(
+    assistantModeInjectionIds: Set<Uuid>,
+    allowConversationPromptInjection: Boolean,
+    conversationModeInjectionIds: Set<Uuid>,
+): Boolean = if (allowConversationPromptInjection) {
+    PLANNING_MODE_ID in conversationModeInjectionIds
+} else {
+    PLANNING_MODE_ID in assistantModeInjectionIds || PLANNING_MODE_ID in conversationModeInjectionIds
+}
+
 /**
  * Planning Mode is a first-party conversation control even when an assistant does not allow
  * arbitrary conversation prompt injections. This policy permits only adding/removing the

@@ -75,6 +75,38 @@ class PlanningModeTest {
     }
 
     @Test
+    fun `effective planning state follows the same assistant conversation selection rules as prompt injection`() {
+        assertTrue(
+            isPlanningModeActive(
+                assistantModeInjectionIds = setOf(PLANNING_MODE_ID),
+                allowConversationPromptInjection = false,
+                conversationModeInjectionIds = emptySet(),
+            )
+        )
+        assertTrue(
+            isPlanningModeActive(
+                assistantModeInjectionIds = emptySet(),
+                allowConversationPromptInjection = false,
+                conversationModeInjectionIds = setOf(PLANNING_MODE_ID),
+            )
+        )
+        assertFalse(
+            isPlanningModeActive(
+                assistantModeInjectionIds = setOf(PLANNING_MODE_ID),
+                allowConversationPromptInjection = true,
+                conversationModeInjectionIds = emptySet(),
+            )
+        )
+        assertTrue(
+            isPlanningModeActive(
+                assistantModeInjectionIds = emptySet(),
+                allowConversationPromptInjection = true,
+                conversationModeInjectionIds = setOf(PLANNING_MODE_ID),
+            )
+        )
+    }
+
+    @Test
     fun `planning-only conversation change may toggle planning while preserving all other ids`() {
         val otherMode = Uuid.random()
         val lorebook = Uuid.random()

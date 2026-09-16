@@ -7,7 +7,7 @@ import {
   parseAskUserQuestions,
   serializeAskUserAnswers,
   toggleMultiSelection,
-} from "./ask-user-state.ts";
+} from "./ask-user-state";
 
 test("parses selection_type and defaults unknown values to text", () => {
   assert.deepEqual(

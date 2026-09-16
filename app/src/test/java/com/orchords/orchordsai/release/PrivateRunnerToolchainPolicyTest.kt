@@ -14,7 +14,7 @@ class PrivateRunnerToolchainPolicyTest {
     }
 
     @Test
-    fun `private android lanes bootstrap the same pinned toolchain`() {
+    fun `android verification and release lanes bootstrap the same pinned toolchain`() {
         val actionPath = ".github/actions/setup-private-android-toolchain/action.yml"
         val main = source(".github/workflows/main-verification.yml")
         val release = source(".github/workflows/release.yml")
@@ -22,7 +22,7 @@ class PrivateRunnerToolchainPolicyTest {
 
         assertTrue(main.contains("uses: ./.github/actions/setup-private-android-toolchain"))
         assertTrue(release.contains("uses: ./.github/actions/setup-private-android-toolchain"))
-        assertTrue(release.contains("runs-on: ubuntu-24.04-x64"))
+        assertTrue(release.contains("runs-on: ubuntu-24.04"))
         assertTrue(action.contains("java-version: '21'"))
         assertTrue(action.contains("node-version: '22'"))
         assertTrue(action.contains("pnpm@11"))

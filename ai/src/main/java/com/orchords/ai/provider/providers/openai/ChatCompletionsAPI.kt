@@ -75,6 +75,7 @@ import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import java.io.IOException
 import kotlin.time.Clock
 
 private const val TAG = "ChatCompletionsAPI"
@@ -168,6 +169,7 @@ class ChatCompletionsAPI(
         )
 
         val decoder = ChatCompletionsStreamDecoder()
+        var providerTerminalObserved = false
 
         fun sendChunks(chunks: Iterable<StreamChunk>) {
             chunks.forEach { chunk ->
@@ -188,7 +190,10 @@ class ChatCompletionsAPI(
                 try {
                     val result = decoder.accept(SseEvent(id = id, event = type, data = data))
                     sendChunks(result.chunks)
-                    if (result.completed) close()
+                    if (result.completed) {
+                        providerTerminalObserved = true
+                        close()
+                    }
                 } catch (e: Throwable) {
                     close(e)
                 }
@@ -218,7 +223,10 @@ class ChatCompletionsAPI(
             }
 
             override fun onClosed(eventSource: EventSource) {
-                sendChunks(decoder.onClosed())
+                if (!providerTerminalObserved) {
+                    close(IOException("Provider stream closed before terminal [DONE]"))
+                    return
+                }
                 close()
             }
         }

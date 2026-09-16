@@ -137,21 +137,27 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
             )
 
             val candidate = provider.copy(apiKey = apiKey)
+            val hasUnsavedCredential = apiKey != provider.apiKey
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                ProviderConnectionTester(internalProvider = candidate)
+                if (!hasUnsavedCredential) {
+                    ProviderConnectionTester(internalProvider = provider)
+                }
                 Button(
                     onClick = {
                         vm.updateSettings(
-                            settings.copy(
+                            settings = settings.copy(
                                 providers = listOf(candidate),
-                            )
+                            ),
+                            onSuccess = {
+                                toaster.show(saveSuccess, type = ToastType.Success)
+                            },
                         )
-                        toaster.show(saveSuccess, type = ToastType.Success)
                     },
+                    enabled = hasUnsavedCredential,
                 ) {
                     Text(stringResource(R.string.setting_provider_page_save))
                 }

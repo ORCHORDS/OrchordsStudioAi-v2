@@ -17,6 +17,31 @@ import kotlin.uuid.Uuid
  */
 object ProviderSecretCodec {
     /**
+     * Move an encrypted provider credential from a legacy provider UUID to a
+     * canonical provider UUID without exposing the credential to DataStore.
+     *
+     * Existing canonical credentials always win. If the canonical entry is
+     * empty, the legacy value is copied first and only then is the legacy entry
+     * removed. A failed write/delete is reported so callers can retry safely on
+     * a later settings emission instead of silently losing the credential.
+     */
+    fun rekeyProviderCredential(
+        legacyProviderId: Uuid,
+        canonicalProviderId: Uuid,
+        store: ProviderSecretBackend,
+    ): Boolean {
+        if (legacyProviderId == canonicalProviderId || !store.isAvailable()) return true
+
+        val legacyCredential = store.get(legacyProviderId) ?: return true
+        val canonicalCredential = store.get(canonicalProviderId)
+        if (canonicalCredential.isNullOrBlank()) {
+            if (!store.put(canonicalProviderId, legacyCredential)) return false
+        }
+
+        return store.remove(legacyProviderId)
+    }
+
+    /**
      * Persist each provider's apiKey into [store] and return a copy with the
      * `apiKey` field redacted to `""`, suitable for serialisation into the
      * Settings DataStore.

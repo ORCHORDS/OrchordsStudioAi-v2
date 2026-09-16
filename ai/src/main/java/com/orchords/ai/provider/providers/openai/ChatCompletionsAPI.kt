@@ -550,7 +550,7 @@ class ChatCompletionsAPI(
                     message = message,
                     includeReasoning = includeHistoryReasoning,
                     includeOpenRouterReasoningDetails = includeOpenRouterReasoningDetails,
-                    supportInputModalities = params.model.inputModalities,
+                    supportInputModalities = supportInputModalities,
                     includeToolResultName = includeToolResultName,
                 )
             } else {

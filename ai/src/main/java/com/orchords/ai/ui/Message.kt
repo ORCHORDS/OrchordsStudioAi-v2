@@ -83,7 +83,12 @@ internal fun mapGenerationTermination(
             normalized.startsWith("incomplete:") -> GenerationTerminationCategory.PROVIDER_INTERRUPTED
         else -> GenerationTerminationCategory.UNKNOWN
     }
-    val category = if (mapped == GenerationTerminationCategory.COMPLETED && emptyResponse) {
+    val category = if (
+        emptyResponse && mapped in setOf(
+            GenerationTerminationCategory.COMPLETED,
+            GenerationTerminationCategory.UNKNOWN,
+        )
+    ) {
         GenerationTerminationCategory.EMPTY_RESPONSE
     } else {
         mapped

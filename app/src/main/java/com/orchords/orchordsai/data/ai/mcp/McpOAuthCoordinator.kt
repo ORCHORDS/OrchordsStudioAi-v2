@@ -103,8 +103,6 @@ internal class McpOAuthCoordinator(
                     expiresAt = computeExpiry(token.expiresIn),
                     scope = token.scope ?: oauth.scope,
                 )
-                // SettingsStore writes the access/refresh set through one atomic
-                // encrypted-store replacement before committing DataStore metadata.
                 persistOAuthState(config.id, updated)
                 config.clone(commonOptions = config.commonOptions.copy(oauth = updated))
             }.getOrElse { error ->
@@ -114,10 +112,6 @@ internal class McpOAuthCoordinator(
                         refreshToken = null,
                         expiresAt = 0L,
                     )
-                    // A rejected refresh token is no longer usable. Persist the
-                    // clear before exposing the re-authorization state; failure to
-                    // wipe is intentionally surfaced rather than leaving stale
-                    // credentials silently active.
                     persistOAuthState(config.id, cleared)
                     updateStatus(config.id, McpStatus.NeedsAuthorization)
                     Log.i(TAG, "OAuth refresh rejected for ${config.commonOptions.name}; authorization required")
@@ -131,16 +125,23 @@ internal class McpOAuthCoordinator(
     }
 
     suspend fun needsAuthorization(config: McpServerConfig, error: Throwable): Boolean {
-        if (looksUnauthorized(error) && config.commonOptions.oauth?.enabled == true) return true
-        if (config.commonOptions.headers.any { it.first.equals("Authorization", ignoreCase = true) }) {
-            return false
+        val hasAuthorizationHeader = config.commonOptions.headers.any {
+            it.first.equals("Authorization", ignoreCase = true)
         }
+        if (looksUnauthorized(error) &&
+            (config.commonOptions.oauth?.enabled == true || hasAuthorizationHeader)
+        ) {
+            return true
+        }
+        if (hasAuthorizationHeader) return false
         return runCatching { discoveryClient.discoverProtectedResource(config.serverUrl) }
             .onFailure {
                 Log.i(TAG, "OAuth probe failed for ${config.commonOptions.name}: ${it::class.simpleName}")
             }
             .isSuccess
     }
+
+    fun permissionDenied(error: Throwable): Boolean = looksPermissionDenied(error)
 
     private suspend fun authorize(config: McpServerConfig, context: Context) = withContext(Dispatchers.IO) {
         val serverUrl = config.serverUrl
@@ -282,6 +283,16 @@ internal class McpOAuthCoordinator(
             message.contains("invalid_token") ||
             message.contains("invalid access token") ||
             message.contains("missing or invalid")
+    }
+
+    private fun looksPermissionDenied(error: Throwable): Boolean {
+        val message = errorChainText(error)
+        return message.contains("403") ||
+            message.contains("forbidden") ||
+            message.contains("insufficient_scope") ||
+            message.contains("insufficient scope") ||
+            message.contains("resource not accessible") ||
+            message.contains("permission denied")
     }
 
     private fun looksInvalidGrant(error: Throwable): Boolean {

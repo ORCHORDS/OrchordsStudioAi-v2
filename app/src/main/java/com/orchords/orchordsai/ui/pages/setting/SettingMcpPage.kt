@@ -133,53 +133,32 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val mcpConfigs = settings.mcpServers
     val creationState = useEditState<McpServerConfig> {
-        vm.updateSettings(
-            settings.copy(
-                mcpServers = mcpConfigs + it
-            )
-        )
+        vm.updateSettings(settings.copy(mcpServers = mcpConfigs + it))
     }
     val editState = useEditState<McpServerConfig> { newConfig ->
         vm.updateSettings(
             settings.copy(
                 mcpServers = mcpConfigs.map {
-                    if (it.id == newConfig.id) {
-                        newConfig
-                    } else {
-                        it
-                    }
+                    if (it.id == newConfig.id) newConfig else it
                 }
-            ))
+            )
+        )
     }
     var showImportDialog by remember { mutableStateOf(false) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         topBar = {
             LargeFlexibleTopAppBar(
-                title = {
-                    Text(stringResource(R.string.setting_mcp_page_title))
-                },
-                navigationIcon = {
-                    BackButton()
-                },
+                title = { Text(stringResource(R.string.setting_mcp_page_title)) },
+                navigationIcon = { BackButton() },
                 actions = {
-                    TextButton(
-                        onClick = { creationState.open(githubMcpPreset()) }
-                    ) {
+                    TextButton(onClick = { creationState.open(githubMcpPreset()) }) {
                         Text("GitHub")
                     }
-                    IconButton(
-                        onClick = {
-                            showImportDialog = true
-                        }
-                    ) {
+                    IconButton(onClick = { showImportDialog = true }) {
                         Icon(HugeIcons.FileImport, null)
                     }
-                    IconButton(
-                        onClick = {
-                            creationState.open(McpServerConfig.StreamableHTTPServer())
-                        }
-                    ) {
+                    IconButton(onClick = { creationState.open(McpServerConfig.StreamableHTTPServer()) }) {
                         Icon(HugeIcons.Add01, null)
                     }
                 },
@@ -198,17 +177,12 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
         val layoutDirection = LocalLayoutDirection.current
         PullToRefreshBox(
             isRefreshing = loading,
-            onRefresh = {
-                scope.launch {
-                    mcpManager.syncAll()
-                }
-            },
+            onRefresh = { scope.launch { mcpManager.syncAll() } },
             state = state,
             modifier = Modifier.fillMaxSize()
         ) {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(
                     start = innerPadding.calculateStartPadding(layoutDirection) + 16.dp,
@@ -220,9 +194,7 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                 items(mcpConfigs, key = { it.id }) { mcpConfig ->
                     McpServerItem(
                         item = mcpConfig,
-                        onEdit = {
-                            editState.open(mcpConfig)
-                        },
+                        onEdit = { editState.open(mcpConfig) },
                         onDisconnect = {
                             val disconnected = mcpConfig.withGitHubMcpDisconnected()
                             vm.updateSettings(
@@ -235,9 +207,7 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                         },
                         onDelete = {
                             vm.updateSettings(
-                                settings.copy(
-                                    mcpServers = mcpConfigs.filter { it.id != mcpConfig.id }
-                                )
+                                settings.copy(mcpServers = mcpConfigs.filter { it.id != mcpConfig.id })
                             )
                         },
                         modifier = Modifier.animateItem()
@@ -267,7 +237,9 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
             onDismiss = { showImportDialog = false },
             onImport = { newConfigs ->
                 val existingIds = mcpConfigs.map { it.commonOptions.name }.toSet()
-                val toAdd = newConfigs.filter { it.commonOptions.name.isNotBlank() && it.commonOptions.name !in existingIds }
+                val toAdd = newConfigs.filter {
+                    it.commonOptions.name.isNotBlank() && it.commonOptions.name !in existingIds
+                }
                 vm.updateSettings(settings.copy(mcpServers = mcpConfigs + toAdd))
                 showImportDialog = false
             }
@@ -300,9 +272,7 @@ private fun McpServerItem(
                     Text(
                         text = fullText,
                         style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState()),
+                        modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
                     )
                 }
             },
@@ -312,9 +282,7 @@ private fun McpServerItem(
                         context.writeClipboardText(fullText)
                         errorDetail = null
                     }
-                ) {
-                    Text(stringResource(R.string.copy))
-                }
+                ) { Text(stringResource(R.string.copy)) }
             },
             dismissButton = {
                 TextButton(onClick = { errorDetail = null }) {
@@ -331,18 +299,10 @@ private fun McpServerItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
-                FilledTonalIconButton(
-                    onClick = {
-                        scope.launch { dismissBoxState.reset() }
-                    }
-                ) {
+                FilledTonalIconButton(onClick = { scope.launch { dismissBoxState.reset() } }) {
                     Icon(HugeIcons.Cancel01, null)
                 }
-                FilledTonalIconButton(
-                    onClick = {
-                        onDelete()
-                    }
-                ) {
+                FilledTonalIconButton(onClick = onDelete) {
                     Icon(HugeIcons.Delete01, null)
                 }
             }
@@ -351,15 +311,9 @@ private fun McpServerItem(
         enableDismissFromEndToStart = true,
         modifier = modifier
     ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = CustomColors.listItemColors.containerColor
-            )
-        ) {
+        Card(colors = CardDefaults.cardColors(containerColor = CustomColors.listItemColors.containerColor)) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -369,6 +323,7 @@ private fun McpServerItem(
                     McpStatus.Connected -> Icon(HugeIcons.McpServer, null)
                     is McpStatus.Reconnecting -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     is McpStatus.Error -> Icon(HugeIcons.AlertCircle, null)
+                    is McpStatus.PermissionDenied -> Icon(HugeIcons.AlertCircle, null)
                     McpStatus.NeedsAuthorization -> Icon(HugeIcons.AlertCircle, null)
                     McpStatus.Authorizing -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 }
@@ -381,18 +336,14 @@ private fun McpServerItem(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = item.commonOptions.name,
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        val dotColor =
-                            if (item.commonOptions.enable) MaterialTheme.extendColors.green6 else MaterialTheme.extendColors.red6
+                        Text(text = item.commonOptions.name, style = MaterialTheme.typography.titleLarge)
+                        val dotColor = if (item.commonOptions.enable) {
+                            MaterialTheme.extendColors.green6
+                        } else {
+                            MaterialTheme.extendColors.red6
+                        }
                         Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .drawWithContent {
-                                    drawCircle(color = dotColor)
-                                }
+                            modifier = Modifier.size(8.dp).drawWithContent { drawCircle(color = dotColor) }
                         )
                     }
 
@@ -417,22 +368,35 @@ private fun McpServerItem(
                     }
 
                     if (status is McpStatus.Error) {
-                        val error = status as McpStatus.Error
                         Text(
-                            text = error.message,
+                            text = status.message,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.clickable { errorDetail = error },
+                            modifier = Modifier.clickable { errorDetail = status },
                         )
                         if (isOfficialGitHubMcpRemote(item) && hasGitHubMcpAuthentication(item)) {
                             Button(
                                 onClick = { scope.launch { mcpManager.addClient(item) } },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                            ) {
-                                Text("Reconnect")
-                            }
+                            ) { Text("Reconnect") }
+                        }
+                    }
+
+                    if (status is McpStatus.PermissionDenied) {
+                        Text(
+                            text = "Permission denied: ${status.message}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (isOfficialGitHubMcpRemote(item)) {
+                            Button(
+                                onClick = { onEdit(item) },
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                            ) { Text("Review access") }
                         }
                     }
 
@@ -450,9 +414,7 @@ private fun McpServerItem(
                             Button(
                                 onClick = { onEdit(item) },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                            ) {
-                                Text("Configure PAT")
-                            }
+                            ) { Text("Configure PAT") }
                         } else {
                             val context = LocalContext.current
                             Text(
@@ -463,9 +425,7 @@ private fun McpServerItem(
                             Button(
                                 onClick = { mcpManager.startAuthorization(item, context) },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                            ) {
-                                Text("Authorize")
-                            }
+                            ) { Text("Authorize") }
                         }
                     }
 
@@ -477,18 +437,14 @@ private fun McpServerItem(
                         TextButton(
                             onClick = { mcpManager.cancelAuthorization(item) },
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        ) {
-                            Text("Cancel authorization")
-                        }
+                        ) { Text("Cancel authorization") }
                     }
 
                     if (isOfficialGitHubMcpRemote(item) && hasGitHubMcpAuthentication(item)) {
                         TextButton(
                             onClick = onDisconnect,
                             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                        ) {
-                            Text("Disconnect")
-                        }
+                        ) { Text("Disconnect") }
                     }
                 }
 
@@ -507,13 +463,13 @@ private fun McpServerConfigModal(state: EditState<McpServerConfig>) {
         val scope = rememberCoroutineScope()
         ModalBottomSheet(
             onDismissRequest = { state.dismiss() },
-            sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+            sheetState = rememberBottomSheetState(
+                initialValue = SheetValue.Hidden,
+                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+            )
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.9f)
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SecondaryTabRow(
@@ -533,9 +489,7 @@ private fun McpServerConfigModal(state: EditState<McpServerConfig>) {
                 }
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 ) { page ->
                     when (page) {
                         0 -> McpCommonOptionsConfigure(config = config, update = updateValue)
@@ -552,9 +506,7 @@ private fun McpServerConfigModal(state: EditState<McpServerConfig>) {
                                 state.confirm()
                             }
                         }
-                    ) {
-                        Text(stringResource(R.string.setting_mcp_page_save))
-                    }
+                    ) { Text(stringResource(R.string.setting_mcp_page_save)) }
                 }
             }
         }
@@ -567,11 +519,7 @@ private fun McpCommonOptionsConfigure(
     update: (McpServerConfig) -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-            .imePadding(),
+        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()).imePadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         FormItem(
@@ -608,7 +556,9 @@ private fun McpCommonOptionsConfigure(
             var patVisible by rememberSaveable { mutableStateOf(false) }
             FormItem(
                 label = { Text("GitHub PAT") },
-                description = { Text("Personal access token for the official GitHub MCP server. Stored through the app's encrypted MCP secret store; the Bearer prefix is added automatically.") }
+                description = {
+                    Text("Personal access token for the official GitHub MCP server. Stored through the app's encrypted MCP secret store; the Bearer prefix is added automatically.")
+                }
             ) {
                 OutlinedTextField(
                     value = githubMcpPat(config),
@@ -618,10 +568,7 @@ private fun McpCommonOptionsConfigure(
                     visualTransformation = if (patVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { patVisible = !patVisible }) {
-                            Icon(
-                                if (patVisible) HugeIcons.ViewOff else HugeIcons.View,
-                                contentDescription = null,
-                            )
+                            Icon(if (patVisible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = null)
                         }
                     },
                 )
@@ -629,25 +576,28 @@ private fun McpCommonOptionsConfigure(
 
             FormItem(
                 label = { Text("GitHub toolsets") },
-                description = { Text("Comma-separated official GitHub MCP toolsets. The safe default is repos, issues and pull_requests; add broader toolsets only when needed.") }
+                description = {
+                    Text("Comma-separated official GitHub MCP toolsets. The safe default is repos, issues and pull_requests; add broader toolsets only when needed.")
+                }
             ) {
                 OutlinedTextField(
                     value = githubMcpToolsets(config),
                     onValueChange = { update(config.withGitHubMcpToolsets(it)) },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Toolsets") },
-                    supportingText = { Text("Examples: repos, issues, pull_requests, actions, code_security, secret_protection") },
+                    supportingText = {
+                        Text("Examples: repos, issues, pull_requests, actions, code_security, secret_protection")
+                    },
                 )
             }
 
             FormItem(
                 label = { Text("GitHub read-only") },
-                description = { Text("Disable all GitHub MCP tools that can modify repositories, issues, pull requests, or other GitHub state.") }
+                description = {
+                    Text("Disable all GitHub MCP tools that can modify repositories, issues, pull requests, or other GitHub state.")
+                }
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (isGitHubMcpReadOnly(config)) "Read-only" else "Write enabled")
                     Spacer(Modifier.weight(1f))
                     Switch(
@@ -659,12 +609,11 @@ private fun McpCommonOptionsConfigure(
 
             FormItem(
                 label = { Text("GitHub lockdown") },
-                description = { Text("Reduce untrusted public-repository content surfaced by the GitHub MCP server. This is a content filter, not an authorization boundary.") }
+                description = {
+                    Text("Reduce untrusted public-repository content surfaced by the GitHub MCP server. This is a content filter, not an authorization boundary.")
+                }
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (isGitHubMcpLockdown(config)) "On" else "Off")
                     Spacer(Modifier.weight(1f))
                     Switch(
@@ -741,9 +690,7 @@ private fun McpCommonOptionsConfigure(
                             }
                         },
                         selected = index == currentTypeIndex
-                    ) {
-                        Text(type)
-                    }
+                    ) { Text(type) }
                 }
             }
         }
@@ -920,9 +867,7 @@ private fun McpToolsConfigure(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (mcpManager.getClient(config) == null) {
-            item {
-                Text(stringResource(R.string.setting_mcp_page_tools_unavailable_message))
-            }
+            item { Text(stringResource(R.string.setting_mcp_page_tools_unavailable_message)) }
         }
         items(config.commonOptions.tools) { tool ->
             McpToolCard(
@@ -961,16 +906,9 @@ private fun McpToolCard(
     onNeedsApprovalChange: (Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = CustomColors.listItemColors.containerColor
-        )
-    ) {
+    Card(colors = CardDefaults.cardColors(containerColor = CustomColors.listItemColors.containerColor)) {
         Column(
-            modifier = Modifier
-                .animateContentSize()
-                .fillMaxWidth()
-                .padding(8.dp),
+            modifier = Modifier.animateContentSize().fillMaxWidth().padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
@@ -1003,20 +941,14 @@ private fun McpToolCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        text = "Enable",
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+                    Text(text = "Enable", style = MaterialTheme.typography.labelSmall)
                     Switch(
                         checked = tool.enable,
                         onCheckedChange = onEnableChange,
                         size = SwitchSize.Small
                     )
                 }
-                IconButton(
-                    onClick = { expanded = !expanded },
-                    modifier = Modifier.size(32.dp)
-                ) {
+                IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         if (expanded) HugeIcons.ArrowUp01 else HugeIcons.ArrowDown01,
                         contentDescription = null,
@@ -1042,10 +974,7 @@ private fun McpToolCard(
                                 Tag(
                                     type = if (schema.required?.contains(key) == true) TagType.INFO else TagType.DEFAULT
                                 ) {
-                                    Text(
-                                        text = key,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
+                                    Text(text = key, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -1090,14 +1019,13 @@ private fun McpImportModal(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+        sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+        )
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.7f)
-                .padding(16.dp)
-                .imePadding(),
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.7f).padding(16.dp).imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(stringResource(R.string.setting_mcp_page_import_title), style = MaterialTheme.typography.titleLarge)
@@ -1112,20 +1040,18 @@ private fun McpImportModal(
                     jsonText = it
                     errorMessage = null
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 placeholder = { Text("{ \"mcpServers\": { ... } }") },
                 isError = errorMessage != null,
-                supportingText = errorMessage?.let { msg -> { Text(msg, color = MaterialTheme.colorScheme.error) } }
+                supportingText = errorMessage?.let { msg ->
+                    { Text(msg, color = MaterialTheme.colorScheme.error) }
+                }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.cancel))
-                }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                 Button(
                     onClick = {
                         try {
@@ -1139,9 +1065,7 @@ private fun McpImportModal(
                             errorMessage = parseErrorMsg.format(e.message ?: "")
                         }
                     }
-                ) {
-                    Text(stringResource(R.string.setting_mcp_page_import_confirm))
-                }
+                ) { Text(stringResource(R.string.setting_mcp_page_import_confirm)) }
             }
         }
     }

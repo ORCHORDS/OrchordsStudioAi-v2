@@ -106,7 +106,7 @@ internal class McpOAuthCoordinator(
                 persistOAuthState(config.id, updated)
                 config.clone(commonOptions = config.commonOptions.copy(oauth = updated))
             }.getOrElse { error ->
-                if (looksInvalidGrant(error)) {
+                if (McpAuthFailureClassifier.isInvalidGrant(error)) {
                     val cleared = oauth.copy(
                         accessToken = null,
                         refreshToken = null,
@@ -128,7 +128,7 @@ internal class McpOAuthCoordinator(
         val hasAuthorizationHeader = config.commonOptions.headers.any {
             it.first.equals("Authorization", ignoreCase = true)
         }
-        if (looksUnauthorized(error) &&
+        if (McpAuthFailureClassifier.isUnauthorized(error) &&
             (config.commonOptions.oauth?.enabled == true || hasAuthorizationHeader)
         ) {
             return true
@@ -141,7 +141,8 @@ internal class McpOAuthCoordinator(
             .isSuccess
     }
 
-    fun permissionDenied(error: Throwable): Boolean = looksPermissionDenied(error)
+    fun permissionDenied(error: Throwable): Boolean =
+        McpAuthFailureClassifier.isPermissionDenied(error)
 
     private suspend fun authorize(config: McpServerConfig, context: Context) = withContext(Dispatchers.IO) {
         val serverUrl = config.serverUrl
@@ -275,37 +276,4 @@ internal class McpOAuthCoordinator(
         } else {
             0L
         }
-
-    private fun looksUnauthorized(error: Throwable): Boolean {
-        val message = errorChainText(error)
-        return message.contains("401") ||
-            message.contains("unauthorized") ||
-            message.contains("invalid_token") ||
-            message.contains("invalid access token") ||
-            message.contains("missing or invalid")
-    }
-
-    private fun looksPermissionDenied(error: Throwable): Boolean {
-        val message = errorChainText(error)
-        return message.contains("403") ||
-            message.contains("forbidden") ||
-            message.contains("insufficient_scope") ||
-            message.contains("insufficient scope") ||
-            message.contains("resource not accessible") ||
-            message.contains("permission denied")
-    }
-
-    private fun looksInvalidGrant(error: Throwable): Boolean {
-        val message = errorChainText(error)
-        return message.contains("invalid_grant") ||
-            message.contains("refresh token is invalid") ||
-            message.contains("refresh token expired") ||
-            message.contains("refresh token revoked")
-    }
-
-    private fun errorChainText(error: Throwable): String =
-        generateSequence(error) { it.cause }
-            .mapNotNull { it.message }
-            .joinToString(" ")
-            .lowercase()
 }

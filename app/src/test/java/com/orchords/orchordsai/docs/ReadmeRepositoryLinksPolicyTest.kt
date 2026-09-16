@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Pins public README links to this repository's canonical GitHub path. */
+/** Pins public README release/documentation links to the current repository contract. */
 class ReadmeRepositoryLinksPolicyTest {
 
     private fun readme(): String {
@@ -19,28 +19,24 @@ class ReadmeRepositoryLinksPolicyTest {
     }
 
     @Test
-    fun `README uses canonical Studio AI repository for build and provenance links`() {
+    fun `README points contributors at current release and build documentation`() {
         val readme = readme()
 
+        assertTrue(
+            "README must link the current build documentation",
+            readme.contains("[Building ORCHORDS AI](docs/BUILDING.md)"),
+        )
+        assertTrue(
+            "README must link the current release documentation",
+            readme.contains("[Releasing ORCHORDS AI](docs/RELEASING.md)"),
+        )
+        assertFalse(
+            "README must not advertise the retired Daily Build workflow",
+            readme.contains("daily-build.yml"),
+        )
         assertFalse(
             "README must not reference the legacy ORCHORDS/OrchordsAI repository path",
             readme.contains("ORCHORDS/OrchordsAI"),
-        )
-        assertTrue(
-            "Daily Build badge and workflow link must point at the canonical repository",
-            readme.contains("https://github.com/ORCHORDS/OrchordsStudioAi/actions/workflows/daily-build.yml"),
-        )
-        assertTrue(
-            "Dependency Audit badge and workflow link must point at the canonical repository",
-            readme.contains("https://github.com/ORCHORDS/OrchordsStudioAi/actions/workflows/dependency-audit.yml"),
-        )
-        assertTrue(
-            "Attestation verification must name the canonical repository",
-            readme.contains("--repo ORCHORDS/OrchordsStudioAi"),
-        )
-        assertTrue(
-            "Attestation signer workflow must point at the canonical repository",
-            readme.contains("--signer-workflow ORCHORDS/OrchordsStudioAi/.github/workflows/daily-build.yml"),
         )
     }
 }

@@ -13,6 +13,7 @@ class GitHubMcpSafetyTest {
         assertTrue(isOfficialGitHubMcpRemote(config))
         assertTrue(isGitHubMcpReadOnly(config))
         assertTrue(isGitHubMcpLockdown(config))
+        assertEquals("repos,issues,pull_requests", githubMcpToolsets(config))
         assertFalse(githubNewToolsNeedApproval(config))
     }
 
@@ -39,6 +40,17 @@ class GitHubMcpSafetyTest {
     }
 
     @Test
+    fun `GitHub toolsets are normalized and editable`() {
+        val configured = githubMcpPreset().withGitHubMcpToolsets(" repos, issues,actions, issues ")
+
+        assertEquals("repos,issues,actions", githubMcpToolsets(configured))
+        assertEquals(
+            "repos,issues,actions",
+            configured.commonOptions.headers.toMap()["X-MCP-Toolsets"],
+        )
+    }
+
+    @Test
     fun `GitHub PAT helper owns bearer syntax without exposing it to the user`() {
         val configured = githubMcpPreset().withGitHubMcpPat(" github_pat_example ")
 
@@ -51,6 +63,27 @@ class GitHubMcpSafetyTest {
         val cleared = configured.withGitHubMcpPat("")
         assertEquals("", githubMcpPat(cleared))
         assertEquals("", cleared.commonOptions.headers.toMap()["Authorization"])
+    }
+
+    @Test
+    fun `GitHub disconnect clears PAT and oauth while keeping safety profile`() {
+        val connected = githubMcpPreset().withGitHubMcpPat("github_pat_example")
+        val disconnected = connected.withGitHubMcpDisconnected()
+
+        assertFalse(hasGitHubMcpAuthentication(disconnected))
+        assertEquals("", githubMcpPat(disconnected))
+        assertTrue(isGitHubMcpReadOnly(disconnected))
+        assertTrue(isGitHubMcpLockdown(disconnected))
+        assertEquals("repos,issues,pull_requests", githubMcpToolsets(disconnected))
+    }
+
+    @Test
+    fun `managed GitHub headers are recognized`() {
+        assertTrue(isGitHubManagedHeader("Authorization"))
+        assertTrue(isGitHubManagedHeader("x-mcp-toolsets"))
+        assertTrue(isGitHubManagedHeader("X-MCP-Readonly"))
+        assertTrue(isGitHubManagedHeader("x-mcp-lockdown"))
+        assertFalse(isGitHubManagedHeader("Accept"))
     }
 
     @Test

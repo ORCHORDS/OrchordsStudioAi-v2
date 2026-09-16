@@ -41,6 +41,7 @@ import com.orchords.ai.provider.Model
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import me.orchid.hugeicons.HugeIcons
+import me.orchid.hugeicons.stroke.AlertCircle
 import me.orchid.hugeicons.stroke.Copy01
 import me.orchid.hugeicons.stroke.Delete01
 import me.orchid.hugeicons.stroke.Edit01
@@ -157,7 +158,6 @@ fun ColumnScope.ChatMessageActionButtons(
                 tint = if (isAvailable) actionIconColor else actionIconColor.copy(alpha = 0.38f)
             )
 
-            // Translation button
             if (onTranslate != null) {
                 Icon(
                     imageVector = HugeIcons.Translate,
@@ -210,7 +210,6 @@ fun ColumnScope.ChatMessageActionButtons(
         }
     }
 
-    // Translation dialog
     if (showTranslateDialog && onTranslate != null) {
         LanguageSelectionDialog(
             onLanguageSelected = { language ->
@@ -227,7 +226,6 @@ fun ColumnScope.ChatMessageActionButtons(
         )
     }
 
-    // Regenerate confirmation dialog
     OrchordsConfirmDialog(
         show = showRegenerateConfirm,
         title = stringResource(R.string.regenerate),
@@ -256,6 +254,8 @@ fun ChatMessageActionsSheet(
     onWebViewPreview: () -> Unit,
     onDismissRequest: () -> Unit
 ) {
+    var showReportDialog by remember { mutableStateOf(false) }
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
@@ -267,7 +267,6 @@ fun ChatMessageActionsSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Select and Copy
             Card(
                 onClick = {
                     onDismissRequest()
@@ -294,7 +293,6 @@ fun ChatMessageActionsSheet(
                 }
             }
 
-            // WebView Preview (only show if message has text content)
             val hasTextContent = message.parts.filterIsInstance<UIMessagePart.Text>()
                 .any { it.text.isNotBlank() }
 
@@ -326,7 +324,6 @@ fun ChatMessageActionsSheet(
                 }
             }
 
-            // Edit
             Card(
                 onClick = {
                     onDismissRequest()
@@ -353,7 +350,6 @@ fun ChatMessageActionsSheet(
                 }
             }
 
-            // Share
             Card(
                 onClick = {
                     onDismissRequest()
@@ -380,7 +376,6 @@ fun ChatMessageActionsSheet(
                 }
             }
 
-            // Create a Fork
             Card(
                 onClick = {
                     onDismissRequest()
@@ -438,7 +433,32 @@ fun ChatMessageActionsSheet(
                 }
             }
 
-            // Delete
+            if (message.role == MessageRole.ASSISTANT && hasTextContent) {
+                Card(
+                    onClick = { showReportDialog = true },
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = HugeIcons.AlertCircle,
+                            contentDescription = null,
+                            modifier = Modifier.padding(4.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            text = "Report AI output",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                }
+            }
+
             Card(
                 onClick = {
                     onDismissRequest()
@@ -468,7 +488,6 @@ fun ChatMessageActionsSheet(
                 }
             }
 
-            // Message Info
             ProvideTextStyle(MaterialTheme.typography.labelSmall) {
                 Text(message.createdAt.toJavaLocalDateTime().toLocalString())
                 if (model != null) {
@@ -476,5 +495,13 @@ fun ChatMessageActionsSheet(
                 }
             }
         }
+    }
+
+    if (showReportDialog) {
+        AiContentReportDialog(
+            message = message,
+            model = model,
+            onDismissRequest = { showReportDialog = false },
+        )
     }
 }

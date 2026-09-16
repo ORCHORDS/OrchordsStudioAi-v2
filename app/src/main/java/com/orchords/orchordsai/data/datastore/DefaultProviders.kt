@@ -6,6 +6,7 @@ import com.orchords.ai.provider.ProviderSetting
 import kotlin.uuid.Uuid
 
 const val ORCHORDS_GATEWAY_BASE_URL = "https://api.orchords.com/v1"
+const val ORCHORDS_SEARCH_BASE_URL = "$ORCHORDS_GATEWAY_BASE_URL/search"
 const val ORCHORDS_MODEL_ID = "oai-1.0"
 val ORCHORDS_MODEL_UUID: Uuid = Uuid.parse("0d3a4f7b-1a25-4f31-9d18-1c5f6b2a7e02")
 private val ORCHORDS_PROVIDER_UUID: Uuid = Uuid.parse("0d3a4f7b-1a25-4f31-9d18-1c5f6b2a7e01")

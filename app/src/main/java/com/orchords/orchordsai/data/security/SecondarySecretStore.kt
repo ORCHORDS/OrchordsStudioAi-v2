@@ -1,6 +1,8 @@
 package com.orchords.orchordsai.data.security
 
 import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
 import java.security.KeyStore
@@ -8,14 +10,30 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 
 interface SecondarySecretBackend {
     fun isAvailable(): Boolean
     fun get(name: String): String?
     fun put(name: String, value: String): Boolean
     fun remove(name: String): Boolean
+
+    /**
+     * Apply a secret-set replacement as one logical operation.
+     *
+     * The Android implementation overrides this with a single
+     * SharedPreferences.Editor commit so token rotations cannot persist only
+     * half of a new credential set. Test/fake implementations may rely on the
+     * compatibility fallback below.
+     */
+    fun replace(values: Map<String, String>, removals: Set<String>): Boolean {
+        for ((name, value) in values) {
+            if (!put(name, value)) return false
+        }
+        for (name in removals) {
+            if (name !in values && !remove(name)) return false
+        }
+        return true
+    }
 }
 
 object SecondarySecretKey {
@@ -59,29 +77,41 @@ open class SecondarySecretStore(context: Context) : SecondarySecretBackend {
             .getOrNull()
     }
 
-    override fun put(name: String, value: String): Boolean {
-        if (value.isBlank()) return remove(name)
-        val secretKey = key ?: return false
+    override fun put(name: String, value: String): Boolean =
+        if (value.isBlank()) remove(name) else replace(mapOf(name to value), emptySet())
+
+    override fun remove(name: String): Boolean = replace(emptyMap(), setOf(name))
+
+    override fun replace(values: Map<String, String>, removals: Set<String>): Boolean {
+        if (values.isNotEmpty() && key == null) return false
         return runCatching {
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-            val payload = buildString {
-                append(FORMAT_VERSION)
-                append(':')
-                append(Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-                append(':')
-                append(Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            val encryptedValues = if (values.isEmpty()) {
+                emptyMap()
+            } else {
+                val secretKey = requireNotNull(key)
+                values.mapValues { (_, value) -> encrypt(secretKey, value) }
             }
-            prefs.edit().putString(name, payload).commit()
-        }.onFailure { error -> Log.w(TAG, "Failed to encrypt secondary secret $name", error) }
+
+            val editor = prefs.edit()
+            removals.filterNot(values::containsKey).forEach(editor::remove)
+            encryptedValues.forEach(editor::putString)
+            editor.commit()
+        }.onFailure { error -> Log.w(TAG, "Failed to atomically replace secondary secrets", error) }
             .getOrDefault(false)
     }
 
-    override fun remove(name: String): Boolean = runCatching {
-        prefs.edit().remove(name).commit()
-    }.onFailure { error -> Log.w(TAG, "Failed to remove secondary secret $name", error) }
-        .getOrDefault(false)
+    private fun encrypt(secretKey: SecretKey, value: String): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+        val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        return buildString {
+            append(FORMAT_VERSION)
+            append(':')
+            append(Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            append(':')
+            append(Base64.encodeToString(encrypted, Base64.NO_WRAP))
+        }
+    }
 
     private fun loadOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }

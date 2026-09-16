@@ -1,6 +1,8 @@
 package com.orchords.orchordsai.data.extensions
 
 import com.orchords.ai.core.MessageRole
+import com.orchords.orchordsai.data.ai.planning.PLANNING_MODE_ID
+import com.orchords.orchordsai.data.ai.planning.planningModeInjection
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.data.model.InjectionPosition
 import com.orchords.orchordsai.data.model.Lorebook
@@ -8,13 +10,16 @@ import com.orchords.orchordsai.data.model.PromptInjection
 import kotlin.uuid.Uuid
 
 /** Native definitions for the existing editors and transformer; no second prompt model/store. */
-fun LibraryMode.toModeInjection(): PromptInjection.ModeInjection = PromptInjection.ModeInjection(
-    id = Uuid.parse(id),
-    name = name,
-    content = body,
-    role = MessageRole.USER,
-    position = InjectionPosition.BOTTOM_OF_CHAT,
-)
+fun LibraryMode.toModeInjection(): PromptInjection.ModeInjection {
+    if (id == PLANNING_MODE_ID.toString()) return planningModeInjection()
+    return PromptInjection.ModeInjection(
+        id = Uuid.parse(id),
+        name = name,
+        content = body,
+        role = MessageRole.USER,
+        position = InjectionPosition.BOTTOM_OF_CHAT,
+    )
+}
 
 fun LibraryLorebook.toLorebook(): Lorebook = Lorebook(
     id = Uuid.parse(id),

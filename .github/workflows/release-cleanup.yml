@@ -1,0 +1,72 @@
+name: Release Cleanup
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  cleanup:
+    name: Remove superseded Releases
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Keep only the latest verified Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers=(
+            --header 'Accept: application/vnd.github+json'
+            --header "Authorization: Bearer $GH_TOKEN"
+            --header 'X-GitHub-Api-Version: 2022-11-28'
+          )
+
+          curl --fail-with-body --silent --show-error "${headers[@]}" \
+            "https://api.github.com/repos/$REPOSITORY/releases/latest" > /tmp/latest.json
+          keep_id="$(python3 -c 'import json; print(json.load(open("/tmp/latest.json"))["id"])')"
+          keep_tag="$(python3 -c 'import json; print(json.load(open("/tmp/latest.json"))["tag_name"])')"
+
+          page=1
+          while :; do
+            curl --fail-with-body --silent --show-error "${headers[@]}" \
+              "https://api.github.com/repos/$REPOSITORY/releases?per_page=100&page=$page" > /tmp/releases.json
+            count="$(python3 -c 'import json; print(len(json.load(open("/tmp/releases.json"))))')"
+            [ "$count" -gt 0 ] || break
+
+            KEEP_ID="$keep_id" python3 - <<'PY' > /tmp/delete-release-ids.txt
+          import json, os
+          keep = int(os.environ['KEEP_ID'])
+          for release in json.load(open('/tmp/releases.json', encoding='utf-8')):
+              if int(release['id']) != keep:
+                  print(release['id'])
+          PY
+            while read -r release_id; do
+              [ -n "$release_id" ] || continue
+              curl --fail-with-body --silent --show-error -X DELETE "${headers[@]}" \
+                "https://api.github.com/repos/$REPOSITORY/releases/$release_id"
+            done < /tmp/delete-release-ids.txt
+
+            [ "$count" -lt 100 ] && break
+            page=$((page + 1))
+          done
+
+          curl --fail-with-body --silent --show-error "${headers[@]}" \
+            "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/final-releases.json
+          KEEP_ID="$keep_id" KEEP_TAG="$keep_tag" python3 - <<'PY'
+          import json, os
+          releases = json.load(open('/tmp/final-releases.json', encoding='utf-8'))
+          assert len(releases) == 1, f"Expected exactly one GitHub Release, found {len(releases)}"
+          release = releases[0]
+          assert int(release['id']) == int(os.environ['KEEP_ID'])
+          assert release['tag_name'] == os.environ['KEEP_TAG']
+          assert release.get('draft') is False
+          print(f"Kept only {release['tag_name']} on the Releases page")
+          PY

@@ -1,6 +1,10 @@
 package com.orchords.orchordsai.data.extensions
 
+import com.orchords.orchordsai.data.ai.planning.PLANNING_MODE_ID
+import com.orchords.orchordsai.data.ai.planning.PLANNING_MODE_PROMPT
+
 internal fun builtInModes(): List<LibraryMode> = listOf(
+    LibraryMode(PLANNING_MODE_ID.toString(), "Planning", PLANNING_MODE_PROMPT),
     LibraryMode("a1e7dd3a-08eb-5b68-9740-c472dd485826", "Focused Answer",
         "Lead with the direct answer or requested deliverable. Preserve the user's constraints, distinguish confirmed facts from assumptions, and use only the detail needed to make the result usable. Explain a material limitation plainly. Do not claim to have searched, calculated, edited, sent, or verified anything unless the corresponding operation actually happened."),
     LibraryMode("75f7616d-458d-550a-8ef7-a341a969495a", "Research Brief",

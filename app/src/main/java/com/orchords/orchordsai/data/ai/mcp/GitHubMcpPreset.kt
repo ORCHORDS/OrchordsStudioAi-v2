@@ -4,6 +4,8 @@ import java.net.URI
 
 const val GITHUB_MCP_REMOTE_ENDPOINT = "https://api.githubcopilot.com/mcp/"
 private const val GITHUB_MCP_REMOTE_HOST = "api.githubcopilot.com"
+private const val HEADER_READONLY = "X-MCP-Readonly"
+private const val HEADER_LOCKDOWN = "X-MCP-Lockdown"
 
 /**
  * Safe first-use configuration for GitHub's official remote MCP server.
@@ -21,8 +23,8 @@ fun githubMcpPreset(): McpServerConfig.StreamableHTTPServer =
             headers = listOf(
                 "Authorization" to "",
                 "X-MCP-Toolsets" to "repos,issues,pull_requests",
-                "X-MCP-Readonly" to "true",
-                "X-MCP-Lockdown" to "true",
+                HEADER_READONLY to "true",
+                HEADER_LOCKDOWN to "true",
             ),
         ),
         url = GITHUB_MCP_REMOTE_ENDPOINT,
@@ -36,13 +38,45 @@ internal fun isGitHubMcpReadOnly(config: McpServerConfig): Boolean {
     if (!isOfficialGitHubMcpRemote(config)) return false
     val path = runCatching { URI(config.serverUrl).path.orEmpty().lowercase() }.getOrDefault("")
     if (path.split('/').any { it == "readonly" }) return true
+    return githubBooleanHeader(config, HEADER_READONLY)
+}
+
+internal fun isGitHubMcpLockdown(config: McpServerConfig): Boolean =
+    isOfficialGitHubMcpRemote(config) && githubBooleanHeader(config, HEADER_LOCKDOWN)
+
+internal fun McpServerConfig.withGitHubMcpReadOnly(enabled: Boolean): McpServerConfig =
+    withGitHubBooleanHeader(HEADER_READONLY, enabled)
+
+internal fun McpServerConfig.withGitHubMcpLockdown(enabled: Boolean): McpServerConfig =
+    withGitHubBooleanHeader(HEADER_LOCKDOWN, enabled)
+
+private fun githubBooleanHeader(config: McpServerConfig, headerName: String): Boolean {
     val value = config.commonOptions.headers
-        .lastOrNull { (name, _) -> name.equals("X-MCP-Readonly", ignoreCase = true) }
+        .lastOrNull { (name, _) -> name.equals(headerName, ignoreCase = true) }
         ?.second
         ?.trim()
         ?.lowercase()
         ?: return false
     return value !in setOf("", "false", "f", "no", "n", "0", "off")
+}
+
+private fun McpServerConfig.withGitHubBooleanHeader(
+    headerName: String,
+    enabled: Boolean,
+): McpServerConfig {
+    if (!isOfficialGitHubMcpRemote(this)) return this
+    var found = false
+    val headers = commonOptions.headers.map { (name, value) ->
+        if (name.equals(headerName, ignoreCase = true)) {
+            found = true
+            name to enabled.toString()
+        } else {
+            name to value
+        }
+    }.let { current ->
+        if (found) current else current + (headerName to enabled.toString())
+    }
+    return clone(commonOptions = commonOptions.copy(headers = headers))
 }
 
 /**

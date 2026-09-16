@@ -29,12 +29,14 @@ jobs:
           persist-credentials: false
           clean: false
 
-      - name: Reject GitHub-hosted runner labels
+      - name: Reject GitHub-hosted runner labels outside Release
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE '^\s*runs-on:\s*(ubuntu-(latest|24\.04|22\.04|20\.04|slim)|windows-(latest|2025|2022|2019)|macos-(latest|[0-9]+))\s*$' .github/workflows; then
-            echo '::error::Private repository workflows must use ORCHORDS private/self-hosted runners only.'
+          violations="$(grep -RInE '^\s*runs-on:\s*(ubuntu-(latest|24\.04|22\.04|20\.04|slim)|windows-(latest|2025|2022|2019)|macos-(latest|[0-9]+))\s*$' .github/workflows --exclude='release.yml' || true)"
+          if [ -n "$violations" ]; then
+            printf '%s\n' "$violations"
+            echo '::error::Only .github/workflows/release.yml may use a GitHub-hosted runner; normal workflows must use ORCHORDS private/self-hosted runners.'
             exit 1
           fi
-          echo 'All explicit runner labels are private/self-hosted labels.'
+          echo 'Hosted-runner exception is limited to release.yml.'

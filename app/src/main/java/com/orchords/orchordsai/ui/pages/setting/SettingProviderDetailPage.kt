@@ -143,9 +143,10 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (!hasUnsavedCredential) {
-                    ProviderConnectionTester(internalProvider = provider)
-                }
+                ProviderConnectionTester(
+                    internalProvider = provider,
+                    enabled = !hasUnsavedCredential,
+                )
                 Button(
                     onClick = {
                         vm.updateSettings(
@@ -161,6 +162,13 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                 ) {
                     Text(stringResource(R.string.setting_provider_page_save))
                 }
+            }
+            if (hasUnsavedCredential) {
+                Text(
+                    text = "Save API key before testing",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

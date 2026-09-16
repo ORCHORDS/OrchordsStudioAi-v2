@@ -16,9 +16,9 @@ class ProviderConnectionPersistencePolicyTest {
         val page = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/SettingProviderDetailPage.kt")
 
         assertTrue(page.contains("val hasUnsavedCredential = apiKey != provider.apiKey"))
+        assertTrue(page.contains("if (!hasUnsavedCredential)"))
         assertTrue(page.contains("ProviderConnectionTester(internalProvider = provider)"))
         assertFalse(page.contains("ProviderConnectionTester(internalProvider = candidate)"))
-        assertTrue(page.contains("if (hasUnsavedCredential)"))
     }
 
     @Test

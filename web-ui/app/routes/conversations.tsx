@@ -772,7 +772,7 @@ function ConversationsPageInner() {
     isHomeRoute,
     homeDraftId,
     setHomeDraftId,
-    useConversationPromptInjection: currentAssistant?.allowConversationPromptInjection === true,
+    useConversationPromptInjection: true,
     navigate,
     refreshList,
   });

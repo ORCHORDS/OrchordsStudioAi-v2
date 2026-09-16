@@ -150,6 +150,9 @@ fun ProviderConnectionTester(
                                     val text = result.message.parts
                                         .filterIsInstance<UIMessagePart.Text>()
                                         .joinToString("") { it.text }
+                                    check(text.isNotBlank()) {
+                                        "Non-streaming response completed without text"
+                                    }
                                     nonStreamingState = UiState.Success(text)
                                 }.onFailure { nonStreamingState = UiState.Error(it) }
                             }

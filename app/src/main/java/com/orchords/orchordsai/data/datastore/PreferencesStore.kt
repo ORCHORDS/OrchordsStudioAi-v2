@@ -38,6 +38,7 @@ import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV3Migrati
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV4Migration
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV5Migration
 import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV6Migration
+import com.orchords.orchordsai.data.datastore.migration.PreferenceStoreV7Migration
 import com.orchords.orchordsai.data.extensions.toModeInjection
 import com.orchords.orchordsai.data.extensions.toLorebook
 import com.orchords.orchordsai.data.model.Assistant
@@ -47,6 +48,7 @@ import com.orchords.orchordsai.data.model.Lorebook
 import com.orchords.orchordsai.data.model.PromptInjection
 import com.orchords.orchordsai.data.model.QuickMessage
 import com.orchords.orchordsai.data.model.Tag
+import com.orchords.orchordsai.data.security.McpSecretCodec
 import com.orchords.orchordsai.data.security.ProviderCredentialStore
 import com.orchords.orchordsai.data.security.ProviderSecretCodec
 import com.orchords.orchordsai.data.security.SecondarySecretCodec
@@ -75,6 +77,7 @@ private val Context.settingsStore by preferencesDataStore(
             PreferenceStoreV4Migration(),
             PreferenceStoreV5Migration(context),
             PreferenceStoreV6Migration(context),
+            PreferenceStoreV7Migration(context),
         )
     }
 )
@@ -151,7 +154,7 @@ class SettingsStore(
                 enableSuggestion = preferences[ENABLE_SUGGESTION] != false,
                 imageGenerationModelId = preferences[IMAGE_GENERATION_MODEL]?.let { Uuid.parse(it) } ?: Uuid.random(),
                 titlePrompt = preferences[TITLE_PROMPT] ?: DEFAULT_TITLE_PROMPT,
-                translatePrompt = preferences[TRANSLATION_PROMPT] ?: DEFAULT_TRANSLATION_PROMPT,
+                translatePrompt = preferences[TRANSLATE_PROMPT] ?: DEFAULT_TRANSLATION_PROMPT,
                 translateThinkingBudget = preferences[TRANSLATE_THINKING_BUDGET] ?: 0,
                 suggestionPrompt = preferences[SUGGESTION_PROMPT] ?: DEFAULT_SUGGESTION_PROMPT,
                 ocrModelId = preferences[OCR_MODEL]?.let { Uuid.parse(it) } ?: Uuid.random(),
@@ -241,7 +244,13 @@ class SettingsStore(
                 val providerHydrated = hydrated.copy(
                     providers = ProviderSecretCodec.hydrateProvidersFromStore(hydrated.providers, credentialStore),
                 )
-                SecondarySecretCodec.hydrateSettingsFromStore(providerHydrated, secondarySecretStore)
+                val secondaryHydrated = SecondarySecretCodec.hydrateSettingsFromStore(providerHydrated, secondarySecretStore)
+                secondaryHydrated.copy(
+                    mcpServers = McpSecretCodec.hydrateServersFromStore(
+                        secondaryHydrated.mcpServers,
+                        secondarySecretStore,
+                    ),
+                )
             }
         }
         .onEach { get<PebbleEngine>().templateCache.invalidateAll() }
@@ -278,6 +287,11 @@ class SettingsStore(
             ?: throw IllegalStateException("Encrypted credential store unavailable; refusing settings update")
         val redactedSettings = SecondarySecretCodec.redactSettingsForWrite(settings, secondarySecretStore)
             ?: throw IllegalStateException("Secondary secret store unavailable; refusing settings update")
+        val redactedMcpServers = McpSecretCodec.redactServersForWrite(
+            previousServers = settingsFlow.value.mcpServers,
+            servers = settings.mcpServers,
+            store = secondarySecretStore,
+        ) ?: throw IllegalStateException("Secondary secret store rejected MCP credentials; refusing settings update")
 
         dataStore.edit { preferences ->
             preferences[DYNAMIC_COLOR] = settings.dynamicColor
@@ -294,7 +308,7 @@ class SettingsStore(
             preferences[ENABLE_SUGGESTION] = settings.enableSuggestion
             preferences[IMAGE_GENERATION_MODEL] = settings.imageGenerationModelId.toString()
             preferences[TITLE_PROMPT] = settings.titlePrompt
-            preferences[TRANSLATION_PROMPT] = settings.translatePrompt
+            preferences[TRANSLATE_PROMPT] = settings.translatePrompt
             preferences[TRANSLATE_THINKING_BUDGET] = settings.translateThinkingBudget
             preferences[SUGGESTION_PROMPT] = settings.suggestionPrompt
             preferences[OCR_MODEL] = settings.ocrModelId.toString()
@@ -308,7 +322,7 @@ class SettingsStore(
             preferences[SEARCH_SERVICES] = JsonInstant.encodeToString(settings.searchServices)
             preferences[SEARCH_COMMON] = JsonInstant.encodeToString(settings.searchCommonOptions)
             preferences[SEARCH_SELECTED] = settings.searchServiceSelected.coerceIn(0, settings.searchServices.size - 1)
-            preferences[MCP_SERVERS] = JsonInstant.encodeToString(settings.mcpServers)
+            preferences[MCP_SERVERS] = JsonInstant.encodeToString(redactedMcpServers)
             preferences[WEBDAV_CONFIG] = JsonInstant.encodeToString(redactedSettings.webDavConfig)
             preferences[S3_CONFIG] = JsonInstant.encodeToString(redactedSettings.s3Config)
             preferences[TTS_PROVIDERS] = JsonInstant.encodeToString(settings.ttsProviders)

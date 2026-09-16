@@ -39,7 +39,12 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
 
     override fun accept(event: SseEvent): DecodeResult {
         if (finished) return DecodeResult(completed = true)
-        if (event.data == "[DONE]") return DecodeResult(finish(), completed = true)
+        if (event.data == "[DONE]") {
+            return DecodeResult(
+                chunks = finish(providerTerminalObserved = true),
+                completed = true,
+            )
+        }
 
         val chunks = buildList {
             event.data.trim().split("\n").filter(String::isNotBlank).forEach { line ->
@@ -84,12 +89,17 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
         return DecodeResult(chunks)
     }
 
-    override fun onClosed(): List<StreamChunk> = finish()
+    override fun onClosed(): List<StreamChunk> = finish(providerTerminalObserved = false)
 
-    private fun finish(): List<StreamChunk> {
+    private fun finish(providerTerminalObserved: Boolean): List<StreamChunk> {
         if (finished) return emptyList()
         finished = true
-        return streamState.finish(finishReason, responseId, responseModel)
+        return streamState.finish(
+            reason = finishReason,
+            responseId = responseId,
+            model = responseModel,
+            providerTerminalObserved = providerTerminalObserved,
+        )
     }
 
     private fun parseMessage(payload: JsonObject): UIMessage {
@@ -250,9 +260,21 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
             if (message.annotations.isNotEmpty()) add(StreamChunk.Annotations(message.annotations))
         }
 
-        fun finish(reason: String?, responseId: String?, model: String?): List<StreamChunk> = buildList {
+        fun finish(
+            reason: String?,
+            responseId: String?,
+            model: String?,
+            providerTerminalObserved: Boolean,
+        ): List<StreamChunk> = buildList {
             addAll(closeText()); addAll(closeReasoning()); addAll(closeImage()); addAll(closeTools())
-            add(StreamChunk.Finish(reason, responseId, model))
+            add(
+                StreamChunk.Finish(
+                    finishReason = reason,
+                    responseId = responseId,
+                    model = model,
+                    providerTerminalObserved = providerTerminalObserved,
+                )
+            )
         }
 
         private fun closeText() = textId?.let {

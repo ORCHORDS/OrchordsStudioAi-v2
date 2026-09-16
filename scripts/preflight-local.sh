@@ -22,7 +22,11 @@ fi
 
 echo "[preflight] common typo guard"
 TYPO_RE='\b(teh|recieve|recieved|seperate|seperated|definately|occured|occurrance|alot)\b'
-if git grep -nEi "$TYPO_RE" -- '*.md' '*.kt' '*.kts' '*.java' '*.xml' '*.json' '*.yml' '*.yaml' '*.toml' '*.ts' '*.tsx' '*.js' '*.jsx' '*.sh' ':(exclude)scripts/preflight-local.sh' >/tmp/orchords-preflight-typos.txt 2>/dev/null; then
+: >/tmp/orchords-preflight-typos.txt
+if git grep -nEi "$TYPO_RE" -- '*.md' '*.kt' '*.kts' '*.java' '*.xml' '*.json' '*.yml' '*.yaml' '*.toml' '*.ts' '*.tsx' '*.js' '*.jsx' '*.sh' >/tmp/orchords-preflight-typos-raw.txt 2>/dev/null; then
+  grep -v '^scripts/preflight-local\.sh:' /tmp/orchords-preflight-typos-raw.txt > /tmp/orchords-preflight-typos.txt || true
+fi
+if [[ -s /tmp/orchords-preflight-typos.txt ]]; then
   cat /tmp/orchords-preflight-typos.txt
   echo "preflight: likely typo(s) found; review before pushing" >&2
   exit 1

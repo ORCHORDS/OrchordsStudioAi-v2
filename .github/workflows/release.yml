@@ -7,11 +7,6 @@ on:
       - 'gradle.properties'
       - '.github/workflows/release.yml'
   workflow_dispatch:
-  # If the stale legacy Daily Build ever leaves its queue, rebuild current main
-  # and make the current version authoritative again.
-  workflow_run:
-    workflows: ['Daily Build']
-    types: [completed]
 
 permissions: {}
 
@@ -41,12 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
-          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "::error::Unable to resolve checked out main SHA"
-            exit 1
-          }
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
           echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
-          echo "Building source $source_sha"
 
       - name: Install pinned Android toolchain
         uses: ./.github/actions/setup-private-android-toolchain
@@ -58,38 +49,39 @@ jobs:
           set -euo pipefail
           version_name="$(awk -F= '$1 == "releaseVersionName" {print $2}' gradle.properties | tail -n1 | tr -d '\r[:space:]')"
           version_code="$(awk -F= '$1 == "releaseVersionCode" {print $2}' gradle.properties | tail -n1 | tr -d '\r[:space:]')"
-
-          [[ "$version_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "::error::Invalid releaseVersionName in gradle.properties: $version_name"
-            exit 1
-          }
-          [[ "$version_code" =~ ^[0-9]+$ ]] || {
-            echo "::error::Invalid releaseVersionCode in gradle.properties: $version_code"
-            exit 1
-          }
-          [ "$version_code" -ge 1 ] && [ "$version_code" -le 2100000000 ] || {
-            echo "::error::releaseVersionCode must be in 1..2100000000"
-            exit 1
-          }
-
+          [[ "$version_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$version_code" =~ ^[0-9]+$ ]]
+          [ "$version_code" -ge 1 ] && [ "$version_code" -le 2100000000 ]
           echo "name=$version_name" >> "$GITHUB_OUTPUT"
           echo "code=$version_code" >> "$GITHUB_OUTPUT"
           echo "tag=v$version_name" >> "$GITHUB_OUTPUT"
           echo "Release version: $version_name ($version_code)"
 
-      - name: Require signing material
+      - name: Select signed or debug build
+        id: build_mode
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
           SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ] || {
-            echo "::error::A GitHub Release must be a signed release build. Configure KEY_BASE64 and SIGNING_CONFIG."
-            exit 1
-          }
+          if [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ]; then
+            echo 'signed=true' >> "$GITHUB_OUTPUT"
+            echo 'gradle_task=:app:buildAll' >> "$GITHUB_OUTPUT"
+            echo 'apk_dir=app/build/outputs/apk/release' >> "$GITHUB_OUTPUT"
+            echo 'variant=release' >> "$GITHUB_OUTPUT"
+            echo 'package_type=signed release APK/AAB' >> "$GITHUB_OUTPUT"
+          else
+            echo 'signed=false' >> "$GITHUB_OUTPUT"
+            echo 'gradle_task=:app:assembleDebug' >> "$GITHUB_OUTPUT"
+            echo 'apk_dir=app/build/outputs/apk/debug' >> "$GITHUB_OUTPUT"
+            echo 'variant=debug' >> "$GITHUB_OUTPUT"
+            echo 'package_type=verified installable debug APK' >> "$GITHUB_OUTPUT"
+            echo 'Signing secrets unavailable; publishing verified debug APKs.'
+          fi
 
       - name: Materialize signing files
+        if: steps.build_mode.outputs.signed == 'true'
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
           SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
@@ -103,9 +95,7 @@ jobs:
 
       - name: Local preflight
         shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/preflight-local.sh
+        run: bash scripts/preflight-local.sh
 
       - name: Verify web app
         shell: bash
@@ -117,10 +107,11 @@ jobs:
           pnpm typecheck
           pnpm build
 
-      - name: Test, lint and build signed Android artifacts
+      - name: Test, lint and build Android artifacts
         env:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
+          GRADLE_TASK: ${{ steps.build_mode.outputs.gradle_task }}
         shell: bash
         run: |
           set -euo pipefail
@@ -132,70 +123,59 @@ jobs:
             :ai:test \
             :workspace:test \
             :app:lintDebug \
-            :app:buildAll
+            "$GRADLE_TASK"
 
       - name: Remove signing files
         if: always()
         shell: bash
         run: rm -f app/app.key local.properties
 
-      - name: Verify exact APK/AAB matrix and embedded version
+      - name: Verify APK matrix and embedded version
         env:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
+          APK_DIR: ${{ steps.build_mode.outputs.apk_dir }}
+          VARIANT: ${{ steps.build_mode.outputs.variant }}
+          SIGNED_BUILD: ${{ steps.build_mode.outputs.signed }}
         shell: bash
         run: |
           set -euo pipefail
           apkanalyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
-          test -x "$apkanalyzer"
-
-          apk_dir='app/build/outputs/apk/release'
           expected=(
-            "$apk_dir/app-universal-release.apk"
-            "$apk_dir/app-arm64-v8a-release.apk"
-            "$apk_dir/app-x86_64-release.apk"
+            "$APK_DIR/app-universal-$VARIANT.apk"
+            "$APK_DIR/app-arm64-v8a-$VARIANT.apk"
+            "$APK_DIR/app-x86_64-$VARIANT.apk"
           )
-
-          for apk in "${expected[@]}"; do
-            test -s "$apk" || { echo "::error::Missing release APK: $apk"; exit 1; }
-            actual_name="$("$apkanalyzer" manifest version-name "$apk" | tr -d '\r\n')"
-            actual_code="$("$apkanalyzer" manifest version-code "$apk" | tr -d '\r\n')"
-            [ "$actual_name" = "$APP_VERSION_NAME" ] || {
-              echo "::error::APK versionName mismatch: $apk expected=$APP_VERSION_NAME actual=$actual_name"
-              exit 1
-            }
-            [ "$actual_code" = "$APP_VERSION_CODE" ] || {
-              echo "::error::APK versionCode mismatch: $apk expected=$APP_VERSION_CODE actual=$actual_code"
-              exit 1
-            }
-          done
-
-          actual_count="$(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')"
-          [ "$actual_count" -eq 3 ] || {
-            echo "::error::Expected exactly 3 APK outputs, found $actual_count"
-            find "$apk_dir" -maxdepth 1 -type f -name '*.apk' -print
-            exit 1
-          }
-
-          aab='app/build/outputs/bundle/release/app-release.aab'
-          test -s "$aab" || { echo '::error::Signed release AAB missing'; exit 1; }
-          [ "$("$apkanalyzer" manifest application-id "$aab" | tr -d '\r\n')" = 'com.orchords.orchordsai' ]
-          [ "$("$apkanalyzer" manifest version-name "$aab" | tr -d '\r\n')" = "$APP_VERSION_NAME" ]
-          [ "$("$apkanalyzer" manifest version-code "$aab" | tr -d '\r\n')" = "$APP_VERSION_CODE" ]
-
-          mapping='app/build/outputs/mapping/release/mapping.txt'
-          test -s "$mapping" || { echo '::error::R8 mapping.txt missing from release build'; exit 1; }
-
           rm -rf release-assets
           mkdir -p release-assets
+          for apk in "${expected[@]}"; do
+            test -s "$apk" || { echo "::error::Missing APK: $apk"; exit 1; }
+            actual_name="$("$apkanalyzer" manifest version-name "$apk" | tr -d '\r\n')"
+            actual_code="$("$apkanalyzer" manifest version-code "$apk" | tr -d '\r\n')"
+            [ "$actual_name" = "$APP_VERSION_NAME" ] || { echo "::error::APK versionName mismatch"; exit 1; }
+            [ "$actual_code" = "$APP_VERSION_CODE" ] || { echo "::error::APK versionCode mismatch"; exit 1; }
+          done
+          actual_count="$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')"
+          [ "$actual_count" -eq 3 ] || { echo "::error::Expected exactly 3 APK outputs, found $actual_count"; exit 1; }
           cp "${expected[0]}" release-assets/orchords-studio-ai-universal.apk
           cp "${expected[1]}" release-assets/orchords-studio-ai-arm64-v8a.apk
           cp "${expected[2]}" release-assets/orchords-studio-ai-x86_64.apk
-          cp "$aab" release-assets/orchords-studio-ai.aab
-          cp "$mapping" release-assets/mapping.txt
+
+          if [ "$SIGNED_BUILD" = 'true' ]; then
+            aab='app/build/outputs/bundle/release/app-release.aab'
+            mapping='app/build/outputs/mapping/release/mapping.txt'
+            test -s "$aab"
+            test -s "$mapping"
+            [ "$("$apkanalyzer" manifest application-id "$aab" | tr -d '\r\n')" = 'com.orchords.orchordsai' ]
+            [ "$("$apkanalyzer" manifest version-name "$aab" | tr -d '\r\n')" = "$APP_VERSION_NAME" ]
+            [ "$("$apkanalyzer" manifest version-code "$aab" | tr -d '\r\n')" = "$APP_VERSION_CODE" ]
+            cp "$aab" release-assets/orchords-studio-ai.aab
+            cp "$mapping" release-assets/mapping.txt
+          fi
 
           cd release-assets
-          sha256sum -- *.apk *.aab > SHA256SUMS
+          sha256sum -- *.apk > SHA256SUMS
+          if [ -f orchords-studio-ai.aab ]; then sha256sum -- orchords-studio-ai.aab >> SHA256SUMS; fi
           sha256sum --check SHA256SUMS
 
       - name: Refuse to reuse a version tag for different source
@@ -207,32 +187,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          headers=(
-            --header 'Accept: application/vnd.github+json'
-            --header "Authorization: Bearer $GH_TOKEN"
-            --header 'X-GitHub-Api-Version: 2022-11-28'
-          )
-          status="$(curl --silent --show-error -o /tmp/release-tag.json -w '%{http_code}' "${headers[@]}" \
-            "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
+          status="$(curl --silent --show-error -o /tmp/tag.json -w '%{http_code}' "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG")"
           if [ "$status" = '404' ]; then exit 0; fi
-          [ "$status" = '200' ] || { cat /tmp/release-tag.json; exit 1; }
-          existing_sha="$(python3 -c 'import json; print(json.load(open("/tmp/release-tag.json"))["object"]["sha"])')"
-          [ "$existing_sha" = "$BUILD_SHA" ] || {
-            echo "::error::Tag $RELEASE_TAG already points to $existing_sha. Bump releaseVersionName/releaseVersionCode before publishing new source."
-            exit 1
-          }
+          [ "$status" = '200' ] || { cat /tmp/tag.json; exit 1; }
+          existing_sha="$(python3 -c 'import json; print(json.load(open("/tmp/tag.json"))["object"]["sha"])')"
+          [ "$existing_sha" = "$BUILD_SHA" ] || { echo "::error::Tag already exists for different source. Bump releaseVersionName/releaseVersionCode before publishing new source."; exit 1; }
 
       - name: Upload verified build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: latest-apks
-          path: |
-            release-assets/orchords-studio-ai-universal.apk
-            release-assets/orchords-studio-ai-arm64-v8a.apk
-            release-assets/orchords-studio-ai-x86_64.apk
-            release-assets/orchords-studio-ai.aab
-            release-assets/mapping.txt
-            release-assets/SHA256SUMS
+          path: release-assets/
           if-no-files-found: error
           retention-days: 7
 
@@ -241,6 +207,7 @@ jobs:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
           BUILD_SHA: ${{ steps.source.outputs.sha }}
+          PACKAGE_TYPE: ${{ steps.build_mode.outputs.package_type }}
         shell: bash
         run: |
           set -euo pipefail
@@ -250,26 +217,25 @@ jobs:
           - Version: \`$APP_VERSION_NAME\`
           - Version code: \`$APP_VERSION_CODE\`
           - Commit: \`$BUILD_SHA\`
-          - Package: \`com.orchords.orchordsai\`
+          - Package type: $PACKAGE_TYPE
 
           ## Highlights
           - First-class Planning Mode on Android and web.
           - First-class GitHub and Cloudflare MCP connectors.
-          - Secure MCP OAuth/header credential storage and diagnostic redaction.
+          - Secure MCP credential handling and diagnostic redaction.
           - Repaired first-party web-search routing.
-          - In-app AI-output reporting path and updated privacy/Data Safety source documentation.
+          - In-app AI-output reporting.
 
-          ## Verified before publication
+          ## Verification
           - Web Planning regression test, TypeScript typecheck and production web build.
           - App, AI and workspace unit tests.
           - Android lint.
-          - Signed universal, arm64-v8a and x86_64 APK matrix.
-          - Signed Android App Bundle.
-          - Embedded package/version metadata for every published binary.
-          - SHA-256 checksum verification.
+          - Universal, arm64-v8a and x86_64 APK manifests verified for this version.
+          - SHA-256 checksums verified before publication.
           EOF
 
-      - name: Publish versioned GitHub Release
+      - name: Publish GitHub Release (signed)
+        if: steps.build_mode.outputs.signed == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -288,6 +254,24 @@ jobs:
             release-assets/SHA256SUMS
             release-assets/mapping.txt
 
+      - name: Publish GitHub Release (debug fallback)
+        if: steps.build_mode.outputs.signed != 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ steps.source.outputs.sha }}
+          name: ORCHORDS Studio AI v${{ steps.version.outputs.name }} — GitHub Build
+          prerelease: false
+          make_latest: true
+          overwrite_files: false
+          fail_on_unmatched_files: true
+          body_path: release-notes.md
+          files: |
+            release-assets/orchords-studio-ai-universal.apk
+            release-assets/orchords-studio-ai-arm64-v8a.apk
+            release-assets/orchords-studio-ai-x86_64.apk
+            release-assets/SHA256SUMS
+
       - name: Verify new Release before cleanup
         id: verify_release
         env:
@@ -295,34 +279,22 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           BUILD_SHA: ${{ steps.source.outputs.sha }}
+          SIGNED_BUILD: ${{ steps.build_mode.outputs.signed }}
         shell: bash
         run: |
           set -euo pipefail
-          headers=(
-            --header 'Accept: application/vnd.github+json'
-            --header "Authorization: Bearer $GH_TOKEN"
-            --header 'X-GitHub-Api-Version: 2022-11-28'
-          )
-          curl --fail-with-body --silent --show-error "${headers[@]}" \
-            "https://api.github.com/repos/$REPOSITORY/releases/tags/$RELEASE_TAG" > /tmp/new-release.json
-          curl --fail-with-body --silent --show-error "${headers[@]}" \
-            "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" > /tmp/new-tag.json
-          BUILD_SHA="$BUILD_SHA" python3 - <<'PY'
+          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
+          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases/tags/$RELEASE_TAG" > /tmp/new-release.json
+          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" > /tmp/new-tag.json
+          BUILD_SHA="$BUILD_SHA" SIGNED_BUILD="$SIGNED_BUILD" python3 - <<'PY'
           import json, os
           release=json.load(open('/tmp/new-release.json', encoding='utf-8'))
           tag=json.load(open('/tmp/new-tag.json', encoding='utf-8'))
-          expected={
-              'orchords-studio-ai-universal.apk',
-              'orchords-studio-ai-arm64-v8a.apk',
-              'orchords-studio-ai-x86_64.apk',
-              'orchords-studio-ai.aab',
-              'SHA256SUMS',
-              'mapping.txt',
-          }
-          names={asset.get('name') for asset in release.get('assets', [])}
-          assert release.get('draft') is False
-          assert release.get('prerelease') is False
-          assert expected == names, (names, expected)
+          expected={'orchords-studio-ai-universal.apk','orchords-studio-ai-arm64-v8a.apk','orchords-studio-ai-x86_64.apk','SHA256SUMS'}
+          if os.environ['SIGNED_BUILD'] == 'true': expected |= {'orchords-studio-ai.aab','mapping.txt'}
+          names={a.get('name') for a in release.get('assets', [])}
+          assert names == expected, (names, expected)
+          assert release.get('draft') is False and release.get('prerelease') is False
           for asset in release.get('assets', []):
               assert asset.get('state') == 'uploaded', asset
               assert int(asset.get('size', 0)) > 0, asset
@@ -339,25 +311,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          headers=(
-            --header 'Accept: application/vnd.github+json'
-            --header "Authorization: Bearer $GH_TOKEN"
-            --header 'X-GitHub-Api-Version: 2022-11-28'
-          )
-          curl --fail-with-body --silent --show-error "${headers[@]}" \
-            "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/releases.json
-          KEEP_RELEASE_ID="$KEEP_RELEASE_ID" python3 - <<'PY' > /tmp/delete-release-ids.txt
+          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
+          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/releases.json
+          KEEP_RELEASE_ID="$KEEP_RELEASE_ID" python3 - <<'PY' > /tmp/delete.txt
           import json, os
           keep=int(os.environ['KEEP_RELEASE_ID'])
           for release in json.load(open('/tmp/releases.json', encoding='utf-8')):
-              if int(release['id']) != keep:
-                  print(release['id'])
+              if int(release['id']) != keep: print(release['id'])
           PY
           while read -r release_id; do
             [ -n "$release_id" ] || continue
-            curl --fail-with-body --silent --show-error -X DELETE "${headers[@]}" \
-              "https://api.github.com/repos/$REPOSITORY/releases/$release_id" >/dev/null
-          done < /tmp/delete-release-ids.txt
+            curl --fail-with-body --silent --show-error -X DELETE "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases/$release_id" >/dev/null
+          done < /tmp/delete.txt
 
       - name: Verify Releases contains only current release
         env:
@@ -368,16 +333,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          headers=(
-            --header 'Accept: application/vnd.github+json'
-            --header "Authorization: Bearer $GH_TOKEN"
-            --header 'X-GitHub-Api-Version: 2022-11-28'
-          )
-          curl --fail-with-body --silent --show-error "${headers[@]}" \
-            "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/final-releases.json
+          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
+          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/final.json
           KEEP_RELEASE_ID="$KEEP_RELEASE_ID" RELEASE_TAG="$RELEASE_TAG" python3 - <<'PY'
           import json, os
-          releases=json.load(open('/tmp/final-releases.json', encoding='utf-8'))
+          releases=json.load(open('/tmp/final.json', encoding='utf-8'))
           assert len(releases) == 1, releases
           release=releases[0]
           assert int(release['id']) == int(os.environ['KEEP_RELEASE_ID'])

@@ -1,6 +1,7 @@
 package com.orchords.orchordsai.data.extensions
 
 import com.orchords.ai.core.MessageRole
+import com.orchords.orchordsai.data.ai.planning.PLANNING_MODE_ID
 import com.orchords.orchordsai.data.files.SkillFrontmatterParser
 import com.orchords.orchordsai.data.model.InjectionPosition
 import org.junit.Assert.assertEquals
@@ -15,7 +16,7 @@ class BuiltInLibraryTest {
         val catalog = BuiltInLibrary.catalog
         assertEquals(2, catalog.version)
         validateLibraryCatalog(catalog)
-        assertEquals(24, catalog.modes.size)
+        assertEquals(25, catalog.modes.size)
         assertEquals(16, catalog.lorebooks.size)
         assertEquals(56, catalog.lorebooks.sumOf { it.entries.size })
         assertEquals(60, catalog.skills.size)
@@ -50,7 +51,12 @@ class BuiltInLibraryTest {
             val mode = definition.toModeInjection()
             assertEquals(definition.id, mode.id.toString())
             assertEquals(MessageRole.USER, mode.role)
-            assertEquals(InjectionPosition.BOTTOM_OF_CHAT, mode.position)
+            val expectedPosition = if (mode.id == PLANNING_MODE_ID) {
+                InjectionPosition.AFTER_SYSTEM_PROMPT
+            } else {
+                InjectionPosition.BOTTOM_OF_CHAT
+            }
+            assertEquals(expectedPosition, mode.position)
         }
         BuiltInLibrary.catalog.lorebooks.forEach { definition ->
             val book = definition.toLorebook()
@@ -71,7 +77,7 @@ class BuiltInLibraryTest {
         val edited = builtIns.first().copy(body = "Keep my custom text")
         val installed = appendMissingById(listOf(edited), builtIns) { it.id }
         assertEquals(edited, installed.first())
-        assertEquals(24, installed.size)
+        assertEquals(25, installed.size)
         assertEquals(installed, appendMissingById(installed, builtIns) { it.id })
         assertEquals(1, appendMissingById(emptyList(), listOf(edited, edited)) { it.id }.size)
     }

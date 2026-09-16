@@ -86,9 +86,6 @@ internal class McpStatusStore {
     }
 }
 
-/**
- *
- */
 internal class McpSessionRegistry(
     private val settingsStore: SettingsStore,
     private val appScope: AppScope,
@@ -253,7 +250,7 @@ internal class McpSessionRegistry(
                 throw e
             } catch (e: Exception) {
                 closeClient(sdkClient, config.commonOptions.name)
-                Log.e(TAG, "Failed to connect MCP server ${config.id}", e)
+                Log.e(TAG, "Failed to connect MCP server ${config.id}: ${e::class.simpleName}")
                 if (oauthCoordinator.needsAuthorization(config, e)) {
                     statusStore.update(config.id, McpStatus.NeedsAuthorization)
                     ConnectResult.NeedsAuthorization
@@ -333,7 +330,8 @@ internal class McpSessionRegistry(
             requestReconnect(config.id, sdkClient)
         }
         transport.onError { error ->
-            Log.e(TAG, "Transport error for ${config.id}: ${error.message}")
+            val safeMessage = McpDiagnosticSanitizer.sanitize(error.message.orEmpty())
+            Log.e(TAG, "Transport error for ${config.id}: ${error::class.simpleName}: $safeMessage")
             if (!isSseStreamGiveUpError(error)) requestReconnect(config.id, sdkClient)
         }
     }
@@ -416,7 +414,9 @@ internal class McpSessionRegistry(
 
     private suspend fun closeClient(client: Client, serverName: String) {
         runCatching { client.close() }
-            .onFailure { Log.w(TAG, "Failed to close MCP client $serverName", it) }
+            .onFailure { error ->
+                Log.w(TAG, "Failed to close MCP client $serverName: ${error::class.simpleName}")
+            }
     }
 
     private fun createSdkClient(config: McpServerConfig): Client = Client(
@@ -441,9 +441,6 @@ internal class McpSessionRegistry(
         headers.appendAll(StringValues.build {
             config.resolvedHeaders().forEach { (name, value) -> append(name, value) }
             if (isCloudflareMcpHost(config.serverUrl)) {
-                // Cloudflare's streamable-HTTP MCP gateway rejects plain POSTs that do
-                // not advertise both the JSON and SSE response variants; advertise both
-                // so the gateway can negotiate a direct streamable-HTTP session.
                 append("Accept", MCP_STREAMABLE_ACCEPT)
             }
         })

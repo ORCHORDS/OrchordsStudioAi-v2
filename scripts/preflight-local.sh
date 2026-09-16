@@ -11,7 +11,10 @@ cd "$ROOT"
 echo "[preflight] whitespace / conflict markers"
 git diff --check
 
-if git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- . ':!*.lock' ':!pnpm-lock.yaml' ':!gradle/libs.versions.toml' >/tmp/orchords-preflight-conflicts.txt 2>/dev/null; then
+# Highlight-language fixtures intentionally contain conflict-marker-looking lines
+# so the renderer can test diffs/Markdown. Exclude only that fixture tree from
+# the unresolved-merge-marker guard; production/source paths remain covered.
+if git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- . ':!*.lock' ':!pnpm-lock.yaml' ':!gradle/libs.versions.toml' ':!highlight/src/test/resources/hljs/**' >/tmp/orchords-preflight-conflicts.txt 2>/dev/null; then
   cat /tmp/orchords-preflight-conflicts.txt
   echo "preflight: unresolved merge markers found" >&2
   exit 1

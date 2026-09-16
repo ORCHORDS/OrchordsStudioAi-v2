@@ -36,3 +36,19 @@ fun Set<Uuid>.isPlanningModeEnabled(): Boolean = PLANNING_MODE_ID in this
 
 fun Set<Uuid>.withPlanningMode(enabled: Boolean): Set<Uuid> =
     if (enabled) this + PLANNING_MODE_ID else this - PLANNING_MODE_ID
+
+/**
+ * Planning Mode is a first-party conversation control even when an assistant does not allow
+ * arbitrary conversation prompt injections. This policy permits only adding/removing the
+ * stable Planning Mode id; every unrelated mode and lorebook selection must remain unchanged.
+ */
+fun isPlanningOnlyConversationInjectionChange(
+    currentModeInjectionIds: Set<Uuid>,
+    currentLorebookIds: Set<Uuid>,
+    requestedModeInjectionIds: Set<Uuid>,
+    requestedLorebookIds: Set<Uuid>,
+): Boolean {
+    if (requestedLorebookIds != currentLorebookIds) return false
+    return (requestedModeInjectionIds - PLANNING_MODE_ID) ==
+        (currentModeInjectionIds - PLANNING_MODE_ID)
+}

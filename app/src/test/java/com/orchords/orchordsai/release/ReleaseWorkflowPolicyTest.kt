@@ -43,31 +43,47 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release always publishes complete apk matrix and adds aab when signing exists`() {
+    fun `release requires stable play signing and never falls back to ephemeral debug`() {
+        val source = workflowSource()
+
+        assertTrue(source.contains("environment: play-internal"))
+        assertTrue(source.contains("KEY_BASE64"))
+        assertTrue(source.contains("SIGNING_CONFIG"))
+        assertTrue(source.contains("Stable signing material is required. Refusing ephemeral debug fallback."))
+        assertFalse(source.contains("Signing secrets unavailable; publishing verified debug APKs"))
+        assertFalse(source.contains("Publish GitHub Release (debug fallback)"))
+        assertFalse(source.contains(":app:assembleDebug"))
+    }
+
+    @Test
+    fun `release always publishes complete signed artifact matrix and signer evidence`() {
         val source = workflowSource()
         listOf(
             "orchords-studio-ai-universal.apk",
             "orchords-studio-ai-arm64-v8a.apk",
             "orchords-studio-ai-x86_64.apk",
+            "orchords-studio-ai.aab",
+            "mapping.txt",
+            "SHA256SUMS",
+            "SIGNING-CERT-SHA256",
         ).forEach { name ->
             assertTrue("Missing release asset contract for $name", source.contains(name))
         }
-        assertTrue(source.contains("orchords-studio-ai.aab"))
-        assertTrue(source.contains("Signing secrets unavailable; publishing verified debug APKs"))
-        assertTrue(source.contains("signed=true"))
-        assertTrue(source.contains("signed=false"))
         assertTrue(source.contains("Expected exactly 3 APK outputs"))
-        assertTrue(source.contains("SHA256SUMS"))
+        assertTrue(source.contains("apksigner"))
+        assertTrue(source.contains("Signer #1 certificate SHA-256 digest"))
+        assertTrue(source.contains("jarsigner -verify"))
+        assertTrue(source.contains("sha256sum --check SHA256SUMS"))
     }
 
     @Test
-    fun `canonical app version lives in gradle properties and is validated by build`() {
+    fun `canonical app version is v0 1 6 and build validates it`() {
         val workflow = workflowSource()
         val build = appBuildSource()
         val properties = gradleProperties()
 
-        assertTrue(properties.contains("releaseVersionName=0.1.5"))
-        assertTrue(properties.contains("releaseVersionCode=1000005"))
+        assertTrue(properties.contains("releaseVersionName=0.1.6"))
+        assertTrue(properties.contains("releaseVersionCode=1000006"))
         assertTrue(workflow.contains("releaseVersionName"))
         assertTrue(workflow.contains("releaseVersionCode"))
         assertTrue(workflow.contains("2100000000"))
@@ -76,15 +92,16 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release verifies version embedded in every apk before publishing`() {
+    fun `release verifies package version signer and aab before publishing`() {
         val source = workflowSource()
-        assertTrue(source.contains("cmdline-tools/latest/bin/apkanalyzer"))
+
+        assertTrue(source.contains("manifest application-id"))
+        assertTrue(source.contains("com.orchords.orchordsai"))
         assertTrue(source.contains("manifest version-name"))
         assertTrue(source.contains("manifest version-code"))
         assertTrue(source.contains("APK versionName mismatch"))
         assertTrue(source.contains("APK versionCode mismatch"))
-        assertTrue(source.contains("manifest application-id"))
-        assertTrue(source.contains("sha256sum --check SHA256SUMS"))
+        assertTrue(source.contains("APK signer mismatch across ABI outputs"))
         assertTrue(source.contains("asset.get('state') == 'uploaded'"))
     }
 
@@ -108,11 +125,23 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release packaging keeps abi splits enabled`() {
+    fun `release keeps signed abi splits and full build`() {
         val source = workflowSource()
         assertFalse(source.contains("-PciVerify"))
         assertTrue(source.contains(":app:buildAll"))
-        assertTrue(source.contains(":app:assembleDebug"))
+        assertTrue(source.contains("app-universal-release.apk"))
+        assertTrue(source.contains("app-arm64-v8a-release.apk"))
+        assertTrue(source.contains("app-x86_64-release.apk"))
+    }
+
+    @Test
+    fun `release notes carry v0 1 5 history and v0 1 6 fixes`() {
+        val source = workflowSource()
+        assertTrue(source.contains("## Fixed in v0.1.5"))
+        assertTrue(source.contains("## Fixed in v0.1.6"))
+        assertTrue(source.contains("Provider stream closed before terminal"))
+        assertTrue(source.contains("connection-test button remains visible"))
+        assertTrue(source.contains("signer SHA-256 fingerprint"))
     }
 
     @Test

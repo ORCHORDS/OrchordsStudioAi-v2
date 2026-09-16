@@ -19,6 +19,7 @@ jobs:
     name: Build, verify and publish
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    environment: play-internal
     permissions:
       contents: write
     steps:
@@ -57,31 +58,35 @@ jobs:
           echo "tag=v$version_name" >> "$GITHUB_OUTPUT"
           echo "Release version: $version_name ($version_code)"
 
-      - name: Select signed or debug build
-        id: build_mode
+      - name: Refuse to reuse a version tag for different source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          BUILD_SHA: ${{ steps.source.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
+          status="$(curl --silent --show-error -o /tmp/tag.json -w '%{http_code}' "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          if [ "$status" = '404' ]; then exit 0; fi
+          [ "$status" = '200' ] || { cat /tmp/tag.json; exit 1; }
+          existing_sha="$(python3 -c 'import json; print(json.load(open("/tmp/tag.json"))["object"]["sha"])')"
+          [ "$existing_sha" = "$BUILD_SHA" ] || { echo "::error::Tag already exists for different source. Bump releaseVersionName/releaseVersionCode before publishing new source."; exit 1; }
+
+      - name: Require stable signing material
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
           SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ]; then
-            echo 'signed=true' >> "$GITHUB_OUTPUT"
-            echo 'gradle_task=:app:buildAll' >> "$GITHUB_OUTPUT"
-            echo 'apk_dir=app/build/outputs/apk/release' >> "$GITHUB_OUTPUT"
-            echo 'variant=release' >> "$GITHUB_OUTPUT"
-            echo 'package_type=signed release APK/AAB' >> "$GITHUB_OUTPUT"
-          else
-            echo 'signed=false' >> "$GITHUB_OUTPUT"
-            echo 'gradle_task=:app:assembleDebug' >> "$GITHUB_OUTPUT"
-            echo 'apk_dir=app/build/outputs/apk/debug' >> "$GITHUB_OUTPUT"
-            echo 'variant=debug' >> "$GITHUB_OUTPUT"
-            echo 'package_type=verified installable debug APK' >> "$GITHUB_OUTPUT"
-            echo 'Signing secrets unavailable; publishing verified debug APKs.'
-          fi
+          [ -n "$KEY_BASE64" ] && [ -n "$SIGNING_CONFIG" ] || {
+            echo "::error::Stable signing material is required. Refusing ephemeral debug fallback."
+            exit 1
+          }
 
       - name: Materialize signing files
-        if: steps.build_mode.outputs.signed == 'true'
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
           SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
@@ -107,11 +112,10 @@ jobs:
           pnpm typecheck
           pnpm build
 
-      - name: Test, lint and build Android artifacts
+      - name: Test, lint and build signed Android artifacts
         env:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
-          GRADLE_TASK: ${{ steps.build_mode.outputs.gradle_task }}
         shell: bash
         run: |
           set -euo pipefail
@@ -123,78 +127,76 @@ jobs:
             :ai:test \
             :workspace:test \
             :app:lintDebug \
-            "$GRADLE_TASK"
+            :app:buildAll
 
       - name: Remove signing files
         if: always()
         shell: bash
         run: rm -f app/app.key local.properties
 
-      - name: Verify APK matrix and embedded version
+      - name: Verify signed APK/AAB matrix, identity and certificate
         env:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
-          APK_DIR: ${{ steps.build_mode.outputs.apk_dir }}
-          VARIANT: ${{ steps.build_mode.outputs.variant }}
-          SIGNED_BUILD: ${{ steps.build_mode.outputs.signed }}
         shell: bash
         run: |
           set -euo pipefail
+          apk_dir='app/build/outputs/apk/release'
           apkanalyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
           expected=(
-            "$APK_DIR/app-universal-$VARIANT.apk"
-            "$APK_DIR/app-arm64-v8a-$VARIANT.apk"
-            "$APK_DIR/app-x86_64-$VARIANT.apk"
+            "$apk_dir/app-universal-release.apk"
+            "$apk_dir/app-arm64-v8a-release.apk"
+            "$apk_dir/app-x86_64-release.apk"
           )
           rm -rf release-assets
           mkdir -p release-assets
+          expected_cert=''
           for apk in "${expected[@]}"; do
             test -s "$apk" || { echo "::error::Missing APK: $apk"; exit 1; }
+            [ "$("$apkanalyzer" manifest application-id "$apk" | tr -d '\r\n')" = 'com.orchords.orchordsai' ] || {
+              echo "::error::APK applicationId mismatch: $apk"; exit 1;
+            }
             actual_name="$("$apkanalyzer" manifest version-name "$apk" | tr -d '\r\n')"
             actual_code="$("$apkanalyzer" manifest version-code "$apk" | tr -d '\r\n')"
             [ "$actual_name" = "$APP_VERSION_NAME" ] || { echo "::error::APK versionName mismatch"; exit 1; }
             [ "$actual_code" = "$APP_VERSION_CODE" ] || { echo "::error::APK versionCode mismatch"; exit 1; }
+            "$apksigner" verify --verbose "$apk" >/dev/null
+            cert="$("$apksigner" verify --print-certs "$apk" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print tolower($2); exit}')"
+            [[ "$cert" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Missing/invalid APK signer digest"; exit 1; }
+            if [ -z "$expected_cert" ]; then expected_cert="$cert"; fi
+            [ "$cert" = "$expected_cert" ] || { echo "::error::APK signer mismatch across ABI outputs"; exit 1; }
           done
-          actual_count="$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')"
+          actual_count="$(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')"
           [ "$actual_count" -eq 3 ] || { echo "::error::Expected exactly 3 APK outputs, found $actual_count"; exit 1; }
+
           cp "${expected[0]}" release-assets/orchords-studio-ai-universal.apk
           cp "${expected[1]}" release-assets/orchords-studio-ai-arm64-v8a.apk
           cp "${expected[2]}" release-assets/orchords-studio-ai-x86_64.apk
+          printf '%s\n' "$expected_cert" > release-assets/SIGNING-CERT-SHA256
 
-          if [ "$SIGNED_BUILD" = 'true' ]; then
-            aab='app/build/outputs/bundle/release/app-release.aab'
-            mapping='app/build/outputs/mapping/release/mapping.txt'
-            test -s "$aab"
-            test -s "$mapping"
-            [ "$("$apkanalyzer" manifest application-id "$aab" | tr -d '\r\n')" = 'com.orchords.orchordsai' ]
-            [ "$("$apkanalyzer" manifest version-name "$aab" | tr -d '\r\n')" = "$APP_VERSION_NAME" ]
-            [ "$("$apkanalyzer" manifest version-code "$aab" | tr -d '\r\n')" = "$APP_VERSION_CODE" ]
-            cp "$aab" release-assets/orchords-studio-ai.aab
-            cp "$mapping" release-assets/mapping.txt
-          fi
+          aab='app/build/outputs/bundle/release/app-release.aab'
+          mapping='app/build/outputs/mapping/release/mapping.txt'
+          test -s "$aab"
+          test -s "$mapping"
+          jarsigner -verify "$aab" >/dev/null
+          [ "$("$apkanalyzer" manifest application-id "$aab" | tr -d '\r\n')" = 'com.orchords.orchordsai' ]
+          [ "$("$apkanalyzer" manifest version-name "$aab" | tr -d '\r\n')" = "$APP_VERSION_NAME" ]
+          [ "$("$apkanalyzer" manifest version-code "$aab" | tr -d '\r\n')" = "$APP_VERSION_CODE" ]
+          cp "$aab" release-assets/orchords-studio-ai.aab
+          cp "$mapping" release-assets/mapping.txt
 
           cd release-assets
-          sha256sum -- *.apk > SHA256SUMS
-          if [ -f orchords-studio-ai.aab ]; then sha256sum -- orchords-studio-ai.aab >> SHA256SUMS; fi
+          sha256sum -- \
+            orchords-studio-ai-universal.apk \
+            orchords-studio-ai-arm64-v8a.apk \
+            orchords-studio-ai-x86_64.apk \
+            orchords-studio-ai.aab \
+            mapping.txt \
+            SIGNING-CERT-SHA256 > SHA256SUMS
           sha256sum --check SHA256SUMS
 
-      - name: Refuse to reuse a version tag for different source
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
-          BUILD_SHA: ${{ steps.source.outputs.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
-          status="$(curl --silent --show-error -o /tmp/tag.json -w '%{http_code}' "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG")"
-          if [ "$status" = '404' ]; then exit 0; fi
-          [ "$status" = '200' ] || { cat /tmp/tag.json; exit 1; }
-          existing_sha="$(python3 -c 'import json; print(json.load(open("/tmp/tag.json"))["object"]["sha"])')"
-          [ "$existing_sha" = "$BUILD_SHA" ] || { echo "::error::Tag already exists for different source. Bump releaseVersionName/releaseVersionCode before publishing new source."; exit 1; }
-
-      - name: Upload verified build artifact
+      - name: Upload verified signed build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: latest-apks
@@ -207,7 +209,6 @@ jobs:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
           BUILD_SHA: ${{ steps.source.outputs.sha }}
-          PACKAGE_TYPE: ${{ steps.build_mode.outputs.package_type }}
         shell: bash
         run: |
           set -euo pipefail
@@ -217,7 +218,7 @@ jobs:
           - Version: \`$APP_VERSION_NAME\`
           - Version code: \`$APP_VERSION_CODE\`
           - Commit: \`$BUILD_SHA\`
-          - Package type: $PACKAGE_TYPE
+          - Package type: signed release APK/AAB
 
           ## Highlights
           - Fixed missing ProviderUsageEventDAO dependency registration needed to construct GenerationHandler and ChatVM.
@@ -227,16 +228,36 @@ jobs:
           - Repaired first-party web-search routing.
           - In-app AI-output reporting.
 
+          ## Fixed in v0.1.5
+          - Connection testing uses the persisted first-party gateway credential rather than an unsaved candidate.
+          - Gateway HTTP 401/403 authentication failures do not retry as generic network loss.
+          - Legacy encrypted Orchords gateway credentials are re-keyed to the canonical provider UUID.
+          - The persisted first-party bearer credential wins over stale custom Authorization headers.
+
+          ## Fixed in v0.1.6
+          - OpenAI-compatible streaming now distinguishes a real \`[DONE]\` terminal from transport closure.
+          - A stream that closes before \`[DONE]\` is an IOException, so the existing bounded pre-output retry path can engage instead of silently saving an empty assistant response.
+          - SSE failure callbacks with no throwable/error payload now fail explicitly instead of closing successfully.
+          - Empty terminal responses are classified explicitly rather than looking like successful invisible assistant output.
+          - The provider connection-test button remains visible while an API-key edit is unsaved, but is disabled until Save succeeds; it always tests the persisted credential.
+          - Connection diagnostics no longer show green for empty non-streaming text, empty streaming text, or a missing tool call.
+          - GitHub Releases now require stable signing material and publish the signer SHA-256 fingerprint; ephemeral debug fallback is refused.
+
+          ## Migration note
+          - v0.1.5 GitHub Build used the debug package \`com.orchords.orchordsai.debug\`. v0.1.6 uses the signed production package \`com.orchords.orchordsai\`, so Android may install it alongside the old debug build rather than replace that debug package. Keep the old debug app until the signed build is configured and verified.
+
           ## Verification
+          - Local release preflight.
           - Web Planning regression test, TypeScript typecheck and production web build.
           - App, AI and workspace unit tests.
           - Android lint.
-          - Universal, arm64-v8a and x86_64 APK manifests verified for this version.
+          - Universal, arm64-v8a and x86_64 signed APK manifests verified for version and application ID.
+          - APK signer SHA-256 fingerprint verified consistently across all ABI outputs.
+          - Signed AAB manifest and JAR signature verified.
           - SHA-256 checksums verified before publication.
           EOF
 
-      - name: Publish GitHub Release (signed)
-        if: steps.build_mode.outputs.signed == 'true'
+      - name: Publish signed GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -253,25 +274,8 @@ jobs:
             release-assets/orchords-studio-ai-x86_64.apk
             release-assets/orchords-studio-ai.aab
             release-assets/SHA256SUMS
+            release-assets/SIGNING-CERT-SHA256
             release-assets/mapping.txt
-
-      - name: Publish GitHub Release (debug fallback)
-        if: steps.build_mode.outputs.signed != 'true'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          target_commitish: ${{ steps.source.outputs.sha }}
-          name: ORCHORDS Studio AI v${{ steps.version.outputs.name }} — GitHub Build
-          prerelease: false
-          make_latest: true
-          overwrite_files: false
-          fail_on_unmatched_files: true
-          body_path: release-notes.md
-          files: |
-            release-assets/orchords-studio-ai-universal.apk
-            release-assets/orchords-studio-ai-arm64-v8a.apk
-            release-assets/orchords-studio-ai-x86_64.apk
-            release-assets/SHA256SUMS
 
       - name: Verify published Release and assets
         id: verify_release
@@ -280,19 +284,25 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
           BUILD_SHA: ${{ steps.source.outputs.sha }}
-          SIGNED_BUILD: ${{ steps.build_mode.outputs.signed }}
         shell: bash
         run: |
           set -euo pipefail
           headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
           curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases/tags/$RELEASE_TAG" > /tmp/new-release.json
           curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" > /tmp/new-tag.json
-          BUILD_SHA="$BUILD_SHA" SIGNED_BUILD="$SIGNED_BUILD" python3 - <<'PY'
+          BUILD_SHA="$BUILD_SHA" python3 - <<'PY'
           import json, os
           release=json.load(open('/tmp/new-release.json', encoding='utf-8'))
           tag=json.load(open('/tmp/new-tag.json', encoding='utf-8'))
-          expected={'orchords-studio-ai-universal.apk','orchords-studio-ai-arm64-v8a.apk','orchords-studio-ai-x86_64.apk','SHA256SUMS'}
-          if os.environ['SIGNED_BUILD'] == 'true': expected |= {'orchords-studio-ai.aab','mapping.txt'}
+          expected={
+              'orchords-studio-ai-universal.apk',
+              'orchords-studio-ai-arm64-v8a.apk',
+              'orchords-studio-ai-x86_64.apk',
+              'orchords-studio-ai.aab',
+              'SHA256SUMS',
+              'SIGNING-CERT-SHA256',
+              'mapping.txt',
+          }
           names={a.get('name') for a in release.get('assets', [])}
           assert names == expected, (names, expected)
           assert release.get('draft') is False and release.get('prerelease') is False
@@ -304,8 +314,7 @@ jobs:
           release_id="$(python3 -c 'import json; print(json.load(open("/tmp/new-release.json"))["id"])')"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
-      # Older releases and their assets are intentionally retained.
-      - name: Verify latest Release while retaining history
+      - name: Verify this is the latest Release
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -322,5 +331,5 @@ jobs:
           assert int(release['id']) == int(os.environ['KEEP_RELEASE_ID'])
           assert release['tag_name'] == os.environ['RELEASE_TAG']
           assert release.get('draft') is False and release.get('prerelease') is False
-          print('Verified latest GitHub Release; older releases retained')
+          print('Verified latest signed GitHub Release')
           PY

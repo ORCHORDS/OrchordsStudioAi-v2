@@ -73,7 +73,6 @@ internal val PORTABLE_SETTINGS_V1_EXCLUDED_FIELDS = setOf(
     "selectedASRProviderId",
     "webServerEnabled",
     "webServerJwtEnabled",
-    "webServerAccessPassword",
     "onboardingState",
 )
 

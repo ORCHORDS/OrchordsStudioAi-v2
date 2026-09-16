@@ -29,11 +29,12 @@ class PlanningModeUiPolicyTest {
 
     @Test
     fun `web composer exposes Plan with the same stable id and draft conversation state`() {
+        val state = source("web-ui/app/components/input/planning-mode-state.ts")
         val button = source("web-ui/app/components/input/planning-mode-button.tsx")
         val input = source("web-ui/app/components/input/chat-input.tsx")
         val page = source("web-ui/app/routes/conversations.tsx")
 
-        assertTrue(button.contains("164b9a03-828e-434e-8aa9-82c0e019a7fb"))
+        assertTrue(state.contains("164b9a03-828e-434e-8aa9-82c0e019a7fb"))
         assertTrue(button.contains("setPlanningModeEnabled"))
         assertTrue(button.contains("setDraftPromptInjectionIds"))
         assertTrue(button.contains("conversations/${'$'}{conversation.id}/injections"))

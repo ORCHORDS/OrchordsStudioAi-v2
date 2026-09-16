@@ -33,3 +33,6 @@ fun planningModeInjection(): PromptInjection.ModeInjection = PromptInjection.Mod
 )
 
 fun Set<Uuid>.isPlanningModeEnabled(): Boolean = PLANNING_MODE_ID in this
+
+fun Set<Uuid>.withPlanningMode(enabled: Boolean): Set<Uuid> =
+    if (enabled) this + PLANNING_MODE_ID else this - PLANNING_MODE_ID

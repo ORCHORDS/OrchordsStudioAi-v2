@@ -121,6 +121,8 @@ fun ChatInput(
     hazeState: HazeState,
     enableSearch: Boolean,
     onUpdateSearchMode: (SearchMode) -> Unit,
+    planningModeEnabled: Boolean,
+    onUpdatePlanningMode: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     completionProviders: List<ChatCompletionProvider> = emptyList(),
     onUpdateChatModel: (Model) -> Unit,
@@ -245,14 +247,12 @@ fun ChatInput(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            // Model Picker
                             ModelSelectorButton(
                                 state = modelListState,
                                 onlyIcon = true,
                                 modifier = Modifier,
                             )
 
-                            // Search
                             val enableSearchMsg = stringResource(R.string.web_search_enabled)
                             val disableSearchMsg = stringResource(R.string.web_search_disabled)
                             val chatModel = settings.getCurrentChatModel()
@@ -265,18 +265,18 @@ fun ChatInput(
                                     toaster.show(
                                         message = if (enabled) enableSearchMsg else disableSearchMsg,
                                         duration = 1.seconds,
-                                        type = if (enabled) {
-                                            ToastType.Success
-                                        } else {
-                                            ToastType.Normal
-                                        }
+                                        type = if (enabled) ToastType.Success else ToastType.Normal,
                                     )
                                 },
                                 onUpdateSearchService = onUpdateSearchService,
                                 model = chatModel,
                             )
 
-                            // Reasoning
+                            PlanningModeButton(
+                                enabled = planningModeEnabled,
+                                onToggle = onUpdatePlanningMode,
+                            )
+
                             val model = settings.getCurrentChatModel()
                             if (model?.abilities?.contains(ModelAbility.REASONING) == true) {
                                 ReasoningButton(
@@ -287,12 +287,9 @@ fun ChatInput(
                                     onlyIcon = true,
                                 )
                             }
-
                         }
 
-                        ActionIconButton(
-                            onClick = onMoreClick
-                        ) {
+                        ActionIconButton(onClick = onMoreClick) {
                             Icon(
                                 imageVector = HugeIcons.Add01,
                                 contentDescription = stringResource(R.string.more_options)
@@ -311,13 +308,11 @@ fun ChatInput(
                                             } else {
                                                 asrBaseText = state.textContent.text.toString()
                                                 asr.start { transcript ->
-                                                    val spacer =
-                                                        if (asrBaseText.isBlank() || transcript.isBlank()) "" else " "
+                                                    val spacer = if (asrBaseText.isBlank() || transcript.isBlank()) "" else " "
                                                     state.setMessageText(asrBaseText + spacer + transcript)
                                                 }
                                             }
                                         }
-
                                         ASRStatus.Connecting, ASRStatus.Stopping -> {}
                                     }
                                 }
@@ -339,7 +334,6 @@ fun ChatInput(
                     }
                 }
             }
-
         }
     }
 
@@ -475,16 +469,11 @@ private fun TextInputRow(
                         transferableContent.consume { item ->
                             val uri = item.uri
                             if (uri != null) {
-                                state.addImages(
-                                    filesManager.createChatFilesByContents(
-                                        listOf(uri)
-                                    )
-                                )
+                                state.addImages(filesManager.createChatFilesByContents(listOf(uri)))
                             }
                             uri != null
                         }
                     }
-
                     settings.displaySetting.pasteLongTextAsFile && transferableContent.hasMediaType(MediaType.Text) -> {
                         transferableContent.consume { item ->
                             val text = item.text?.toString()
@@ -492,12 +481,9 @@ private fun TextInputRow(
                                 val document = filesManager.createChatTextFile(text)
                                 state.addFiles(listOf(document))
                                 true
-                            } else {
-                                false
-                            }
+                            } else false
                         }
                     }
-
                     else -> transferableContent
                 }
             }
@@ -517,8 +503,7 @@ private fun TextInputRow(
             }.collectLatest { context ->
                 val lists = completionProviders.mapNotNull { provider ->
                     try {
-                        provider.complete(context)
-                            ?.takeIf { it.items.isNotEmpty() }
+                        provider.complete(context)?.takeIf { it.items.isNotEmpty() }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -531,11 +516,9 @@ private fun TextInputRow(
                         .filter { it.replacementRange == list.replacementRange }
                         .flatMap { it.items }
                         .distinctBy { it.label to it.insertText }
-                        .sortedWith(
-                            compareByDescending<ChatCompletionItem> { it.sortScore }
-                                .thenBy { it.label.length }
-                                .thenBy { it.label.lowercase() }
-                        )
+                        .sortedWith(compareByDescending<ChatCompletionItem> { it.sortScore }
+                            .thenBy { it.label.length }
+                            .thenBy { it.label.lowercase() })
                         .take(8)
                     list.copy(items = mergedItems)
                 }
@@ -558,22 +541,16 @@ private fun TextInputRow(
                 .fillMaxWidth()
                 .testTag("chat_input")
                 .contentReceiver(receiveContentListener)
-                .onFocusChanged {
-                    isFocused = it.isFocused
-                },
+                .onFocusChanged { isFocused = it.isFocused },
             shape = MaterialTheme.shapes.largeIncreased,
-            placeholder = {
-                Text(stringResource(R.string.chat_input_placeholder))
-            },
+            placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
                 imeAction = if (settings.displaySetting.sendOnEnter) ImeAction.Send else ImeAction.Default
             ),
             onKeyboardAction = {
-                if (settings.displaySetting.sendOnEnter && !state.isEmpty()) {
-                    onSendMessage()
-                }
+                if (settings.displaySetting.sendOnEnter && !state.isEmpty()) onSendMessage()
             },
             colors = TextFieldDefaults.colors().copy(
                 unfocusedIndicatorColor = Color.Transparent,
@@ -587,25 +564,18 @@ private fun TextInputRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (isFocused) {
-                        IconButton(
-                            onClick = {
-                                isFullScreen = !isFullScreen
-                            }) {
+                        IconButton(onClick = { isFullScreen = !isFullScreen }) {
                             Icon(HugeIcons.Fullscreen, null)
                         }
                     }
                 }
             },
             leadingIcon = if (quickMessages.isNotEmpty()) {
-                {
-                    QuickMessageButton(quickMessages = quickMessages, state = state)
-                }
+                { QuickMessageButton(quickMessages = quickMessages, state = state) }
             } else null,
         )
         if (isFullScreen) {
-            FullScreenEditor(state = state) {
-                isFullScreen = false
-            }
+            FullScreenEditor(state = state) { isFullScreen = false }
         }
     }
 }
@@ -697,16 +667,12 @@ private fun QuickMessageButton(
     state: ChatInputState,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    IconButton(
-        onClick = {
-            expanded = !expanded
-        }) {
+    IconButton(onClick = { expanded = !expanded }) {
         Icon(HugeIcons.Zap, null)
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .widthIn(min = 200.dp, max = 360.dp)
+            modifier = Modifier.widthIn(min = 200.dp, max = 360.dp)
         ) {
             quickMessages.forEach { quickMessage ->
                 Surface(
@@ -717,9 +683,7 @@ private fun QuickMessageButton(
                     color = Color.Transparent,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(8.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Text(
                             text = quickMessage.title,
                             style = MaterialTheme.typography.titleMedium,
@@ -744,9 +708,7 @@ private fun FullScreenEditor(
     state: ChatInputState, onDone: () -> Unit
 ) {
     BasicAlertDialog(
-        onDismissRequest = {
-            onDone()
-        },
+        onDismissRequest = { onDone() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false, decorFitsSystemWindows = false
         ),
@@ -772,10 +734,7 @@ private fun FullScreenEditor(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row {
-                        TextButton(
-                            onClick = {
-                                onDone()
-                            }) {
+                        TextButton(onClick = { onDone() }) {
                             Text(stringResource(R.string.chat_page_save))
                         }
                     }
@@ -785,9 +744,7 @@ private fun FullScreenEditor(
                             .padding(bottom = 2.dp)
                             .fillMaxSize(),
                         shape = RoundedCornerShape(32.dp),
-                        placeholder = {
-                            Text(stringResource(R.string.chat_input_placeholder))
-                        },
+                        placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.Sentences,
                         ),

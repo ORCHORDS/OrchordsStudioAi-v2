@@ -2,6 +2,7 @@ package com.orchords.orchordsai.data.ai.mcp
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import com.orchords.ai.core.InputSchema
 import kotlin.uuid.Uuid
 
@@ -14,21 +15,19 @@ data class McpCommonOptions(
     val oauth: McpOAuthState? = null,
 )
 
-/**
- *
- */
+/** Runtime OAuth state. Secret-bearing fields are hydrated from secure storage. */
 @Serializable
 data class McpOAuthState(
     val enabled: Boolean = false,
     val clientId: String? = null,
-    val clientSecret: String? = null,
+    @Transient val clientSecret: String? = null,
     val authorizationEndpoint: String? = null,
     val tokenEndpoint: String? = null,
     val registrationEndpoint: String? = null,
     val redirectUri: String? = null,
     val scope: String? = null,
-    val accessToken: String? = null,
-    val refreshToken: String? = null,
+    @Transient val accessToken: String? = null,
+    @Transient val refreshToken: String? = null,
     val expiresAt: Long = 0L,
 ) {
     val isAuthorized: Boolean get() = !accessToken.isNullOrBlank()

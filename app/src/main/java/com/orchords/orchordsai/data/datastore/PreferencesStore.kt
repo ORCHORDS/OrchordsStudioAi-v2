@@ -192,7 +192,7 @@ class SettingsStore(
                 webServerLocalhostOnly = preferences[WEB_SERVER_LOCALHOST_ONLY] == true,
                 backupReminderConfig = preferences[BACKUP_REMINDER_CONFIG]?.let { JsonInstant.decodeFromString(it) } ?: BackupReminderConfig(),
                 launchCount = preferences[LAUNCH_COUNT] ?: 0,
-                onboardingState = preferences[ONBOARDING_STATE]?.let { stored -> OnboardingState.entries.firstOrNull { it.name == stored } ?: OnboardingState.UNINITIALIZED,
+                onboardingState = preferences[ONBOARDING_STATE]?.let { stored -> OnboardingState.entries.firstOrNull { it.name == stored } } ?: OnboardingState.UNINITIALIZED,
             )
         }
         .onEach { settings ->
@@ -449,7 +449,8 @@ data class DisplaySetting(
     val userAvatar: Avatar = Avatar.Dummy,
     val userNickname: String = "",
     val useAppIconStyleLoadingIndicator: Boolean = true,
-    val showUserAvatar: Boolean = false,
+    val showUserAvatar: Boolean = true,
+    val showAssistantBubble: Boolean = false,
     val bubbleOpacity: Float = 1.0f,
     val showModelIcon: Boolean = true,
     val showModelName: Boolean = true,

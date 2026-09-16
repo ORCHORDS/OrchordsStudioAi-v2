@@ -34,6 +34,14 @@ class ProviderConnectionPersistencePolicyTest {
     }
 
     @Test
+    fun `tool connection test cannot report success when no tool call was returned`() {
+        val tester = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/components/ProviderConnectionTester.kt")
+
+        assertTrue(tester.contains("check(toolCall != null)"))
+        assertTrue(tester.contains("Tool-call test completed without a tool call"))
+    }
+
+    @Test
     fun `save success is emitted only after settings persistence completes`() {
         val page = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/SettingProviderDetailPage.kt")
         val vm = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/SettingVM.kt")

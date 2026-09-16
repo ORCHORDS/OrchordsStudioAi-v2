@@ -2,6 +2,7 @@ package com.orchords.orchordsai.data.ai.planning
 
 import com.orchords.ai.core.MessageRole
 import com.orchords.orchordsai.data.extensions.BuiltInLibrary
+import com.orchords.orchordsai.data.extensions.toModeInjection
 import com.orchords.orchordsai.data.model.InjectionPosition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -44,5 +45,16 @@ class PlanningModeTest {
 
         assertEquals(1, matches.size)
         assertEquals("Planning", matches.single().name)
+    }
+
+    @Test
+    fun `built in planning library entry converts to after system prompt`() {
+        val planning = BuiltInLibrary.catalog.modes
+            .single { it.id == PLANNING_MODE_ID.toString() }
+            .toModeInjection()
+
+        assertEquals(InjectionPosition.AFTER_SYSTEM_PROMPT, planning.position)
+        assertEquals(PLANNING_MODE_ID, planning.id)
+        assertEquals(PLANNING_MODE_PROMPT, planning.content)
     }
 }

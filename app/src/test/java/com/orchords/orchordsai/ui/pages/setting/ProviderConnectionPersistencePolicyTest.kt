@@ -19,7 +19,7 @@ class ProviderConnectionPersistencePolicyTest {
         assertTrue(page.contains("ProviderConnectionTester("))
         assertTrue(page.contains("internalProvider = provider"))
         assertTrue(page.contains("enabled = !hasUnsavedCredential"))
-        assertTrue(page.contains("setting_provider_page_save_before_test"))
+        assertTrue(page.contains("Save API key before testing"))
         assertFalse(page.contains("ProviderConnectionTester(internalProvider = candidate"))
     }
 

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import com.orchords.orchordsai.data.ai.planning.isPlanningOnlyConversationInjectionChange
 import com.orchords.orchordsai.data.datastore.SettingsStore
 import com.orchords.orchordsai.data.repository.ConversationRepository
 import com.orchords.orchordsai.data.repository.FolderRepository
@@ -81,7 +82,6 @@ fun Route.conversationRoutes(
             }
 
             val page = when {
-                // Search ignores folder filter (searches across all conversations of the assistant)
                 query.isNotBlank() -> conversationRepo.searchConversationsOfAssistantPage(
                     assistantId = settings.assistantId,
                     titleKeyword = query,
@@ -120,7 +120,6 @@ fun Route.conversationRoutes(
             )
         }
 
-        // GET /api/conversations/search?query=foo - Full-text search messages
         get("/search") {
             val query = call.request.queryParameters["query"]?.trim().orEmpty()
             if (query.isBlank()) {
@@ -140,7 +139,6 @@ fun Route.conversationRoutes(
             })
         }
 
-        // GET /api/conversations/{id} - Get single conversation
         get("/{id}") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val conversation = conversationRepo.getConversationById(uuid)
@@ -150,7 +148,6 @@ fun Route.conversationRoutes(
             call.respond(conversation.toDto(isGenerating))
         }
 
-        // DELETE /api/conversations/{id} - Delete conversation
         delete("/{id}") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val conversation = conversationRepo.getConversationById(uuid)
@@ -160,7 +157,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.NoContent)
         }
 
-        // POST /api/conversations/{id}/pin - Toggle pinned status
         post("/{id}/pin") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             chatService.requireHydratedConversation(uuid)
@@ -168,7 +164,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
 
-        // POST /api/conversations/{id}/regenerate-title - Regenerate conversation title
         post("/{id}/regenerate-title") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val conversation = conversationRepo.getConversationById(uuid)
@@ -178,7 +173,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "accepted"))
         }
 
-        // POST /api/conversations/{id}/title - Update conversation title
         post("/{id}/title") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<UpdateConversationTitleRequest>()
@@ -193,7 +187,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
 
-        // POST /api/conversations/{id}/injections - Update conversation-scoped prompt injections
         post("/{id}/injections") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<UpdateConversationInjectionsRequest>()
@@ -205,15 +198,23 @@ fun Route.conversationRoutes(
             val settings = settingsStore.settingsFlow.first()
             val assistant = settings.assistants.firstOrNull { it.id == conversation.assistantId }
                 ?: throw NotFoundException("Assistant not found")
-            if (!assistant.allowConversationPromptInjection) {
-                throw BadRequestException("Conversation prompt injection is not enabled for this assistant")
-            }
 
             val (modeInjectionIds, lorebookIds) = validateConversationInjectionIds(
                 settings = settings,
                 modeInjectionIds = request.modeInjectionIds,
                 lorebookIds = request.lorebookIds,
             )
+            if (!assistant.allowConversationPromptInjection &&
+                !isPlanningOnlyConversationInjectionChange(
+                    currentModeInjectionIds = conversation.modeInjectionIds,
+                    currentLorebookIds = conversation.lorebookIds,
+                    requestedModeInjectionIds = modeInjectionIds,
+                    requestedLorebookIds = lorebookIds,
+                )
+            ) {
+                throw BadRequestException("Conversation prompt injection is not enabled for this assistant")
+            }
+
             val updatedConversation = conversation.copy(
                 modeInjectionIds = modeInjectionIds,
                 lorebookIds = lorebookIds,
@@ -224,7 +225,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.OK, updatedConversation.toDto(isGenerating))
         }
 
-        // POST /api/conversations/{id}/move - Move conversation to another assistant
         post("/{id}/move") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<MoveConversationRequest>()
@@ -240,7 +240,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
 
-        // POST /api/conversations/{id}/folder - Move conversation to a folder (null = unfiled)
         post("/{id}/folder") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<MoveConversationToFolderRequest>()
@@ -261,7 +260,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.OK, mapOf("status" to "updated"))
         }
 
-        // POST /api/conversations/{id}/messages - Send a message
         post("/{id}/messages") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<SendMessageRequest>()
@@ -279,7 +277,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "accepted"))
         }
 
-        // POST /api/conversations/{id}/messages/{messageId}/edit - Edit a message as a new branch version
         post("/{id}/messages/{messageId}/edit") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val messageId = call.parameters["messageId"].toUuid("message id")
@@ -291,7 +288,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "accepted"))
         }
 
-        // POST /api/conversations/{id}/fork - Create a forked conversation up to message
         post("/{id}/fork") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<ForkConversationRequest>()
@@ -303,7 +299,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Created, ForkConversationResponse(conversationId = fork.id.toString()))
         }
 
-        // DELETE /api/conversations/{id}/messages/{messageId} - Delete a message
         delete("/{id}/messages/{messageId}") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val messageId = call.parameters["messageId"].toUuid("message id")
@@ -314,7 +309,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.OK, mapOf("status" to "deleted"))
         }
 
-        // POST /api/conversations/{id}/nodes/{nodeId}/select - Switch branch selection for a message node
         post("/{id}/nodes/{nodeId}/select") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val nodeId = call.parameters["nodeId"].toUuid("node id")
@@ -326,7 +320,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "accepted"))
         }
 
-        // POST /api/conversations/{id}/regenerate - Regenerate message
         post("/{id}/regenerate") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<RegenerateRequest>()
@@ -341,14 +334,12 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "accepted"))
         }
 
-        // POST /api/conversations/{id}/stop - Stop generation
         post("/{id}/stop") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             chatService.stopGeneration(uuid)
             call.respond(HttpStatusCode.OK, mapOf("status" to "stopped"))
         }
 
-        // POST /api/conversations/{id}/tool-approval - Handle tool approval
         post("/{id}/tool-approval") {
             val uuid = call.parameters["id"].toUuid("conversation id")
             val request = call.receive<ToolApprovalRequest>()
@@ -357,7 +348,6 @@ fun Route.conversationRoutes(
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "accepted"))
         }
 
-        // SSE /api/conversations/{id}/stream - Stream conversation updates
         sse("/{id}/stream") {
             val id = call.parameters["id"] ?: return@sse
             val uuid = runCatching { Uuid.parse(id) }.getOrNull() ?: return@sse
@@ -494,18 +484,22 @@ private suspend fun applyInitialConversationInjections(
     val settings = settingsStore.settingsFlow.first()
     val assistant = settings.assistants.firstOrNull { it.id == conversation.assistantId }
         ?: throw NotFoundException("Assistant not found")
-    if (!assistant.allowConversationPromptInjection) {
-        if (modeInjectionIds.orEmpty().isNotEmpty() || lorebookIds.orEmpty().isNotEmpty()) {
-            throw BadRequestException("Conversation prompt injection is not enabled for this assistant")
-        }
-        return
-    }
 
     val (requestedModeInjectionIds, requestedLorebookIds) = validateConversationInjectionIds(
         settings = settings,
         modeInjectionIds = modeInjectionIds ?: conversation.modeInjectionIds.map { it.toString() },
         lorebookIds = lorebookIds ?: conversation.lorebookIds.map { it.toString() },
     )
+    if (!assistant.allowConversationPromptInjection &&
+        !isPlanningOnlyConversationInjectionChange(
+            currentModeInjectionIds = conversation.modeInjectionIds,
+            currentLorebookIds = conversation.lorebookIds,
+            requestedModeInjectionIds = requestedModeInjectionIds,
+            requestedLorebookIds = requestedLorebookIds,
+        )
+    ) {
+        throw BadRequestException("Conversation prompt injection is not enabled for this assistant")
+    }
 
     chatService.updateConversationState(conversationId) {
         it.copy(

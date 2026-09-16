@@ -28,6 +28,17 @@ In `web-ui`, install JavaScript dependencies with:
 pnpm install --frozen-lockfile
 ```
 
+## App version
+
+The canonical release identity lives in root `gradle.properties`:
+
+```properties
+releaseVersionName=0.1.2
+releaseVersionCode=1000002
+```
+
+`app/build.gradle.kts` validates both properties before embedding them. `releaseVersionName` must be a numeric semantic version and `releaseVersionCode` must remain within the Android/Google Play accepted range. Increment both for every new shipped release.
+
 ## Local preflight
 
 Normal issue development does not depend on repository runners. Before a direct push to `main`, run:
@@ -54,16 +65,23 @@ Keep `local.properties`, signing configuration, API credentials, and other machi
 
 ## GitHub Release build
 
-GitHub Releases are produced by `.github/workflows/daily-build.yml` on the private `main-verification` runner. That release path intentionally performs a stronger verification/build pass than normal issue work:
+GitHub Releases are produced by `.github/workflows/release.yml` on the independent private `ubuntu-24.04-x64` runner. The workflow runs when the canonical version changes, can be dispatched manually, and can recover from completion of the retired legacy Daily Build.
 
-- verifies JDK 21, Node.js 22, pnpm 11 and the pinned Android toolchain;
+The release path intentionally performs a stronger verification/build pass than normal issue work:
+
+- verifies the pinned JDK 21 / Node.js 22 / pnpm 11 / Android toolchain;
+- requires signing secrets rather than publishing a debug build as a Release;
+- runs web Planning regression tests, TypeScript typecheck and the production web build;
 - runs app, AI and workspace tests plus Android lint;
-- builds the configured universal, arm64-v8a and x86_64 APK matrix;
-- produces a signed AAB when the configured signing secrets are present;
-- verifies embedded version metadata and SHA-256 checksums;
-- updates the rolling `latest` tag and GitHub Release and replaces stale release assets.
+- builds and verifies the universal, arm64-v8a and x86_64 release APK matrix;
+- builds and verifies the signed AAB and optional mapping output;
+- checks embedded package/version metadata with `apkanalyzer`;
+- generates and verifies SHA-256 checksums;
+- publishes a versioned tag (`v<versionName>`) and marks that Release as latest;
+- verifies the new Release before deleting older GitHub Releases;
+- verifies that the Releases page contains exactly the newly published Release afterward.
 
-The release workflow is the repository exception to the normal no-runner development policy. A release should not be called complete until that workflow reaches its final live-release verification step successfully.
+The release workflow is the repository exception to the normal no-runner development policy. A release is not complete until the workflow reaches its final live-release verification step successfully.
 
 ## Brand
 

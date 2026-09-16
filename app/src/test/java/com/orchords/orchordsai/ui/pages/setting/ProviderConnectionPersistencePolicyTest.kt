@@ -24,6 +24,14 @@ class ProviderConnectionPersistencePolicyTest {
     }
 
     @Test
+    fun `non streaming connection test cannot report success with empty text`() {
+        val tester = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/components/ProviderConnectionTester.kt")
+
+        assertTrue(tester.contains("check(text.isNotBlank())"))
+        assertTrue(tester.contains("Non-streaming response completed without text"))
+    }
+
+    @Test
     fun `streaming connection test cannot report success with no streamed text`() {
         val tester = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/components/ProviderConnectionTester.kt")
 

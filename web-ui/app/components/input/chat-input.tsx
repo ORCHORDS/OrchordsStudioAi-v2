@@ -22,6 +22,7 @@ import { useCurrentAssistant } from "~/hooks/use-current-assistant";
 import { ModelList } from "~/components/input/model-list";
 import { ReasoningPickerButton } from "~/components/input/reasoning-picker";
 import { SearchPickerButton } from "~/components/input/search-picker";
+import { PlanningModeButton } from "~/components/input/planning-mode-button";
 import { McpPickerButton } from "~/components/input/mcp-picker";
 import { ExtensionPickerButton } from "~/components/input/extension-picker";
 import { useSettingsStore } from "~/stores";
@@ -695,6 +696,11 @@ function ChatInputInner({
               </DropdownMenu>
               <ModelList disabled={!canSwitchModel} className="max-w-64" />
               <SearchPickerButton disabled={!canSwitchModel} />
+              <PlanningModeButton
+                conversation={conversation}
+                draftKey={draftKey}
+                disabled={!canSwitchModel}
+              />
               <ReasoningPickerButton disabled={!canSwitchModel} />
               <McpPickerButton disabled={!canSwitchModel} />
               <ExtensionPickerButton

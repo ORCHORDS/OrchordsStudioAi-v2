@@ -220,6 +220,7 @@ jobs:
           - Package type: $PACKAGE_TYPE
 
           ## Highlights
+          - Fixed missing ProviderUsageEventDAO dependency registration needed to construct GenerationHandler and ChatVM.
           - First-class Planning Mode on Android and web.
           - First-class GitHub and Cloudflare MCP connectors.
           - Secure MCP credential handling and diagnostic redaction.
@@ -272,7 +273,7 @@ jobs:
             release-assets/orchords-studio-ai-x86_64.apk
             release-assets/SHA256SUMS
 
-      - name: Verify new Release before cleanup
+      - name: Verify published Release and assets
         id: verify_release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -303,28 +304,8 @@ jobs:
           release_id="$(python3 -c 'import json; print(json.load(open("/tmp/new-release.json"))["id"])')"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
-      - name: Remove every older GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          KEEP_RELEASE_ID: ${{ steps.verify_release.outputs.release_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
-          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/releases.json
-          KEEP_RELEASE_ID="$KEEP_RELEASE_ID" python3 - <<'PY' > /tmp/delete.txt
-          import json, os
-          keep=int(os.environ['KEEP_RELEASE_ID'])
-          for release in json.load(open('/tmp/releases.json', encoding='utf-8')):
-              if int(release['id']) != keep: print(release['id'])
-          PY
-          while read -r release_id; do
-            [ -n "$release_id" ] || continue
-            curl --fail-with-body --silent --show-error -X DELETE "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases/$release_id" >/dev/null
-          done < /tmp/delete.txt
-
-      - name: Verify Releases contains only current release
+      # Older releases and their assets are intentionally retained.
+      - name: Verify latest Release while retaining history
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -334,14 +315,12 @@ jobs:
         run: |
           set -euo pipefail
           headers=(--header 'Accept: application/vnd.github+json' --header "Authorization: Bearer $GH_TOKEN" --header 'X-GitHub-Api-Version: 2022-11-28')
-          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases?per_page=100" > /tmp/final.json
+          curl --fail-with-body --silent --show-error "${headers[@]}" "https://api.github.com/repos/$REPOSITORY/releases/latest" > /tmp/final.json
           KEEP_RELEASE_ID="$KEEP_RELEASE_ID" RELEASE_TAG="$RELEASE_TAG" python3 - <<'PY'
           import json, os
-          releases=json.load(open('/tmp/final.json', encoding='utf-8'))
-          assert len(releases) == 1, releases
-          release=releases[0]
+          release=json.load(open('/tmp/final.json', encoding='utf-8'))
           assert int(release['id']) == int(os.environ['KEEP_RELEASE_ID'])
           assert release['tag_name'] == os.environ['RELEASE_TAG']
           assert release.get('draft') is False and release.get('prerelease') is False
-          print('Verified exactly one current GitHub Release')
+          print('Verified latest GitHub Release; older releases retained')
           PY

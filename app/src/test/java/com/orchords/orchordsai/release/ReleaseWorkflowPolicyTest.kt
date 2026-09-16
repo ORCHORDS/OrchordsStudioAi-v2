@@ -33,7 +33,7 @@ class ReleaseWorkflowPolicyTest {
         assertTrue(source.contains("prerelease: false"))
         assertTrue(source.contains("make_latest: true"))
         assertTrue(source.contains("releases/tags/\$RELEASE_TAG"))
-        assertTrue(source.contains("Verify Releases contains only current release"))
+        assertTrue(source.contains("Verify latest Release while retaining history"))
     }
 
     @Test
@@ -60,8 +60,8 @@ class ReleaseWorkflowPolicyTest {
         val build = appBuildSource()
         val properties = gradleProperties()
 
-        assertTrue(properties.contains("releaseVersionName=0.1.2"))
-        assertTrue(properties.contains("releaseVersionCode=1000002"))
+        assertTrue(properties.contains("releaseVersionName=0.1.4"))
+        assertTrue(properties.contains("releaseVersionCode=1000004"))
         assertTrue(workflow.contains("releaseVersionName"))
         assertTrue(workflow.contains("releaseVersionCode"))
         assertTrue(workflow.contains("2100000000"))
@@ -91,14 +91,14 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release publishes new build before deleting older releases`() {
+    fun `release retains older releases instead of deleting them`() {
         val source = workflowSource()
         val publish = source.indexOf("Publish GitHub Release")
-        val verify = source.indexOf("Verify new Release before cleanup")
-        val cleanup = source.indexOf("Remove every older GitHub Release")
+        val verify = source.indexOf("Verify published Release and assets")
         assertTrue(publish >= 0)
         assertTrue(verify > publish)
-        assertTrue(cleanup > verify)
+        assertFalse(source.contains("Remove every older GitHub Release"))
+        assertTrue(source.contains("releases/latest"))
     }
 
     @Test

@@ -3,6 +3,9 @@ package com.orchords.orchordsai.security
 import com.orchords.orchordsai.data.ai.mcp.McpCommonOptions
 import com.orchords.orchordsai.data.ai.mcp.McpOAuthState
 import com.orchords.orchordsai.data.ai.mcp.McpServerConfig
+import com.orchords.orchordsai.data.security.McpSecretCodec
+import com.orchords.orchordsai.data.security.McpSecretKey
+import com.orchords.orchordsai.data.security.SecondarySecretBackend
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

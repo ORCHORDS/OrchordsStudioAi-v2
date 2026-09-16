@@ -32,8 +32,12 @@ class SecondarySecretPersistencePolicyTest {
         assertTrue("secondary store must use AndroidKeyStore", "AndroidKeyStore" in store)
         assertTrue("secondary store must use AES GCM", "AES/GCM/NoPadding" in store)
         assertFalse(
-            "new storage must not extend deprecated EncryptedSharedPreferences",
-            "EncryptedSharedPreferences" in store,
+            "new storage must not import deprecated EncryptedSharedPreferences",
+            "import androidx.security.crypto.EncryptedSharedPreferences" in store,
+        )
+        assertFalse(
+            "new storage must not construct deprecated EncryptedSharedPreferences",
+            "EncryptedSharedPreferences.create(" in store,
         )
     }
 }

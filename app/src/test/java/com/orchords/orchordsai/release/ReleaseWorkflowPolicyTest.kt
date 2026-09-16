@@ -37,19 +37,21 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release contains the complete signed binary matrix`() {
+    fun `release always publishes complete apk matrix and adds aab when signing exists`() {
         val source = workflowSource()
         listOf(
             "orchords-studio-ai-universal.apk",
             "orchords-studio-ai-arm64-v8a.apk",
             "orchords-studio-ai-x86_64.apk",
-            "orchords-studio-ai.aab",
         ).forEach { name ->
             assertTrue("Missing release asset contract for $name", source.contains(name))
         }
+        assertTrue(source.contains("orchords-studio-ai.aab"))
+        assertTrue(source.contains("Signing secrets unavailable; publishing verified debug APKs"))
+        assertTrue(source.contains("signed=true"))
+        assertTrue(source.contains("signed=false"))
         assertTrue(source.contains("Expected exactly 3 APK outputs"))
         assertTrue(source.contains("SHA256SUMS"))
-        assertTrue(source.contains("A GitHub Release must be a signed release build"))
     }
 
     @Test
@@ -68,7 +70,7 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release verifies version embedded in every apk and aab before publishing`() {
+    fun `release verifies version embedded in every apk before publishing`() {
         val source = workflowSource()
         assertTrue(source.contains("cmdline-tools/latest/bin/apkanalyzer"))
         assertTrue(source.contains("manifest version-name"))
@@ -91,7 +93,7 @@ class ReleaseWorkflowPolicyTest {
     @Test
     fun `release publishes new build before deleting older releases`() {
         val source = workflowSource()
-        val publish = source.indexOf("Publish versioned GitHub Release")
+        val publish = source.indexOf("Publish GitHub Release")
         val verify = source.indexOf("Verify new Release before cleanup")
         val cleanup = source.indexOf("Remove every older GitHub Release")
         assertTrue(publish >= 0)
@@ -104,10 +106,11 @@ class ReleaseWorkflowPolicyTest {
         val source = workflowSource()
         assertFalse(source.contains("-PciVerify"))
         assertTrue(source.contains(":app:buildAll"))
+        assertTrue(source.contains(":app:assembleDebug"))
     }
 
     @Test
-    fun `private repository release path does not use unsupported attestations`() {
+    fun `release path does not use unsupported attestations`() {
         val source = workflowSource()
         assertFalse(source.contains("actions/attest@"))
         assertFalse(source.contains("attestations: write"))

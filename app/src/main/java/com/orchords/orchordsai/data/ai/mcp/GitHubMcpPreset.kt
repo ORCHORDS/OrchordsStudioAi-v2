@@ -143,8 +143,13 @@ private fun McpServerConfig.withGitHubHeader(
 
 /**
  * Do not trust server-supplied ToolAnnotations as an authorization boundary.
- * Our own GitHub read-only configuration is deterministic: when it is off,
- * every newly discovered GitHub tool starts approval-required.
+ * GitHub write-enabled profiles and the Cloudflare API Code Mode surface both
+ * default newly discovered tools to approval-required.
+ *
+ * The historical function name is kept because McpSessionRegistry already
+ * calls this policy hook for every server; it now covers both first-class
+ * providers without changing generic MCP behavior.
  */
 internal fun githubNewToolsNeedApproval(config: McpServerConfig): Boolean =
-    isOfficialGitHubMcpRemote(config) && !isGitHubMcpReadOnly(config)
+    cloudflareNewToolsNeedApproval(config) ||
+        (isOfficialGitHubMcpRemote(config) && !isGitHubMcpReadOnly(config))

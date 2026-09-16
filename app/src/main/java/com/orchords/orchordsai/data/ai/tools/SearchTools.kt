@@ -10,6 +10,7 @@ import com.orchords.ai.core.Tool
 import com.orchords.ai.provider.ProviderSetting
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.orchordsai.data.datastore.ORCHORDS_GATEWAY_BASE_URL
+import com.orchords.orchordsai.data.datastore.ORCHORDS_SEARCH_BASE_URL
 import com.orchords.orchordsai.data.datastore.Settings
 import com.orchords.orchordsai.utils.JsonInstantPretty
 import com.orchords.orchordsai.utils.toLocalString
@@ -36,19 +37,45 @@ internal fun String.canReceiveOrchordsGatewayCredential(): Boolean {
 }
 
 /**
+ * Repair first-party Orchords Search records created before the canonical
+ * gateway search route existed. Blank URLs and any HTTPS URL on the canonical
+ * Orchords gateway origin are normalized to the one supported /v1/search
+ * route. Genuine custom/external URLs are preserved and never receive the
+ * first-party gateway bearer.
+ */
+internal fun normalizeOrchordsSearchOptions(
+    configured: SearchServiceOptions.OrchordsAIOptions,
+): SearchServiceOptions.OrchordsAIOptions {
+    val raw = configured.baseUrl.trim()
+    val parsed = raw.toHttpUrlOrNull()
+    val isCanonicalGatewayOrigin = parsed != null &&
+        parsed.scheme == ORCHORDS_GATEWAY_ORIGIN.scheme &&
+        parsed.host == ORCHORDS_GATEWAY_ORIGIN.host &&
+        parsed.port == ORCHORDS_GATEWAY_ORIGIN.port
+    val effectiveUrl = if (raw.isBlank() || isCanonicalGatewayOrigin) {
+        ORCHORDS_SEARCH_BASE_URL
+    } else {
+        raw
+    }
+    return configured.copy(baseUrl = effectiveUrl)
+}
+
+/**
  * Resolve the one supported external-search configuration.
  *
  * Legacy search-provider records remain readable for migration, but they are
- * never routed at runtime. A configured Orchords Search endpoint/depth is
- * preserved. The first-party gateway credential is reused only when the Search
- * endpoint is on the exact canonical Orchords gateway origin; otherwise the
- * Search profile keeps only its own existing credential.
+ * never routed at runtime. A configured custom Search endpoint/depth is
+ * preserved. Blank/stale first-party records are repaired to the canonical
+ * Orchords Search route. The first-party gateway credential is reused only
+ * when the effective Search endpoint is on the exact canonical Orchords
+ * gateway origin; otherwise the Search profile keeps only its own credential.
  */
 internal fun Settings.activeSearchOptions(): SearchServiceOptions.OrchordsAIOptions {
     val configured = searchServices
         .filterIsInstance<SearchServiceOptions.OrchordsAIOptions>()
         .firstOrNull()
-        ?: SearchServiceOptions.DEFAULT as SearchServiceOptions.OrchordsAIOptions
+        ?: SearchServiceOptions.OrchordsAIOptions(baseUrl = ORCHORDS_SEARCH_BASE_URL)
+    val normalized = normalizeOrchordsSearchOptions(configured)
 
     val gatewayKey = providers
         .filterIsInstance<ProviderSetting.OpenAI>()
@@ -56,13 +83,13 @@ internal fun Settings.activeSearchOptions(): SearchServiceOptions.OrchordsAIOpti
         ?.apiKey
         .orEmpty()
 
-    val effectiveKey = if (configured.baseUrl.canReceiveOrchordsGatewayCredential()) {
-        gatewayKey.ifBlank { configured.apiKey }
+    val effectiveKey = if (normalized.baseUrl.canReceiveOrchordsGatewayCredential()) {
+        gatewayKey.ifBlank { normalized.apiKey }
     } else {
-        configured.apiKey
+        normalized.apiKey
     }
 
-    return configured.copy(apiKey = effectiveKey)
+    return normalized.copy(apiKey = effectiveKey)
 }
 
 fun createSearchTools(settings: Settings): Set<Tool> {

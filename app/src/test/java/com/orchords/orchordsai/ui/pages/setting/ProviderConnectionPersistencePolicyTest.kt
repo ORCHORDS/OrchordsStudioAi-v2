@@ -12,13 +12,25 @@ class ProviderConnectionPersistencePolicyTest {
     private fun source(path: String): String = File(root, path).readText()
 
     @Test
-    fun `connection tester never tests unsaved gateway credentials`() {
+    fun `connection tester stays visible but never tests unsaved gateway credentials`() {
         val page = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/SettingProviderDetailPage.kt")
 
         assertTrue(page.contains("val hasUnsavedCredential = apiKey != provider.apiKey"))
-        assertTrue(page.contains("if (!hasUnsavedCredential)"))
-        assertTrue(page.contains("ProviderConnectionTester(internalProvider = provider)"))
-        assertFalse(page.contains("ProviderConnectionTester(internalProvider = candidate)"))
+        assertTrue(page.contains("ProviderConnectionTester("))
+        assertTrue(page.contains("internalProvider = provider"))
+        assertTrue(page.contains("enabled = !hasUnsavedCredential"))
+        assertTrue(page.contains("setting_provider_page_save_before_test"))
+        assertFalse(page.contains("ProviderConnectionTester(internalProvider = candidate"))
+    }
+
+    @Test
+    fun `streaming connection test cannot report success with no streamed text`() {
+        val tester = source("app/src/main/java/com/orchords/orchordsai/ui/pages/setting/components/ProviderConnectionTester.kt")
+
+        assertTrue(tester.contains("enabled: Boolean = true"))
+        assertTrue(tester.contains("IconButton("))
+        assertTrue(tester.contains("enabled = enabled"))
+        assertTrue(tester.contains("check(streamingText.isNotBlank())"))
     }
 
     @Test

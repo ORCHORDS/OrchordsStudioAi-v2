@@ -54,6 +54,7 @@ import org.koin.compose.koinInject
 @Composable
 fun ProviderConnectionTester(
     internalProvider: ProviderSetting,
+    enabled: Boolean = true,
 ) {
     var showTestDialog by remember { mutableStateOf(false) }
     val providerManager = koinInject<ProviderManager>()
@@ -61,7 +62,10 @@ fun ProviderConnectionTester(
     val context = LocalContext.current
     val resources = LocalResources.current
 
-    IconButton(onClick = { showTestDialog = true }) {
+    IconButton(
+        onClick = { showTestDialog = true },
+        enabled = enabled,
+    ) {
         Icon(HugeIcons.Connect, null)
     }
 
@@ -168,6 +172,9 @@ fun ProviderConnectionTester(
                                         if (chunk is StreamChunk.TextDelta) {
                                             streamingText += chunk.text
                                         }
+                                    }
+                                    check(streamingText.isNotBlank()) {
+                                        "Streaming response completed without text"
                                     }
                                     streamingState = UiState.Success("")
                                 }.onFailure { streamingState = UiState.Error(it) }

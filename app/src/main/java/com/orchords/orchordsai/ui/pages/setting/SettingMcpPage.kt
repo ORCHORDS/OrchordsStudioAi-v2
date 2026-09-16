@@ -101,6 +101,11 @@ import com.orchords.orchordsai.data.ai.mcp.McpServerConfig
 import com.orchords.orchordsai.data.ai.mcp.McpStatus
 import com.orchords.orchordsai.data.ai.mcp.McpTool
 import com.orchords.orchordsai.data.ai.mcp.githubMcpPreset
+import com.orchords.orchordsai.data.ai.mcp.isGitHubMcpLockdown
+import com.orchords.orchordsai.data.ai.mcp.isGitHubMcpReadOnly
+import com.orchords.orchordsai.data.ai.mcp.isOfficialGitHubMcpRemote
+import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpLockdown
+import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpReadOnly
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.FormItem
 import com.orchords.orchordsai.ui.components.ui.Switch
@@ -393,6 +398,14 @@ private fun McpServerItem(
                                 is McpServerConfig.StreamableHTTPServer -> Text("Streamable HTTP")
                             }
                         }
+                        if (isOfficialGitHubMcpRemote(item)) {
+                            Tag(type = if (isGitHubMcpReadOnly(item)) TagType.SUCCESS else TagType.INFO) {
+                                Text(if (isGitHubMcpReadOnly(item)) "Read-only" else "Write enabled")
+                            }
+                            if (isGitHubMcpLockdown(item)) {
+                                Tag(type = TagType.INFO) { Text("Lockdown") }
+                            }
+                        }
                     }
                     if (status is McpStatus.Error) {
                         val error = status as McpStatus.Error
@@ -575,6 +588,43 @@ private fun McpCommonOptionsConfigure(
                         )
                     }
                 )
+            }
+        }
+
+        if (isOfficialGitHubMcpRemote(config)) {
+            HorizontalDivider()
+            FormItem(
+                label = { Text("GitHub read-only") },
+                description = { Text("Disable all GitHub MCP tools that can modify repositories, issues, pull requests, or other GitHub state.") }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(if (isGitHubMcpReadOnly(config)) "Read-only" else "Write enabled")
+                    Spacer(Modifier.weight(1f))
+                    Switch(
+                        checked = isGitHubMcpReadOnly(config),
+                        onCheckedChange = { update(config.withGitHubMcpReadOnly(it)) },
+                    )
+                }
+            }
+
+            FormItem(
+                label = { Text("GitHub lockdown") },
+                description = { Text("Reduce untrusted public-repository content surfaced by the GitHub MCP server. This is a content filter, not an authorization boundary.") }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(if (isGitHubMcpLockdown(config)) "On" else "Off")
+                    Spacer(Modifier.weight(1f))
+                    Switch(
+                        checked = isGitHubMcpLockdown(config),
+                        onCheckedChange = { update(config.withGitHubMcpLockdown(it)) },
+                    )
+                }
             }
         }
 

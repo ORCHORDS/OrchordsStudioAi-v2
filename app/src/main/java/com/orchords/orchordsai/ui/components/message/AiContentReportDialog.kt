@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -62,6 +63,9 @@ fun AiContentReportDialog(
     val client = koinInject<AiContentReportClient>()
     val scope = rememberCoroutineScope()
     val output = remember(message) { visibleAssistantOutputForReport(message) }
+    val modelName = remember(model) {
+        model?.let { value -> value.modelId.ifBlank { value.displayName } }.orEmpty()
+    }
     var category by remember { mutableStateOf<AiReportCategory?>(null) }
     var note by remember { mutableStateOf("") }
     var state by remember { mutableStateOf<AiReportUiState>(AiReportUiState.Editing) }
@@ -138,10 +142,7 @@ fun AiContentReportDialog(
                         Text(
                             output.ifBlank { "No visible assistant text is available to report." },
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 160.dp)
-                                .verticalScroll(rememberScrollState()),
+                            modifier = Modifier.fillMaxWidth(),
                         )
 
                         if (current is AiReportUiState.Failed) {
@@ -163,7 +164,12 @@ fun AiContentReportDialog(
 
                 is AiReportUiState.Submitting -> {
                     TextButton(onClick = {}, enabled = false) {
-                        CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(end = 4.dp),
+                            strokeWidth = 2.dp,
+                        )
                         Text("Sending…")
                     }
                 }
@@ -179,14 +185,18 @@ fun AiContentReportDialog(
                                     message = message,
                                     category = selected.key,
                                     note = note,
-                                    model = model?.modelId?.ifBlank { model.displayName }.orEmpty(),
+                                    model = modelName,
                                     provider = "",
                                 )
                                 state = when (val result = client.submit(payload)) {
                                     is AiContentReportResult.Success -> AiReportUiState.Sent(result.reference)
                                     is AiContentReportResult.RateLimited -> {
-                                        val suffix = result.retryAfterSeconds?.let { " Try again in about $it seconds." }.orEmpty()
-                                        AiReportUiState.Failed("Too many reports were submitted from this connection.$suffix")
+                                        val suffix = result.retryAfterSeconds?.let {
+                                            " Try again in about $it seconds."
+                                        }.orEmpty()
+                                        AiReportUiState.Failed(
+                                            "Too many reports were submitted from this connection.$suffix"
+                                        )
                                     }
                                     AiContentReportResult.Rejected -> AiReportUiState.Failed(
                                         "The report could not be accepted. Review the category and note, then try again."

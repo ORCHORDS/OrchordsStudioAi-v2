@@ -19,4 +19,12 @@ class ChatCompletionsStreamClosurePolicyTest {
         assertTrue(source.contains("Provider stream closed before terminal [DONE]"))
         assertTrue(source.contains("close(IOException("))
     }
+
+    @Test
+    fun `SSE failure without throwable or error payload cannot close successfully`() {
+        val source = source()
+
+        assertTrue(source.contains("Provider stream failed without an error detail"))
+        assertTrue(source.contains("close(exception ?: IOException("))
+    }
 }

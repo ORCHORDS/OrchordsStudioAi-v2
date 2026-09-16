@@ -100,6 +100,7 @@ import com.orchords.orchordsai.data.ai.mcp.McpManager
 import com.orchords.orchordsai.data.ai.mcp.McpServerConfig
 import com.orchords.orchordsai.data.ai.mcp.McpStatus
 import com.orchords.orchordsai.data.ai.mcp.McpTool
+import com.orchords.orchordsai.data.ai.mcp.githubMcpPreset
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.FormItem
 import com.orchords.orchordsai.ui.components.ui.Switch
@@ -150,6 +151,11 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                     BackButton()
                 },
                 actions = {
+                    TextButton(
+                        onClick = { creationState.open(githubMcpPreset()) }
+                    ) {
+                        Text("GitHub")
+                    }
                     IconButton(
                         onClick = {
                             showImportDialog = true

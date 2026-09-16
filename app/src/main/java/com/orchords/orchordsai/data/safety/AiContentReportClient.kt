@@ -7,7 +7,6 @@ import com.orchords.orchordsai.utils.JsonInstant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
@@ -98,12 +97,7 @@ class AiContentReportClient(
                         }
 
                         response.code == 429 -> {
-                            val retryAfter = runCatching {
-                                JsonInstant.parseToJsonElement(body)
-                                    .jsonObject["retryAfterSeconds"]
-                                    ?.jsonPrimitive
-                                    ?.intOrNull
-                            }.getOrNull()
+                            val retryAfter = response.header("Retry-After")?.toIntOrNull()
                             AiContentReportResult.RateLimited(retryAfter)
                         }
 

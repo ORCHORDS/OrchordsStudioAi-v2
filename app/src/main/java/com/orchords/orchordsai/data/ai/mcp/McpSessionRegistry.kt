@@ -310,7 +310,11 @@ internal class McpSessionRegistry(
             old.copy(
                 mcpServers = old.mcpServers.map { storedConfig ->
                     if (storedConfig.id != connectionConfig.id) return@map storedConfig
-                    val tools = mergeTools(storedConfig.commonOptions.tools, serverTools)
+                    val tools = mergeTools(
+                        storedTools = storedConfig.commonOptions.tools,
+                        serverTools = serverTools,
+                        newToolsNeedApproval = githubNewToolsNeedApproval(storedConfig),
+                    )
                     storedConfig.clone(commonOptions = storedConfig.commonOptions.copy(tools = tools))
                         .also { updatedConfig = it }
                 }
@@ -502,7 +506,11 @@ private fun McpServerConfig.resolvedHeaders(): List<Pair<String, String>> {
     }
 }
 
-private fun mergeTools(storedTools: List<McpTool>, serverTools: List<Tool>): List<McpTool> {
+private fun mergeTools(
+    storedTools: List<McpTool>,
+    serverTools: List<Tool>,
+    newToolsNeedApproval: Boolean,
+): List<McpTool> {
     val toolsByName = storedTools.associateBy { it.name }
     return serverTools.map { serverTool ->
         toolsByName[serverTool.name]?.copy(
@@ -512,6 +520,7 @@ private fun mergeTools(storedTools: List<McpTool>, serverTools: List<Tool>): Lis
             name = serverTool.name,
             description = serverTool.description,
             enable = true,
+            needsApproval = newToolsNeedApproval,
             inputSchema = serverTool.inputSchema.toSchema(),
         )
     }

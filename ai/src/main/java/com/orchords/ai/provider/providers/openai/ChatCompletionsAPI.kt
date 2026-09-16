@@ -218,7 +218,7 @@ class ChatCompletionsAPI(
                     )
                     exception = e
                 } finally {
-                    close(exception)
+                    close(exception ?: IOException("Provider stream failed without an error detail"))
                 }
             }
 
@@ -550,7 +550,7 @@ class ChatCompletionsAPI(
                     message = message,
                     includeReasoning = includeHistoryReasoning,
                     includeOpenRouterReasoningDetails = includeOpenRouterReasoningDetails,
-                    supportInputModalities = supportInputModalities,
+                    supportInputModalities = params.model.inputModalities,
                     includeToolResultName = includeToolResultName,
                 )
             } else {

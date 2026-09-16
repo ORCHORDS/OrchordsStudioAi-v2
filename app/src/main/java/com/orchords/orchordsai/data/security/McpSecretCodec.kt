@@ -16,7 +16,7 @@ object McpSecretKey {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(normalized.toByteArray(Charsets.UTF_8))
             .take(8)
-            .joinToString("") { "%02x".format(it) }
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
         return "${prefix(serverId)}.header.$index.$digest"
     }
 }

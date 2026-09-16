@@ -2,6 +2,7 @@ package com.orchords.ai.provider
 
 import java.io.IOException
 import okhttp3.Interceptor
+import okhttp3.Request
 import okhttp3.Response
 
 const val ORCHORDS_GATEWAY_HOST = "api.orchords.com"
@@ -42,36 +43,34 @@ class OrchordsGatewayException(
 ) : IOException(error.userMessage)
 
 /**
+ * Keep exactly one Authorization value on first-party gateway requests.
+ *
+ * OpenAI-compatible request builders apply user/model custom headers before
+ * adding the persisted provider credential. If a stale custom Authorization
+ * header is present, OkHttp can otherwise carry both values. The final value is
+ * the provider credential added by the request builder, so that value wins.
+ */
+internal fun Request.normalizeOrchordsGatewayAuthorization(): Request {
+    if (url.host != ORCHORDS_GATEWAY_HOST) return this
+    val authorizationValues = headers.values("Authorization")
+    if (authorizationValues.size <= 1) return this
+
+    return newBuilder()
+        .header("Authorization", authorizationValues.last())
+        .build()
+}
+
+/**
  * First-party HTTP failure boundary.
  *
  * Deliberately does not read or parse the response body. The Orchords gateway's
  * error-body schema is not a confirmed product contract, so arbitrary JSON/HTML
  * cannot become exception/UI/log content. Status and Retry-After are safe HTTP
  * metadata and are sufficient for the currently verified classifications.
- *
- * OpenAI-compatible request builders apply user/model custom headers before the
- * provider credential. If a stale custom Authorization header is present, OkHttp
- * can otherwise send both values. For the first-party gateway we collapse only
- * duplicate Authorization values to the final value, which is the provider
- * credential added by the request builder. This keeps custom headers useful while
- * preventing them from shadowing the persisted gateway credential.
  */
 internal class OrchordsGatewayErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val original = chain.request()
-        val request = if (original.url.host == ORCHORDS_GATEWAY_HOST) {
-            val authorizationValues = original.headers.values("Authorization")
-            if (authorizationValues.size > 1) {
-                original.newBuilder()
-                    .header("Authorization", authorizationValues.last())
-                    .build()
-            } else {
-                original
-            }
-        } else {
-            original
-        }
-
+        val request = chain.request().normalizeOrchordsGatewayAuthorization()
         val response = chain.proceed(request)
         if (request.url.host != ORCHORDS_GATEWAY_HOST || response.isSuccessful) {
             return response

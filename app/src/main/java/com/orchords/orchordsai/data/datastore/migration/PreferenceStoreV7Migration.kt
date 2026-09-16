@@ -48,7 +48,7 @@ class PreferenceStoreV7Migration(
             val migrated = JsonArray(root.map { element ->
                 val server = element as? JsonObject ?: error("MCP server is not an object")
                 val serverId = (server["id"] as? JsonPrimitive)?.content
-                    ?.let(Uuid::parse)
+                    ?.let { Uuid.parse(it) }
                     ?: error("MCP server id missing")
                 val common = server["commonOptions"] as? JsonObject ?: return@map server
                 val commonValues = common.toMutableMap()

@@ -173,7 +173,7 @@ listing at must serve the same content.
 ## 10. Contact
 
 Privacy questions: open an issue at
-<https://github.com/ORCHORDS/OrchordsStudioAi/issues> with the label
+<https://github.com/ORCHORDS/OrchordsStudioAi-v2/issues> with the label
 `privacy`.
 
 Security issues: see `SECURITY.md`.

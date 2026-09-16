@@ -1,7 +1,7 @@
 # Google Play Release Compliance Agenda
 
 **App:** OrchordsAI (`com.orchords.orchordsai`)
-**Repository:** `ORCHORDS/OrchordsStudioAi` (remote: `https://github.com/ORCHORDS/OrchordsStudioAi.git`)
+**Repository:** `ORCHORDS/OrchordsStudioAi-v2` (remote: `https://github.com/ORCHORDS/OrchordsStudioAi-v2.git`)
 **Status:** Evidence-based pre-release checklist; approval is not guaranteed.
 **Prepared:** 2026-09-14
 **HEAD evidence captured on:** `git rev 16e8c6e` (2026-09-15)
@@ -78,6 +78,56 @@ Read-only inspection recorded: branch `main` tracks `origin/main`; working tree 
 - [ ] **Pending:** review Android vitals after test distribution and before production promotion; investigate any bad behavior rather than assuming approval. Android vitals data only exists once the first user-cohort install has aged past the metric collection window, so this is post-launch work.
 - [ ] **Pending:** complete Store listing, Data Safety, privacy policy, content rating, target audience, ads, app access, permissions/API declarations, financial declarations, and any Play Console questionnaires shown for this app. Pre-drafted answers exist for several of these (`DATA_SAFETY.md`, `LISTING_COPY.md`, `CONTENT_RATING.md`, `PERMISSIONS.md`, `PRIVACY.md`); the Console-side submission remains external.
 - [ ] **PLAY-10 pending:** verify listing assets. `docs/LISTING_ASSETS.md` currently contains TODO rows and therefore is not a release-ready checklist. Do not fabricate screenshots or placeholder icons.
+
+## Repository policy changes (effective 2026-09-16)
+
+The following operational decisions were applied to this repository on
+2026-09-16 and supersede any prior CI-runner evidence recorded above.
+Workflow SHAs cited in the bullets below (`e3b4e88`, `16bce6c`,
+`7115142`, `5e943a6`, `1780862`, `ffa6127`, `16bce6c`) remain accurate
+as historical evidence of what *did* run on a self-hosted runner at
+that SHA, but no runner will fire again until the policy is reversed.
+
+1. **GitHub Actions disabled at the repo level.** All `.github/workflows/*`
+   jobs (`Branch Verification`, `CI Metrics`, `Citation Integrity Tests`,
+   `Close Blank Issues`, `Daily Build`, `Dependency Audit`,
+   `Gradle Dependency Submission`, `Instrumented Tests`,
+   `Main Verification`, `Play Internal Publish`,
+   `Protected PR Verification`, `Private Runner Policy`,
+   `Runner Maintenance`, `Security Analysis`) are individually marked
+   `disabled_manually`, and `repos/.../actions/permissions.enabled = false`
+   so no runner ever spins up again from `push`, `pull_request`,
+   `schedule`, or `workflow_dispatch`. The workflow files remain on `main`
+   so the policy is reversible in one commit.
+2. **Dependabot disabled.** `.github/dependabot.yml` was deleted, and
+   `automated-security-fixes.enabled = false` was set via the repo API.
+   No Dependabot version-update or security-update PR will be opened
+   again. Transitive `js-yaml@4.3.2` and `morgan@1.12.0` remain pinned
+   via `web-ui/pnpm-workspace.yaml` `overrides:` so the dependency
+   graph itself does not regress; only the alert surface is removed.
+3. **Single branch.** `main` is the only branch on the repo. All
+   pre-existing branches (`fix/291-multi-image-generation-slots`,
+   `fix/48h-ci-failures-20260911`, `fix/semgrep-host-verifier-false-positives`,
+   `team2/issue-129-config-health`) were deleted on 2026-09-16. Tags
+   `latest` and `nightly` are preserved and reachable from `main`.
+   `default_branch` was set to `main`.
+4. **Pull requests closed, not merged.** The three PRs that were open at
+   repo recreation (`#1`, `#2`, `#3`) were closed as superseded; their
+   head branches were deleted with them. No code from any non-`main`
+   branch landed on `main` in this cleanup.
+5. **No Dependabot alerts will be tracked going forward.** Any new
+   alerts that appear (currently zero open) are informational only; the
+   closure workflow is manual via the Security tab and is not part of
+   the release gate.
+6. **Contributor identity.** The repository was recreated on
+   2026-09-16 with history rewritten to a single author
+   `ORCHORDS.COM <72497645+ORCHORDS@users.noreply.github.com>`. The
+   contributors graph on the new repo therefore shows one entry.
+7. **Scope of this agenda.** Items above that cite "is green on
+   workflow X at SHA Y" remain accurate as historical evidence; they
+   no longer represent a guarantee that the same path will run on the
+   next push. The unresolved-blocker list below is unaffected — none of
+   those items depended on CI, only on Console-side evidence.
 
 ## Unresolved blockers
 

@@ -74,7 +74,7 @@ provider you configure).
 > privacy page for the full list and the privacy policy linked below.
 >
 > Source of truth for every statement above:
-> https://github.com/ORCHORDS/OrchordsStudioAi/blob/main/docs/PRIVACY.md
+> https://github.com/ORCHORDS/OrchordsStudioAi-v2/blob/main/docs/PRIVACY.md
 
 The structure follows `docs/PRIVACY.md` §1–§7 and §10 (issue tracker
 contact) and `docs/PERMISSIONS.md`. The "What OrchordsAI does not do"

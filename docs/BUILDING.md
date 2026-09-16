@@ -17,7 +17,7 @@ Use JDK 17, Android SDK, Node.js 22, and pnpm 11.
 The repository ships everything it needs. A plain `git clone` is enough:
 
 ```bash
-git clone https://github.com/ORCHORDS/OrchordsStudioAi.git
+git clone https://github.com/ORCHORDS/OrchordsStudioAi-v2.git
 ```
 
 `material-color-utilities` is vendored into `material3/src/main/java/` under Apache License 2.0. The license, upstream source, and attribution live alongside the vendored sources (see `material3/src/main/java/LICENSE.material-color-utilities` and `THIRD_PARTY_NOTICES.md`). No submodule, manual download, or extra Gradle step is required.

@@ -152,5 +152,6 @@ sealed class StreamChunk {
         val finishReason: String? = null,
         val responseId: String? = null,
         val model: String? = null,
+        val providerTerminalObserved: Boolean = finishReason != null,
     ) : StreamChunk()
 }

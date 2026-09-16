@@ -73,13 +73,10 @@ fun McpPickerButton(
     ToggleSurface(
         modifier = modifier,
         checked = assistant.mcpServers.isNotEmpty(),
-        onClick = {
-            showMcpPicker = true
-        }
+        onClick = { showMcpPicker = true }
     ) {
         Row(
-            modifier = Modifier
-                .padding(vertical = 8.dp, horizontal = 8.dp),
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -88,16 +85,12 @@ fun McpPickerButton(
                 contentAlignment = Alignment.Center
             ) {
                 if (loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp)
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
                 } else {
                     BadgedBox(
                         badge = {
                             if (enabledServers.isNotEmpty()) {
-                                Badge(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                ) {
+                                Badge(containerColor = MaterialTheme.colorScheme.tertiaryContainer) {
                                     Text(text = enabledServers.size.toString())
                                 }
                             }
@@ -108,7 +101,6 @@ fun McpPickerButton(
                             contentDescription = stringResource(R.string.mcp_picker_title),
                         )
                     }
-
                 }
             }
         }
@@ -119,7 +111,7 @@ fun McpPickerButton(
             sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
         ) {
             Column(
-                modifier = Modifier.Companion
+                modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.7f)
                     .padding(16.dp),
@@ -128,9 +120,7 @@ fun McpPickerButton(
             ) {
                 Text(
                     text = stringResource(id = R.string.mcp_picker_title),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    )
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
                 AnimatedVisibility(loading) {
                     Column(
@@ -148,12 +138,8 @@ fun McpPickerButton(
                 McpPicker(
                     assistant = assistant,
                     servers = servers,
-                    onUpdateAssistant = {
-                        onUpdateAssistant(it)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
+                    onUpdateAssistant = onUpdateAssistant,
+                    modifier = Modifier.fillMaxWidth().weight(1f)
                 )
             }
         }
@@ -186,9 +172,7 @@ fun McpPickerListItem(
                 )
             }
         },
-        headlineContent = {
-            Text(stringResource(R.string.mcp_picker_title))
-        },
+        headlineContent = { Text(stringResource(R.string.mcp_picker_title)) },
         trailingContent = {
             if (enabledServers.isNotEmpty()) {
                 Text(
@@ -198,14 +182,10 @@ fun McpPickerListItem(
                 )
             }
         },
-        colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = modifier
             .clip(MaterialTheme.shapes.large)
-            .clickable {
-                showMcpPicker = true
-            },
+            .clickable { showMcpPicker = true },
     )
 
     if (showMcpPicker) {
@@ -241,9 +221,7 @@ private fun McpPickerSheet(
         ) {
             Text(
                 text = stringResource(id = R.string.mcp_picker_title),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
-                )
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
             )
             AnimatedVisibility(loading) {
                 Column(
@@ -261,12 +239,8 @@ private fun McpPickerSheet(
             McpPicker(
                 assistant = assistant,
                 servers = servers,
-                onUpdateAssistant = {
-                    onUpdateAssistant(it)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                onUpdateAssistant = onUpdateAssistant,
+                modifier = Modifier.fillMaxWidth().weight(1f)
             )
         }
     }
@@ -298,21 +272,13 @@ fun McpPicker(
                 ) {
                     when (status) {
                         McpStatus.Idle -> Icon(HugeIcons.Icon1stBracket, null)
-                        McpStatus.Connecting -> CircularProgressIndicator(
-                            modifier = Modifier.size(
-                                24.dp
-                            )
-                        )
-
+                        McpStatus.Connecting -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         McpStatus.Connected -> Icon(HugeIcons.McpServer, null)
-                        is McpStatus.Reconnecting -> CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp)
-                        )
+                        is McpStatus.Reconnecting -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         is McpStatus.Error -> Icon(HugeIcons.Alert01, null)
+                        is McpStatus.PermissionDenied -> Icon(HugeIcons.Alert01, null)
                         McpStatus.NeedsAuthorization -> Icon(HugeIcons.Alert01, null)
-                        McpStatus.Authorizing -> CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp)
-                        )
+                        McpStatus.Authorizing -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     }
                     Column(
                         modifier = Modifier.weight(1f),
@@ -329,6 +295,7 @@ fun McpPicker(
                                 is McpStatus.Connected -> "Connected"
                                 is McpStatus.Reconnecting -> "Reconnecting (${s.attempt}/${s.maxAttempts})"
                                 is McpStatus.Error -> "Error: ${s.message}"
+                                is McpStatus.PermissionDenied -> "Permission denied: ${s.message}"
                                 is McpStatus.NeedsAuthorization -> "Needs authorization"
                                 is McpStatus.Authorizing -> "Authorizing"
                             },
@@ -339,9 +306,7 @@ fun McpPicker(
                         if (status == McpStatus.Connected) {
                             val tools = server.commonOptions.tools
                             val enabledTools = tools.fastFilter { it.enable }
-                            Tag(
-                                type = TagType.INFO
-                            ) {
+                            Tag(type = TagType.INFO) {
                                 Text("${enabledTools.size}/${tools.size} tools")
                             }
                         }
@@ -352,21 +317,13 @@ fun McpPicker(
                             if (it) {
                                 val newServers = assistant.mcpServers.toMutableSet()
                                 newServers.add(server.id)
-                                newServers.removeIf { servers.none { s -> s.id == server.id } } // remove invalid servers
-                                onUpdateAssistant(
-                                    assistant.copy(
-                                        mcpServers = newServers.toSet()
-                                    )
-                                )
+                                newServers.removeIf { servers.none { s -> s.id == server.id } }
+                                onUpdateAssistant(assistant.copy(mcpServers = newServers.toSet()))
                             } else {
                                 val newServers = assistant.mcpServers.toMutableSet()
                                 newServers.remove(server.id)
-                                newServers.removeIf { servers.none { s -> s.id == server.id } } //  remove invalid servers
-                                onUpdateAssistant(
-                                    assistant.copy(
-                                        mcpServers = newServers.toSet()
-                                    )
-                                )
+                                newServers.removeIf { servers.none { s -> s.id == server.id } }
+                                onUpdateAssistant(assistant.copy(mcpServers = newServers.toSet()))
                             }
                         }
                     )

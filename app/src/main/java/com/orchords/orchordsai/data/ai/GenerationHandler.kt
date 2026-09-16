@@ -36,7 +36,7 @@ import com.orchords.ai.ui.applyToolResultRetention
 import com.orchords.ai.ui.limitContext
 import com.orchords.ai.ui.ToolResultRetentionMode
 import com.orchords.orchordsai.R
-import com.orchords.orchordsai.data.ai.planning.isPlanningModeEnabled
+import com.orchords.orchordsai.data.ai.planning.isPlanningModeActive
 import com.orchords.orchordsai.data.ai.planning.withPlanningApprovalOverlay
 import com.orchords.orchordsai.data.ai.transformers.InputMessageTransformer
 import com.orchords.orchordsai.data.ai.transformers.MessageTransformer
@@ -105,7 +105,11 @@ class GenerationHandler(
     ): Flow<GenerationChunk> = flow {
         val provider = model.findProvider(settings.providers) ?: error("Provider not found")
         val providerImpl = providerManager.getProviderByType(provider)
-        val planningModeEnabled = conversationModeInjectionIds.isPlanningModeEnabled()
+        val planningModeEnabled = isPlanningModeActive(
+            assistantModeInjectionIds = assistant.modeInjectionIds,
+            allowConversationPromptInjection = assistant.allowConversationPromptInjection,
+            conversationModeInjectionIds = conversationModeInjectionIds,
+        )
 
         var messages: List<UIMessage> = messages
 
@@ -138,14 +142,12 @@ class GenerationHandler(
                 tool.withPlanningApprovalOverlay(planningModeEnabled)
             }
 
-            // Check if we have tool calls ready to continue after user interaction.
             val pendingTools = messages.lastOrNull()?.getTools()?.filter {
                 it.canResumeExecution
             } ?: emptyList()
 
             val toolsToProcess: List<UIMessagePart.Tool>
 
-            // Skip generation if we have approved/denied tool calls to handle
             if (pendingTools.isEmpty()) {
                 generateInternal(
                     assistant = assistant,
@@ -207,22 +209,18 @@ class GenerationHandler(
 
                 val tools = messages.last().getTools().filter { !it.isExecuted }
                 if (tools.isEmpty()) {
-                    // no tool calls, break
                     break
                 }
 
-                // Check for tools that need approval
                 var hasPendingApproval = false
                 val updatedTools = tools.map { tool ->
                     val toolDef = toolsInternal.find { it.name == tool.toolName }
                     when {
-                        // Tool needs approval and state is Auto -> set to Pending
                         toolDef?.needsApproval(tool.inputAsJson()) == true &&
                             tool.approvalState is ToolApprovalState.Auto -> {
                             hasPendingApproval = true
                             tool.copy(approvalState = ToolApprovalState.Pending)
                         }
-                        // State is Pending -> keep waiting
                         tool.approvalState is ToolApprovalState.Pending -> {
                             hasPendingApproval = true
                             tool
@@ -232,7 +230,6 @@ class GenerationHandler(
                     }
                 }
 
-                // If any tools were updated to Pending, update the message and break
                 if (updatedTools != tools) {
                     val lastMessage = messages.last()
                     val updatedParts = lastMessage.parts.map { part ->
@@ -246,7 +243,6 @@ class GenerationHandler(
                     emit(GenerationChunk.Messages(messages))
                 }
 
-                // If there are pending approvals, break and wait for user
                 if (hasPendingApproval) {
                     Log.i(TAG, "generateText: waiting for tool approval")
                     break
@@ -254,17 +250,14 @@ class GenerationHandler(
 
                 toolsToProcess = updatedTools
             } else {
-                // Resuming after user interaction - use the resumable tools directly.
                 Log.i(TAG, "generateText: resuming with ${pendingTools.size} resumable tools")
                 toolsToProcess = messages.last().getTools().filter { it.canResumeExecution }
             }
 
-            // Handle tools (execute approved tools, handle denied tools)
             val executedTools = arrayListOf<UIMessagePart.Tool>()
             toolsToProcess.forEach { tool ->
                 when (tool.approvalState) {
                     is ToolApprovalState.Denied -> {
-                        // Tool was denied by user
                         val reason = (tool.approvalState as ToolApprovalState.Denied).reason
                         executedTools += tool.copy(
                             output = listOf(
@@ -283,7 +276,6 @@ class GenerationHandler(
                     }
 
                     is ToolApprovalState.Answered -> {
-                        // Tool was answered by user (e.g., ask_user tool)
                         val answer = (tool.approvalState as ToolApprovalState.Answered).answer
                         executedTools += tool.copy(
                             output = listOf(
@@ -293,11 +285,9 @@ class GenerationHandler(
                     }
 
                     is ToolApprovalState.Pending -> {
-                        // Should not reach here, but just in case
                     }
 
                     else -> {
-                        // Auto or Approved - execute the tool
                         runCatching {
                             val toolDef = toolsInternal.find { toolDef -> toolDef.name == tool.toolName }
                                 ?: error("Tool ${tool.toolName} not found")
@@ -338,11 +328,9 @@ class GenerationHandler(
             }
 
             if (executedTools.isEmpty()) {
-                // No results to add (all tools were pending)
                 break
             }
 
-            // Update last message with executed tools (NOT create TOOL message)
             val lastMessage = messages.last()
             val updatedParts = lastMessage.parts.map { part ->
                 if (part is UIMessagePart.Tool) {
@@ -545,7 +533,6 @@ class GenerationHandler(
         completedAt: Long,
         isPartial: Boolean,
     ) {
-        // Usage is accounting metadata only; do not persist prompts, completions, or credentials.
         val eventId = Uuid.random().toString()
         providerUsageEventDAO.insert(
             ProviderUsageEventEntity(

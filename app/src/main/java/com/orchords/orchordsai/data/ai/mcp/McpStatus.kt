@@ -19,6 +19,8 @@ sealed class McpStatus {
         }
     }
 
+    data class PermissionDenied(val message: String) : McpStatus()
+
     data object NeedsAuthorization : McpStatus()
 
     data object Authorizing : McpStatus()

@@ -59,6 +59,12 @@ sealed class McpServerConfig {
     abstract val id: Uuid
     abstract val commonOptions: McpCommonOptions
 
+    val serverUrl: String
+        get() = when (this) {
+            is SseTransportServer -> url
+            is StreamableHTTPServer -> url
+        }
+
     abstract fun clone(
         id: Uuid = this.id,
         commonOptions: McpCommonOptions = this.commonOptions
@@ -88,9 +94,3 @@ sealed class McpServerConfig {
         }
     }
 }
-
-val McpServerConfig.serverUrl: String
-    get() = when (this) {
-        is McpServerConfig.SseTransportServer -> url
-        is McpServerConfig.StreamableHTTPServer -> url
-    }

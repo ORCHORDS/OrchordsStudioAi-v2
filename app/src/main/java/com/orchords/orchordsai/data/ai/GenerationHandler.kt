@@ -36,6 +36,8 @@ import com.orchords.ai.ui.applyToolResultRetention
 import com.orchords.ai.ui.limitContext
 import com.orchords.ai.ui.ToolResultRetentionMode
 import com.orchords.orchordsai.R
+import com.orchords.orchordsai.data.ai.planning.isPlanningModeEnabled
+import com.orchords.orchordsai.data.ai.planning.withPlanningApprovalOverlay
 import com.orchords.orchordsai.data.ai.transformers.InputMessageTransformer
 import com.orchords.orchordsai.data.ai.transformers.MessageTransformer
 import com.orchords.orchordsai.data.ai.transformers.OutputMessageTransformer
@@ -103,6 +105,7 @@ class GenerationHandler(
     ): Flow<GenerationChunk> = flow {
         val provider = model.findProvider(settings.providers) ?: error("Provider not found")
         val providerImpl = providerManager.getProviderByType(provider)
+        val planningModeEnabled = conversationModeInjectionIds.isPlanningModeEnabled()
 
         var messages: List<UIMessage> = messages
 
@@ -131,6 +134,8 @@ class GenerationHandler(
                     ).let(this::addAll)
                 }
                 addAll(tools)
+            }.map { tool ->
+                tool.withPlanningApprovalOverlay(planningModeEnabled)
             }
 
             // Check if we have tool calls ready to continue after user interaction.

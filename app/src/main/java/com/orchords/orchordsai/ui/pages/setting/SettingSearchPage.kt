@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.Screen
+import com.orchords.orchordsai.data.ai.tools.normalizeOrchordsSearchOptions
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.AutoAIIcon
 import com.orchords.orchordsai.ui.components.ui.FormItem
@@ -54,24 +55,28 @@ import org.koin.androidx.compose.koinViewModel
  *
  * Bing and the old provider picker are intentionally not presented. Legacy
  * serialized provider records stay readable elsewhere for migration safety,
- * but this surface normalizes the active configuration to one Orchords Search
- * record and one selected index.
+ * but this surface normalizes the active configuration to one repaired
+ * Orchords Search record and one selected index.
  */
 @Composable
 fun SettingSearchPage(vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val nav = LocalNavController.current
-    val orchordsSearch = remember(settings.searchServices) {
+    val storedOrchordsSearch = remember(settings.searchServices) {
         settings.searchServices
             .filterIsInstance<SearchServiceOptions.OrchordsAIOptions>()
             .firstOrNull()
-            ?: SearchServiceOptions.DEFAULT as SearchServiceOptions.OrchordsAIOptions
+            ?: SearchServiceOptions.OrchordsAIOptions()
+    }
+    val orchordsSearch = remember(storedOrchordsSearch) {
+        normalizeOrchordsSearchOptions(storedOrchordsSearch)
     }
     val needsNormalization =
         settings.searchServices.size != 1 ||
             settings.searchServices.firstOrNull() !is SearchServiceOptions.OrchordsAIOptions ||
-            settings.searchServiceSelected != 0
+            settings.searchServiceSelected != 0 ||
+            storedOrchordsSearch != orchordsSearch
 
     LaunchedEffect(orchordsSearch, needsNormalization) {
         if (needsNormalization) {

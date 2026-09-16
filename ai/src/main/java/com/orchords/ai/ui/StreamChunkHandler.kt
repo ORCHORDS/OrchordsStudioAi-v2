@@ -222,7 +222,7 @@ class StreamChunkHandler(private val model: Model? = null) {
                 finishedAt = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
                 termination = mapGenerationTermination(
                     rawProviderCode = chunk.finishReason,
-                    providerTerminalObserved = chunk.finishReason != null,
+                    providerTerminalObserved = chunk.providerTerminalObserved,
                     responseId = chunk.responseId,
                     providerModel = chunk.model,
                     emptyResponse = parts.isEmptyUIMessage(),

@@ -6,13 +6,16 @@
   backs up everything in sharedpref/file/database/external except what
   is excluded; we invert that by declaring an explicit allowlist with
   no cross-domain deny rules. Anything outside the listed paths (the
-  Room database with conversation content, encryption keys, the file-
-  backed upload cache, and the provider/MCP credential files) is not
-  matched by any <include> and therefore stays out of the backup.
+  Room database with conversation content, encryption keys, file-backed
+  caches, provider credentials, MCP credentials, and the V6 secondary
+  secret store) is not matched by any <include> and therefore stays out
+  of backup and device transfer.
 
-  Credentials currently share a namespace with ordinary settings; that
-  re-architecture is tracked separately (#40/#87). Until then this file
-  errs on the side of NOT backing up anything that could leak them.
+  The V6 `orchordsai_secondary_secrets` SharedPreferences file contains
+  only Android-Keystore-encrypted credential payloads, but it is still
+  intentionally excluded. Keystore keys are device-bound and are not
+  treated as portable backup material.
+
   Durable user-data portability is owned by the reviewed first-party
   backup/sync flows (#229/#230), not by Android OS backup.
 

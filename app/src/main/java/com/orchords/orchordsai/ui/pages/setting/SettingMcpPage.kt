@@ -100,11 +100,13 @@ import com.orchords.orchordsai.data.ai.mcp.McpManager
 import com.orchords.orchordsai.data.ai.mcp.McpServerConfig
 import com.orchords.orchordsai.data.ai.mcp.McpStatus
 import com.orchords.orchordsai.data.ai.mcp.McpTool
+import com.orchords.orchordsai.data.ai.mcp.githubMcpPat
 import com.orchords.orchordsai.data.ai.mcp.githubMcpPreset
 import com.orchords.orchordsai.data.ai.mcp.isGitHubMcpLockdown
 import com.orchords.orchordsai.data.ai.mcp.isGitHubMcpReadOnly
 import com.orchords.orchordsai.data.ai.mcp.isOfficialGitHubMcpRemote
 import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpLockdown
+import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpPat
 import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpReadOnly
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.FormItem
@@ -593,6 +595,28 @@ private fun McpCommonOptionsConfigure(
 
         if (isOfficialGitHubMcpRemote(config)) {
             HorizontalDivider()
+            var patVisible by rememberSaveable { mutableStateOf(false) }
+            FormItem(
+                label = { Text("GitHub PAT") },
+                description = { Text("Personal access token for the official GitHub MCP server. Stored through the app's encrypted MCP secret store; the Bearer prefix is added automatically.") }
+            ) {
+                OutlinedTextField(
+                    value = githubMcpPat(config),
+                    onValueChange = { update(config.withGitHubMcpPat(it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Personal access token") },
+                    visualTransformation = if (patVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { patVisible = !patVisible }) {
+                            Icon(
+                                if (patVisible) HugeIcons.ViewOff else HugeIcons.View,
+                                contentDescription = null,
+                            )
+                        }
+                    },
+                )
+            }
+
             FormItem(
                 label = { Text("GitHub read-only") },
                 description = { Text("Disable all GitHub MCP tools that can modify repositories, issues, pull requests, or other GitHub state.") }
@@ -778,6 +802,9 @@ private fun McpCommonOptionsConfigure(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 config.commonOptions.headers.forEachIndexed { index, header ->
+                    if (isOfficialGitHubMcpRemote(config) && header.first.equals("Authorization", ignoreCase = true)) {
+                        return@forEachIndexed
+                    }
                     var headerName by remember(header.first) { mutableStateOf(header.first) }
                     var headerValue by remember(header.second) { mutableStateOf(header.second) }
                     var headerValueVisible by rememberSaveable { mutableStateOf(false) }

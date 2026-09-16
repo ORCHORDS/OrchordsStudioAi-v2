@@ -14,6 +14,12 @@ class ReleaseWorkflowPolicyTest {
         return workflow.readText()
     }
 
+    private fun cleanupWorkflowSource(): String {
+        val workflow = repoRoot().resolve(".github/workflows/release-cleanup.yml")
+        require(workflow.isFile) { "release-cleanup.yml not found from ${File(".").canonicalPath}" }
+        return workflow.readText()
+    }
+
     private fun appBuildSource(): String {
         val buildFile = repoRoot().resolve("app/build.gradle.kts")
         require(buildFile.isFile) { "app/build.gradle.kts not found from ${File(".").canonicalPath}" }
@@ -33,7 +39,7 @@ class ReleaseWorkflowPolicyTest {
         assertTrue(source.contains("prerelease: false"))
         assertTrue(source.contains("make_latest: true"))
         assertTrue(source.contains("releases/tags/\$RELEASE_TAG"))
-        assertTrue(source.contains("Verify latest Release while retaining history"))
+        assertTrue(source.contains("Verify published Release and assets"))
     }
 
     @Test
@@ -60,8 +66,8 @@ class ReleaseWorkflowPolicyTest {
         val build = appBuildSource()
         val properties = gradleProperties()
 
-        assertTrue(properties.contains("releaseVersionName=0.1.4"))
-        assertTrue(properties.contains("releaseVersionCode=1000004"))
+        assertTrue(properties.contains("releaseVersionName=0.1.5"))
+        assertTrue(properties.contains("releaseVersionCode=1000005"))
         assertTrue(workflow.contains("releaseVersionName"))
         assertTrue(workflow.contains("releaseVersionCode"))
         assertTrue(workflow.contains("2100000000"))
@@ -91,14 +97,14 @@ class ReleaseWorkflowPolicyTest {
     }
 
     @Test
-    fun `release retains older releases instead of deleting them`() {
-        val source = workflowSource()
-        val publish = source.indexOf("Publish GitHub Release")
-        val verify = source.indexOf("Verify published Release and assets")
-        assertTrue(publish >= 0)
-        assertTrue(verify > publish)
-        assertFalse(source.contains("Remove every older GitHub Release"))
+    fun `successful release cleanup removes every older GitHub Release`() {
+        val source = cleanupWorkflowSource()
+        assertTrue(source.contains("workflow_run"))
+        assertTrue(source.contains("workflows: [Release]"))
+        assertTrue(source.contains("github.event.workflow_run.conclusion == 'success'"))
         assertTrue(source.contains("releases/latest"))
+        assertTrue(source.contains("-X DELETE"))
+        assertTrue(source.contains("Expected exactly one GitHub Release"))
     }
 
     @Test

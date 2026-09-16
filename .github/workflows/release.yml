@@ -74,6 +74,36 @@ jobs:
           existing_sha="$(python3 -c 'import json; print(json.load(open("/tmp/tag.json"))["object"]["sha"])')"
           [ "$existing_sha" = "$BUILD_SHA" ] || { echo "::error::Tag already exists for different source. Bump releaseVersionName/releaseVersionCode before publishing new source."; exit 1; }
 
+      - name: Local preflight
+        shell: bash
+        run: bash scripts/preflight-local.sh
+
+      - name: Verify web app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd web-ui
+          pnpm install --frozen-lockfile
+          pnpm test:planning
+          pnpm typecheck
+          pnpm build
+
+      - name: Test, lint and verify Android source
+        env:
+          APP_VERSION_NAME: ${{ steps.version.outputs.name }}
+          APP_VERSION_CODE: ${{ steps.version.outputs.code }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --stacktrace \
+            -PreleaseVersionName="$APP_VERSION_NAME" \
+            -PreleaseVersionCode="$APP_VERSION_CODE" \
+            :app:testDebugUnitTest \
+            :ai:test \
+            :workspace:test \
+            :app:lintDebug
+
       - name: Require stable signing material
         env:
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
@@ -98,35 +128,16 @@ jobs:
           printf '%s' "$SIGNING_CONFIG" > local.properties
           chmod 600 app/app.key local.properties
 
-      - name: Local preflight
-        shell: bash
-        run: bash scripts/preflight-local.sh
-
-      - name: Verify web app
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd web-ui
-          pnpm install --frozen-lockfile
-          pnpm test:planning
-          pnpm typecheck
-          pnpm build
-
-      - name: Test, lint and build signed Android artifacts
+      - name: Build signed Android artifacts
         env:
           APP_VERSION_NAME: ${{ steps.version.outputs.name }}
           APP_VERSION_CODE: ${{ steps.version.outputs.code }}
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x gradlew
           ./gradlew --stacktrace \
             -PreleaseVersionName="$APP_VERSION_NAME" \
             -PreleaseVersionCode="$APP_VERSION_CODE" \
-            :app:testDebugUnitTest \
-            :ai:test \
-            :workspace:test \
-            :app:lintDebug \
             :app:buildAll
 
       - name: Remove signing files
@@ -236,7 +247,7 @@ jobs:
 
           ## Fixed in v0.1.6
           - OpenAI-compatible streaming now distinguishes a real \`[DONE]\` terminal from transport closure.
-          - A stream that closes before \`[DONE]\` is an IOException, so the existing bounded pre-output retry path can engage instead of silently saving an empty assistant response.
+          - Provider stream closed before terminal \`[DONE]\` now raises an IOException, so the existing bounded pre-output retry path can engage instead of silently saving an empty assistant response.
           - SSE failure callbacks with no throwable/error payload now fail explicitly instead of closing successfully.
           - Empty terminal responses are classified explicitly rather than looking like successful invisible assistant output.
           - The provider connection-test button remains visible while an API-key edit is unsaved, but is disabled until Save succeeds; it always tests the persisted credential.

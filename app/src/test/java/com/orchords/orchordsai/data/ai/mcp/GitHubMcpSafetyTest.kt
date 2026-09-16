@@ -11,23 +11,30 @@ class GitHubMcpSafetyTest {
 
         assertTrue(isOfficialGitHubMcpRemote(config))
         assertTrue(isGitHubMcpReadOnly(config))
+        assertTrue(isGitHubMcpLockdown(config))
         assertFalse(githubNewToolsNeedApproval(config))
     }
 
     @Test
     fun `GitHub write enabled config defaults every new tool to approval required`() {
-        val base = githubMcpPreset()
-        val writeEnabled = base.copy(
-            commonOptions = base.commonOptions.copy(
-                headers = base.commonOptions.headers.map { (name, value) ->
-                    if (name.equals("X-MCP-Readonly", ignoreCase = true)) name to "false"
-                    else name to value
-                }
-            )
-        )
+        val writeEnabled = githubMcpPreset().withGitHubMcpReadOnly(false)
 
         assertFalse(isGitHubMcpReadOnly(writeEnabled))
         assertTrue(githubNewToolsNeedApproval(writeEnabled))
+    }
+
+    @Test
+    fun `GitHub safety toggles update only their matching headers`() {
+        val base = githubMcpPreset()
+        val changed = base
+            .withGitHubMcpReadOnly(false)
+            .withGitHubMcpLockdown(false)
+
+        val headers = changed.commonOptions.headers.toMap()
+        assertTrue(headers["Authorization"] == "")
+        assertTrue(headers["X-MCP-Toolsets"] == "repos,issues,pull_requests")
+        assertTrue(headers["X-MCP-Readonly"] == "false")
+        assertTrue(headers["X-MCP-Lockdown"] == "false")
     }
 
     @Test

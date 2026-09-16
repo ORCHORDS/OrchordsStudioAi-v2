@@ -1,11 +1,13 @@
 package com.orchords.orchordsai.data.sync.s3
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class S3Config(
     val endpoint: String = "",
     val accessKeyId: String = "",
+    @Transient
     val secretAccessKey: String = "",
     val bucket: String = "",
     val region: String = "auto",

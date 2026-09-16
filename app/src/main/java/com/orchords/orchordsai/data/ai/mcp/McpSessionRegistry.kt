@@ -47,15 +47,9 @@ private const val BASE_RECONNECT_DELAY_MS = 1000L
 private const val MAX_RECONNECT_DELAY_MS = 30000L
 
 private class McpSession(initialConfig: McpServerConfig) {
-    @Volatile
-    var config: McpServerConfig = initialConfig
-
-    @Volatile
-    var client: Client? = null
-
-    @Volatile
-    var connectedConfig: McpServerConfig? = null
-
+    @Volatile var config: McpServerConfig = initialConfig
+    @Volatile var client: Client? = null
+    @Volatile var connectedConfig: McpServerConfig? = null
     val lifecycleMutex = Mutex()
     var reconnectJob: Job? = null
     var reconnectAttempt: Int = 0
@@ -65,6 +59,7 @@ private sealed interface ConnectResult {
     data object Success : ConnectResult
     data object Stale : ConnectResult
     data object NeedsAuthorization : ConnectResult
+    data object PermissionDenied : ConnectResult
     data object Failed : ConnectResult
 }
 
@@ -96,7 +91,6 @@ internal class McpSessionRegistry(
     private val sessions = ConcurrentHashMap<Uuid, McpSession>()
 
     fun getClient(configId: Uuid): Client? = sessions[configId]?.client
-
     fun getStatus(configId: Uuid): Flow<McpStatus> = statusStore.get(configId)
 
     fun reconcile(configs: List<McpServerConfig>) {
@@ -123,9 +117,7 @@ internal class McpSessionRegistry(
 
             val mustReconnect = !hasSameConnectionParameters(existing.config, newConfig)
             existing.config = newConfig
-            if (mustReconnect) {
-                appScope.launch { addClient(newConfig) }
-            }
+            if (mustReconnect) appScope.launch { addClient(newConfig) }
         }
     }
 
@@ -152,8 +144,11 @@ internal class McpSessionRegistry(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (oauthCoordinator.needsAuthorization(config, e)) {
-                statusStore.update(config.id, McpStatus.NeedsAuthorization)
+            when {
+                oauthCoordinator.needsAuthorization(config, e) ->
+                    statusStore.update(config.id, McpStatus.NeedsAuthorization)
+                oauthCoordinator.permissionDenied(e) ->
+                    statusStore.update(config.id, McpStatus.PermissionDenied(permissionMessage(e)))
             }
             throw e
         }
@@ -199,9 +194,7 @@ internal class McpSessionRegistry(
     ): ConnectResult = withContext(Dispatchers.IO) {
         session.lifecycleMutex.withLock {
             if (sessions[requestedConfig.id] !== session) return@withLock ConnectResult.Stale
-            if (!hasSameConnectionParameters(session.config, requestedConfig)) {
-                return@withLock ConnectResult.Stale
-            }
+            if (!hasSameConnectionParameters(session.config, requestedConfig)) return@withLock ConnectResult.Stale
 
             if (cancelPendingReconnect) {
                 session.reconnectJob?.cancel()
@@ -211,10 +204,7 @@ internal class McpSessionRegistry(
 
             val config = oauthCoordinator.ensureFreshToken(session.config)
             session.config = config
-            if (!forceReconnect &&
-                session.client != null &&
-                hasSameConnectionParameters(session.connectedConfig, config)
-            ) {
+            if (!forceReconnect && session.client != null && hasSameConnectionParameters(session.connectedConfig, config)) {
                 return@withLock ConnectResult.Success
             }
 
@@ -231,9 +221,7 @@ internal class McpSessionRegistry(
             try {
                 sdkClient.connect(transport)
                 val syncedConfig = syncTools(session, sdkClient, config)
-                if (sessions[config.id] !== session ||
-                    !hasSameConnectionParameters(config, syncedConfig)
-                ) {
+                if (sessions[config.id] !== session || !hasSameConnectionParameters(config, syncedConfig)) {
                     closeClient(sdkClient, config.commonOptions.name)
                     return@withLock ConnectResult.Stale
                 }
@@ -251,12 +239,19 @@ internal class McpSessionRegistry(
             } catch (e: Exception) {
                 closeClient(sdkClient, config.commonOptions.name)
                 Log.e(TAG, "Failed to connect MCP server ${config.id}: ${e::class.simpleName}")
-                if (oauthCoordinator.needsAuthorization(config, e)) {
-                    statusStore.update(config.id, McpStatus.NeedsAuthorization)
-                    ConnectResult.NeedsAuthorization
-                } else {
-                    statusStore.update(config.id, McpStatus.Error.from(e))
-                    ConnectResult.Failed
+                when {
+                    oauthCoordinator.needsAuthorization(config, e) -> {
+                        statusStore.update(config.id, McpStatus.NeedsAuthorization)
+                        ConnectResult.NeedsAuthorization
+                    }
+                    oauthCoordinator.permissionDenied(e) -> {
+                        statusStore.update(config.id, McpStatus.PermissionDenied(permissionMessage(e)))
+                        ConnectResult.PermissionDenied
+                    }
+                    else -> {
+                        statusStore.update(config.id, McpStatus.Error.from(e))
+                        ConnectResult.Failed
+                    }
                 }
             }
         }
@@ -287,10 +282,12 @@ internal class McpSessionRegistry(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    if (oauthCoordinator.needsAuthorization(config, e)) {
-                        statusStore.update(config.id, McpStatus.NeedsAuthorization)
-                    } else {
-                        statusStore.update(config.id, McpStatus.Error.from(e))
+                    when {
+                        oauthCoordinator.needsAuthorization(config, e) ->
+                            statusStore.update(config.id, McpStatus.NeedsAuthorization)
+                        oauthCoordinator.permissionDenied(e) ->
+                            statusStore.update(config.id, McpStatus.PermissionDenied(permissionMessage(e)))
+                        else -> statusStore.update(config.id, McpStatus.Error.from(e))
                     }
                 }
             }
@@ -350,9 +347,7 @@ internal class McpSessionRegistry(
             session.lifecycleMutex.withLock {
                 if (sessions[configId] !== session) return@withLock
                 if (sourceClient != null && session.client !== sourceClient) return@withLock
-                if (!retryAfterFailure && statusStore.status.value[configId] != McpStatus.Connected) {
-                    return@withLock
-                }
+                if (!retryAfterFailure && statusStore.status.value[configId] != McpStatus.Connected) return@withLock
                 if (session.reconnectJob?.isActive == true) return@withLock
 
                 val attempt = session.reconnectAttempt + 1
@@ -380,9 +375,7 @@ internal class McpSessionRegistry(
         try {
             delay(delayMs)
             val latestConfig = settingsStore.settingsFlow.value.mcpServers.find {
-                it.id == session.config.id &&
-                    it.commonOptions.enable &&
-                    it.commonOptions.name.isNotBlank()
+                it.id == session.config.id && it.commonOptions.enable && it.commonOptions.name.isNotBlank()
             } ?: return
             session.config = latestConfig
             retry = connectSession(
@@ -433,7 +426,6 @@ internal class McpSessionRegistry(
             client = httpClient,
             requestBuilder = { appendResolvedHeaders(config) },
         )
-
         is McpServerConfig.StreamableHTTPServer -> StreamableHttpClientTransport(
             url = config.url,
             client = httpClient,
@@ -444,11 +436,14 @@ internal class McpSessionRegistry(
     private fun HttpRequestBuilder.appendResolvedHeaders(config: McpServerConfig) {
         headers.appendAll(StringValues.build {
             config.resolvedHeaders().forEach { (name, value) -> append(name, value) }
-            if (isCloudflareMcpHost(config.serverUrl)) {
-                append("Accept", MCP_STREAMABLE_ACCEPT)
-            }
+            if (isCloudflareMcpHost(config.serverUrl)) append("Accept", MCP_STREAMABLE_ACCEPT)
         })
     }
+
+    private fun permissionMessage(error: Throwable): String =
+        McpDiagnosticSanitizer.sanitize(
+            error.message?.takeIf { it.isNotBlank() } ?: "Permission denied by MCP server"
+        )
 
     private fun calculateBackoffDelay(attempt: Int): Long {
         val exponentialDelay = BASE_RECONNECT_DELAY_MS * (1L shl (attempt - 1).coerceAtMost(10))
@@ -509,7 +504,7 @@ private fun McpServerConfig.resolvedHeaders(): List<Pair<String, String>> {
 private fun mergeTools(
     storedTools: List<McpTool>,
     serverTools: List<Tool>,
-    newToolsNeedApproval: Boolean,
+    newToolsNeedApproval: Boolean = false,
 ): List<McpTool> {
     val toolsByName = storedTools.associateBy { it.name }
     return serverTools.map { serverTool ->

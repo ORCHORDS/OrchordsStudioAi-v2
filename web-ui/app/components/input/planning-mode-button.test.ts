@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   PLANNING_MODE_ID,
   setPlanningModeEnabled,
-} from "./planning-mode-button";
+} from "./planning-mode-state";
 
 test("planning mode id matches the Android stable id", () => {
   assert.equal(PLANNING_MODE_ID, "164b9a03-828e-434e-8aa9-82c0e019a7fb");

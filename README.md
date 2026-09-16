@@ -4,8 +4,6 @@
 
 # ORCHORDS AI
 
-[![Daily build](https://github.com/ORCHORDS/OrchordsStudioAi/actions/workflows/daily-build.yml/badge.svg)](https://github.com/ORCHORDS/OrchordsStudioAi/actions/workflows/daily-build.yml)
-[![Dependency audit](https://github.com/ORCHORDS/OrchordsStudioAi/actions/workflows/dependency-audit.yml/badge.svg)](https://github.com/ORCHORDS/OrchordsStudioAi/actions/workflows/dependency-audit.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 > ⭐ If you like ORCHORDS AI or find it useful, please consider starring this repository. It helps more people discover the project.
@@ -37,19 +35,17 @@ ORCHORDS AI is a private-by-design, local-first Android AI workspace for user-se
 - Voice, search, rich rendering, image, and video workflows
 - Optional local web interface and workspace tooling
 
-## Verify nightly APKs
+## Repository workflow
 
-Nightly releases publish SHA-256 checksums and a GitHub/Sigstore SLSA provenance attestation. After downloading the APK and `SHA256SUMS`, verify both before installing:
+This repository works directly on `main`. GitHub Actions are disabled at the repository level and normal development does not depend on hosted or self-hosted runners. Contributors verify changes on their own host before pushing.
+
+For issue work, run the lightweight local preflight first:
 
 ```bash
-sha256sum --check SHA256SUMS
-gh attestation verify ./ORCHORDS-AI.apk \
-  --repo ORCHORDS/OrchordsStudioAi \
-  --signer-workflow ORCHORDS/OrchordsStudioAi/.github/workflows/daily-build.yml \
-  --source-ref refs/heads/main
+bash scripts/preflight-local.sh
 ```
 
-Replace `ORCHORDS-AI.apk` with the downloaded APK filename.
+Then run the relevant build, unit tests, lint, or focused verification for the code you changed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [Building ORCHORDS AI](docs/BUILDING.md).
 
 ## Documentation boundary
 

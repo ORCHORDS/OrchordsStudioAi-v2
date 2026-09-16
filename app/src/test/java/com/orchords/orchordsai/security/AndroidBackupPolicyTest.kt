@@ -17,18 +17,17 @@ import java.io.File
  * preferences namespace as `<include>`. Anything that does not
  * appear in a `<include>` rule is excluded by definition — including
  * the Room database carrying conversation content, encryption keys,
- * and the file-backed upload cache that lives in the `file` domain.
+ * file-backed caches, and credential stores.
  */
 class AndroidBackupPolicyTest {
     private val sensitiveDomains = listOf("root", "file", "database", "external")
 
     /**
      * Portable preferences that may ride along with Android OS backup /
-     * device transfer. The only known safe SharedPreferences namespace is
-     * `orchordsai.preferences` (UI toggles, theme, layout). Credentials
-     * currently share a namespace with these settings; that re-
-     * architecture is tracked separately (#40/#87) and is not
-     * re-asserted here.
+     * device transfer. The only allowed SharedPreferences namespace is
+     * `orchordsai.preferences` (UI toggles, theme, layout). Provider
+     * credentials and the V6 `orchordsai_secondary_secrets` encrypted
+     * payload file intentionally stay outside this allowlist.
      */
     private val portableSharedPrefs = setOf("orchordsai.preferences.xml")
 
@@ -63,12 +62,6 @@ class AndroidBackupPolicyTest {
             .toList()
     }
 
-    /**
-     * The deny-by-default shape means: there is no `<include>` rule that
-     * touches a sensitive domain. Mixed include/exclude rules across the
-     * whole file are not the policy here; we keep the policy unit-
-     * testable by pinning what *is* allowed.
-     */
     private fun assertSensitiveDomainsAreAbsent(xml: String) {
         sensitiveDomains.forEach { domain ->
             assertTrue(
@@ -83,8 +76,6 @@ class AndroidBackupPolicyTest {
         val xml = source("src/main/res/xml/data_extraction_rules.xml")
 
         assertSensitiveDomainsAreAbsent(xml)
-
-        // Allowlist is exactly the portable set; nothing else should be sneaked in.
         assertEquals(
             "cloud-backup allowlist drifted from the documented portable set",
             portableSharedPrefs.sorted(),
@@ -102,7 +93,6 @@ class AndroidBackupPolicyTest {
         val xml = source("src/main/res/xml/backup_rules.xml")
 
         assertSensitiveDomainsAreAbsent(xml)
-
         assertEquals(
             "Legacy Auto Backup allowlist drifted from the documented portable set",
             portableSharedPrefs.sorted(),
@@ -116,6 +106,7 @@ class AndroidBackupPolicyTest {
         val legacy = source("src/main/res/xml/backup_rules.xml")
         listOf(dataExtraction, legacy).forEach { xml ->
             assertSensitiveDomainsAreAbsent(xml)
+            assertTrue("secondary secret store must stay out of backup allowlist", "orchordsai_secondary_secrets" !in xml.substringAfter("<data-extraction-rules>", xml))
         }
     }
 

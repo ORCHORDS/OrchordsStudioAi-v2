@@ -100,14 +100,21 @@ import com.orchords.orchordsai.data.ai.mcp.McpManager
 import com.orchords.orchordsai.data.ai.mcp.McpServerConfig
 import com.orchords.orchordsai.data.ai.mcp.McpStatus
 import com.orchords.orchordsai.data.ai.mcp.McpTool
+import com.orchords.orchordsai.data.ai.mcp.cloudflareMcpApiToken
+import com.orchords.orchordsai.data.ai.mcp.cloudflareMcpPreset
 import com.orchords.orchordsai.data.ai.mcp.githubMcpPat
 import com.orchords.orchordsai.data.ai.mcp.githubMcpPreset
 import com.orchords.orchordsai.data.ai.mcp.githubMcpToolsets
+import com.orchords.orchordsai.data.ai.mcp.hasCloudflareMcpAuthentication
 import com.orchords.orchordsai.data.ai.mcp.hasGitHubMcpAuthentication
+import com.orchords.orchordsai.data.ai.mcp.isCloudflareManagedHeader
 import com.orchords.orchordsai.data.ai.mcp.isGitHubManagedHeader
 import com.orchords.orchordsai.data.ai.mcp.isGitHubMcpLockdown
 import com.orchords.orchordsai.data.ai.mcp.isGitHubMcpReadOnly
+import com.orchords.orchordsai.data.ai.mcp.isOfficialCloudflareMcpRemote
 import com.orchords.orchordsai.data.ai.mcp.isOfficialGitHubMcpRemote
+import com.orchords.orchordsai.data.ai.mcp.withCloudflareMcpApiToken
+import com.orchords.orchordsai.data.ai.mcp.withCloudflareMcpDisconnected
 import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpDisconnected
 import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpLockdown
 import com.orchords.orchordsai.data.ai.mcp.withGitHubMcpPat
@@ -155,6 +162,9 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                     TextButton(onClick = { creationState.open(githubMcpPreset()) }) {
                         Text("GitHub")
                     }
+                    TextButton(onClick = { creationState.open(cloudflareMcpPreset()) }) {
+                        Text("Cloudflare")
+                    }
                     IconButton(onClick = { showImportDialog = true }) {
                         Icon(HugeIcons.FileImport, null)
                     }
@@ -196,7 +206,10 @@ fun SettingMcpPage(vm: SettingVM = koinViewModel()) {
                         item = mcpConfig,
                         onEdit = { editState.open(mcpConfig) },
                         onDisconnect = {
-                            val disconnected = mcpConfig.withGitHubMcpDisconnected()
+                            val disconnected = when {
+                                isOfficialCloudflareMcpRemote(mcpConfig) -> mcpConfig.withCloudflareMcpDisconnected()
+                                else -> mcpConfig.withGitHubMcpDisconnected()
+                            }
                             vm.updateSettings(
                                 settings.copy(
                                     mcpServers = mcpConfigs.map { current ->
@@ -365,6 +378,12 @@ private fun McpServerItem(
                                 Text(if (hasGitHubMcpAuthentication(item)) "Authenticated" else "No auth")
                             }
                         }
+                        if (isOfficialCloudflareMcpRemote(item)) {
+                            Tag(type = TagType.INFO) { Text("Cloudflare API") }
+                            Tag(type = if (hasCloudflareMcpAuthentication(item)) TagType.SUCCESS else TagType.DEFAULT) {
+                                Text(if (hasCloudflareMcpAuthentication(item)) "Authenticated" else "OAuth ready")
+                            }
+                        }
                     }
 
                     if (status is McpStatus.Error) {
@@ -376,7 +395,10 @@ private fun McpServerItem(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.clickable { errorDetail = status },
                         )
-                        if (isOfficialGitHubMcpRemote(item) && hasGitHubMcpAuthentication(item)) {
+                        if (
+                            (isOfficialGitHubMcpRemote(item) && hasGitHubMcpAuthentication(item)) ||
+                            (isOfficialCloudflareMcpRemote(item) && hasCloudflareMcpAuthentication(item))
+                        ) {
                             Button(
                                 onClick = { scope.launch { mcpManager.addClient(item) } },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -392,7 +414,7 @@ private fun McpServerItem(
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (isOfficialGitHubMcpRemote(item)) {
+                        if (isOfficialGitHubMcpRemote(item) || isOfficialCloudflareMcpRemote(item)) {
                             Button(
                                 onClick = { onEdit(item) },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -415,10 +437,24 @@ private fun McpServerItem(
                                 onClick = { onEdit(item) },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                             ) { Text("Configure PAT") }
+                        } else if (isOfficialCloudflareMcpRemote(item) && cloudflareMcpApiToken(item).isNotBlank()) {
+                            Text(
+                                text = "Cloudflare API token was rejected; update the token or clear it to use OAuth",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Button(
+                                onClick = { onEdit(item) },
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                            ) { Text("Configure token") }
                         } else {
                             val context = LocalContext.current
                             Text(
-                                text = "Requires OAuth authorization",
+                                text = if (isOfficialCloudflareMcpRemote(item)) {
+                                    "Connect with Cloudflare OAuth"
+                                } else {
+                                    "Requires OAuth authorization"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -440,7 +476,10 @@ private fun McpServerItem(
                         ) { Text("Cancel authorization") }
                     }
 
-                    if (isOfficialGitHubMcpRemote(item) && hasGitHubMcpAuthentication(item)) {
+                    if (
+                        (isOfficialGitHubMcpRemote(item) && hasGitHubMcpAuthentication(item)) ||
+                        (isOfficialCloudflareMcpRemote(item) && hasCloudflareMcpAuthentication(item))
+                    ) {
                         TextButton(
                             onClick = onDisconnect,
                             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
@@ -624,6 +663,38 @@ private fun McpCommonOptionsConfigure(
             }
         }
 
+        if (isOfficialCloudflareMcpRemote(config)) {
+            HorizontalDivider()
+            var tokenVisible by rememberSaveable { mutableStateOf(false) }
+            FormItem(
+                label = { Text("Cloudflare authentication") },
+                description = {
+                    Text("OAuth is the default and recommended interactive path. Optionally paste a scoped Cloudflare API token for automation; leave this field empty to use OAuth.")
+                }
+            ) {
+                OutlinedTextField(
+                    value = cloudflareMcpApiToken(config),
+                    onValueChange = { update(config.withCloudflareMcpApiToken(it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Optional API token") },
+                    visualTransformation = if (tokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { tokenVisible = !tokenVisible }) {
+                            Icon(if (tokenVisible) HugeIcons.ViewOff else HugeIcons.View, contentDescription = null)
+                        }
+                    },
+                    supportingText = {
+                        Text("Stored through the encrypted MCP secret store; the Bearer prefix is added automatically.")
+                    },
+                )
+            }
+            Text(
+                text = "Cloudflare Code Mode exposes search and execute across the API. Newly discovered Cloudflare tools start approval-required.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         HorizontalDivider()
 
         FormItem(
@@ -739,7 +810,10 @@ private fun McpCommonOptionsConfigure(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 config.commonOptions.headers.forEachIndexed { index, header ->
-                    if (isOfficialGitHubMcpRemote(config) && isGitHubManagedHeader(header.first)) {
+                    if (
+                        (isOfficialGitHubMcpRemote(config) && isGitHubManagedHeader(header.first)) ||
+                        (isOfficialCloudflareMcpRemote(config) && isCloudflareManagedHeader(header.first))
+                    ) {
                         return@forEachIndexed
                     }
                     var headerName by remember(header.first) { mutableStateOf(header.first) }

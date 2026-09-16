@@ -13,6 +13,7 @@ bash scripts/preflight-local.sh
   --tests 'com.orchords.orchordsai.data.ai.mcp.GitHubMcpPresetTest' \
   --tests 'com.orchords.orchordsai.data.ai.mcp.GitHubMcpSafetyTest' \
   --tests 'com.orchords.orchordsai.data.ai.mcp.GitHubConnectorStateTest' \
+  --tests 'com.orchords.orchordsai.data.ai.mcp.GitHubMcpContractPolicyTest' \
   --tests 'com.orchords.orchordsai.data.ai.mcp.McpAuthFailureClassifierTest' \
   --tests 'com.orchords.orchordsai.data.ai.mcp.McpDiagnosticSanitizerTest' \
   --tests 'com.orchords.orchordsai.data.sync.SettingsBackupProjectionTest'

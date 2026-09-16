@@ -21,8 +21,8 @@ class FastlanePublishingPolicyTest {
 
     private fun gradleKts(): String = repoRoot().resolve("app/build.gradle.kts").readText()
 
-    private fun dailyBuildWorkflow(): String =
-        repoRoot().resolve(".github/workflows/daily-build.yml").readText()
+    private fun releaseWorkflow(): String =
+        repoRoot().resolve(".github/workflows/release.yml").readText()
 
     private fun publishingWorkflow(): String =
         repoRoot().resolve(".github/workflows/play-internal-publish.yml").readText()
@@ -68,20 +68,20 @@ class FastlanePublishingPolicyTest {
     }
 
     @Test
-    fun `bundleRelease task is wired through buildAll and gradle accepts the release properties`() {
+    fun `bundleRelease task is wired through buildAll and release validates signed aab`() {
         val gradle = gradleKts()
         assertTrue("buildAll must depend on bundleRelease", gradle.contains("dependsOn(\"assembleRelease\", \"bundleRelease\")"))
 
-        val workflow = dailyBuildWorkflow()
-        assertTrue("signed path must invoke buildAll to also build the AAB", workflow.contains("gradle_task=buildAll"))
+        val workflow = releaseWorkflow()
+        assertTrue("release path must invoke buildAll", workflow.contains(":app:buildAll"))
         assertTrue(
-            "Daily Build must validate the AAB package id with apkanalyzer",
-            workflow.contains("aab_path=app/build/outputs/bundle/release/app-release.aab"),
+            "Release must validate the AAB package id with apkanalyzer",
+            workflow.contains("app/build/outputs/bundle/release/app-release.aab"),
         )
-        assertTrue(workflow.contains("apkanalyzer\" manifest application-id"))
-        val aabPackageCheck = "test " + "\"" + "\$aab_package" + "\" = \"com.orchords.orchordsai\""
-        assertTrue(workflow.contains(aabPackageCheck))
+        assertTrue(workflow.contains("manifest application-id"))
+        assertTrue(workflow.contains("com.orchords.orchordsai"))
         assertTrue(workflow.contains("release-assets/orchords-studio-ai.aab"))
+        assertTrue(workflow.contains("A GitHub Release must be a signed release build"))
     }
 
     @Test

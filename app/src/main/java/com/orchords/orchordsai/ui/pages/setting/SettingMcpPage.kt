@@ -269,7 +269,7 @@ private fun McpServerItem(
     onEdit: (McpServerConfig) -> Unit,
 ) {
     val mcpManager = koinInject<McpManager>()
-    val status by mcpManager.getStatus(item).collectAsStateWithLifecycle(McpStatus.Idle)
+    val status = mcpManager.getStatus(item).collectAsStateWithLifecycle(McpStatus.Idle).value
     val dismissBoxState = rememberSwipeToDismissBoxState()
     val scope = rememberCoroutineScope()
     var errorDetail by remember { mutableStateOf<McpStatus.Error?>(null) }

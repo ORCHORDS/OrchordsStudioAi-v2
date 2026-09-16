@@ -14,6 +14,13 @@ import com.orchords.ai.provider.ProviderSetting
 internal fun Settings.enforceFirstPartyModelPolicy(): Settings {
     val provider = canonicalOrchordsProvider(providers)
     val modelId = ORCHORDS_MODEL_UUID
+    val effectiveAssistants = assistants
+        .ifEmpty { DEFAULT_ASSISTANTS }
+        .map { assistant -> assistant.copy(chatModelId = modelId) }
+    val effectiveAssistantId = effectiveAssistants
+        .firstOrNull { it.id == assistantId }
+        ?.id
+        ?: effectiveAssistants.first().id
 
     return copy(
         providers = listOf(provider),
@@ -22,9 +29,8 @@ internal fun Settings.enforceFirstPartyModelPolicy(): Settings {
         translateModeId = modelId,
         compressModelId = modelId,
         favoriteModels = favoriteModels.filter { it == modelId }.distinct(),
-        assistants = assistants.map { assistant ->
-            assistant.copy(chatModelId = modelId)
-        },
+        assistantId = effectiveAssistantId,
+        assistants = effectiveAssistants,
     )
 }
 

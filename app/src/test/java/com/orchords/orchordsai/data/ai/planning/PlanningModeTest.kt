@@ -4,7 +4,9 @@ import com.orchords.ai.core.MessageRole
 import com.orchords.orchordsai.data.extensions.BuiltInLibrary
 import com.orchords.orchordsai.data.extensions.toModeInjection
 import com.orchords.orchordsai.data.model.InjectionPosition
+import kotlin.uuid.Uuid
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,5 +58,19 @@ class PlanningModeTest {
         assertEquals(InjectionPosition.AFTER_SYSTEM_PROMPT, planning.position)
         assertEquals(PLANNING_MODE_ID, planning.id)
         assertEquals(PLANNING_MODE_PROMPT, planning.content)
+    }
+
+    @Test
+    fun `planning toggle preserves unrelated conversation modes`() {
+        val other = Uuid.random()
+        val base = setOf(other)
+
+        val enabled = base.withPlanningMode(true)
+        val disabled = enabled.withPlanningMode(false)
+
+        assertTrue(enabled.contains(PLANNING_MODE_ID))
+        assertTrue(enabled.contains(other))
+        assertFalse(disabled.contains(PLANNING_MODE_ID))
+        assertTrue(disabled.contains(other))
     }
 }

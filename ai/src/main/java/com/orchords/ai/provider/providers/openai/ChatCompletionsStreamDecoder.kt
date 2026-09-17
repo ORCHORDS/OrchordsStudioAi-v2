@@ -106,7 +106,12 @@ internal class ChatCompletionsStreamDecoder : StreamChunkDecoder {
         val role = MessageRole.valueOf(
             payload["role"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "ASSISTANT"
         )
-        val content = payload["content"]?.jsonPrimitiveOrNull?.contentOrNull ?: ""
+        val contentElement = payload["content"]
+        val content = contentElement?.jsonPrimitiveOrNull?.contentOrNull
+            ?: contentElement?.jsonArrayOrNull?.mapNotNull { part ->
+                part.jsonObjectOrNull?.get("text")?.jsonPrimitiveOrNull?.contentOrNull
+            }?.joinToString("")
+            ?: ""
         val refusal = payload["refusal"]?.jsonPrimitiveOrNull?.contentOrNull
         val reasoning = payload["reasoning_content"]?.jsonPrimitiveOrNull?.contentOrNull
             ?: payload["reasoning"]?.jsonPrimitiveOrNull?.contentOrNull

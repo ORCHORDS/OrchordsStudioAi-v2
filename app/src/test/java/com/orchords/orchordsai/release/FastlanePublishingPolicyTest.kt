@@ -68,13 +68,12 @@ class FastlanePublishingPolicyTest {
     }
 
     @Test
-    fun `release keeps signed aab path and a verified debug fallback`() {
+    fun `release keeps signed aab path and rejects debug fallback`() {
         val gradle = gradleKts()
         assertTrue("buildAll must depend on bundleRelease", gradle.contains("dependsOn(\"assembleRelease\", \"bundleRelease\")"))
 
         val workflow = releaseWorkflow()
         assertTrue("signed release path must invoke buildAll", workflow.contains(":app:buildAll"))
-        assertTrue("debug fallback must assemble an installable APK", workflow.contains(":app:assembleDebug"))
         assertTrue(
             "Signed release path must validate the AAB package id with apkanalyzer",
             workflow.contains("app/build/outputs/bundle/release/app-release.aab"),
@@ -82,9 +81,22 @@ class FastlanePublishingPolicyTest {
         assertTrue(workflow.contains("manifest application-id"))
         assertTrue(workflow.contains("com.orchords.orchordsai"))
         assertTrue(workflow.contains("release-assets/orchords-studio-ai.aab"))
-        assertTrue(workflow.contains("Signing secrets unavailable; publishing verified debug APKs."))
-        assertTrue(workflow.contains("Publish GitHub Release (signed)"))
-        assertTrue(workflow.contains("Publish GitHub Release (debug fallback)"))
+        assertFalse(
+            "Debug fallback must NOT be present - signed release is required",
+            workflow.contains(":app:assembleDebug"),
+        )
+        assertFalse(
+            "Debug fallback policy text must NOT be present - signed release is required",
+            workflow.contains("Signing secrets unavailable; publishing verified debug APKs."),
+        )
+        assertFalse(
+            "Stale 'Publish GitHub Release (debug fallback)' label must NOT be present - signed release is required",
+            workflow.contains("Publish GitHub Release (debug fallback)"),
+        )
+        assertFalse(
+            "Stale 'Publish GitHub Release (signed)' label must NOT be present - signed release is required and the single release path",
+            workflow.contains("Publish GitHub Release (signed)"),
+        )
     }
 
     @Test

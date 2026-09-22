@@ -142,6 +142,7 @@ sealed class UIMessagePart {
                 arguments = arguments + other.arguments,
                 approvalState = approvalState,
                 metadata = if (other.metadata != null) other.metadata else metadata,
+                executionCompleted = other.executionCompleted ?: executionCompleted,
             )
         }
     }
@@ -182,10 +183,15 @@ sealed class UIMessagePart {
         val input: String,
         val output: List<UIMessagePart> = emptyList(),
         val approvalState: ToolApprovalState = ToolApprovalState.Auto,
-        override var metadata: JsonObject? = null
+        override var metadata: JsonObject? = null,
+        /**
+         * Explicit terminal marker for new executions. Null preserves backward compatibility:
+         * legacy persisted tools still infer completion from non-empty output.
+         */
+        val executionCompleted: Boolean? = null,
     ) : UIMessagePart() {
-        /** Whether the tool has been executed (has output) */
-        val isExecuted: Boolean get() = output.isNotEmpty()
+        /** Whether this tool call reached a terminal local execution outcome. */
+        val isExecuted: Boolean get() = executionCompleted ?: output.isNotEmpty()
 
         /** Whether the tool is pending user approval */
         val isPending: Boolean get() = approvalState is ToolApprovalState.Pending

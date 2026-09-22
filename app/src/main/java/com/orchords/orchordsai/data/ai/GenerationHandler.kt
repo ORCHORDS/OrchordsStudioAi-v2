@@ -260,6 +260,7 @@ class GenerationHandler(
                     is ToolApprovalState.Denied -> {
                         val reason = (tool.approvalState as ToolApprovalState.Denied).reason
                         executedTools += tool.copy(
+                            executionCompleted = true,
                             output = listOf(
                                 UIMessagePart.Text(
                                     json.encodeToString(
@@ -278,6 +279,7 @@ class GenerationHandler(
                     is ToolApprovalState.Answered -> {
                         val answer = (tool.approvalState as ToolApprovalState.Answered).answer
                         executedTools += tool.copy(
+                            executionCompleted = true,
                             output = listOf(
                                 UIMessagePart.Text(answer)
                             )
@@ -300,12 +302,14 @@ class GenerationHandler(
                             val result = toolDef.execute(args)
                             val hasShellAccess = toolsInternal.any { it.name == "workspace_shell" }
                             executedTools += tool.copy(
-                                output = maybeTruncateToolOutput(tool.toolCallId, result, hasShellAccess)
+                                output = maybeTruncateToolOutput(tool.toolCallId, result, hasShellAccess),
+                                executionCompleted = true,
                             )
                         }.onFailure {
                             if (it is CancellationException) throw it
                             Log.w(TAG, "generateText: tool execution failed type=${it.javaClass.simpleName}")
                             executedTools += tool.copy(
+                                executionCompleted = true,
                                 output = listOf(
                                     UIMessagePart.Text(
                                         json.encodeToString(

@@ -1,22 +1,31 @@
 package com.orchords.orchordsai.data.datastore
 
 import com.orchords.ai.provider.ProviderSetting
+import kotlin.uuid.Uuid
 
 /**
- * Enforce the product-wide first-party model policy from #26/#416.
+ * Enforce the product-wide first-party model policy.
  *
- * Legacy provider/model records may still be decoded for migration compatibility,
- * but they are never returned as active runtime settings. The only model route is
- * Orchords `oai-1.0` through the canonical gateway. Existing first-party gateway
- * credentials and safe first-party request tuning remain attached to that route;
- * alternate hosts/models/provider types are discarded from the effective view.
+ * Legacy provider/model records may still be decoded for migration
+ * compatibility, but active runtime settings are restricted to the canonical
+ * Orchords gateway and the stable first-party model allowlist (oai-1.0 and
+ * oai-1.2). Existing valid first-party selections are preserved; unknown or
+ * retired selections fall back to oai-1.0.
  */
 internal fun Settings.enforceFirstPartyModelPolicy(): Settings {
     val provider = canonicalOrchordsProvider(providers)
-    val modelId = ORCHORDS_MODEL_UUID
+    val effectiveChatModelId = canonicalFirstPartyModelId(chatModelId)
+    val effectiveFastModelId = canonicalFirstPartyModelId(fastModelId)
+    val effectiveTranslateModelId = canonicalFirstPartyModelId(translateModeId)
+    val effectiveCompressModelId = canonicalFirstPartyModelId(compressModelId)
+
     val effectiveAssistants = assistants
         .ifEmpty { DEFAULT_ASSISTANTS }
-        .map { assistant -> assistant.copy(chatModelId = modelId) }
+        .map { assistant ->
+            assistant.copy(
+                chatModelId = canonicalFirstPartyModelId(assistant.chatModelId),
+            )
+        }
     val effectiveAssistantId = effectiveAssistants
         .firstOrNull { it.id == assistantId }
         ?.id
@@ -24,15 +33,21 @@ internal fun Settings.enforceFirstPartyModelPolicy(): Settings {
 
     return copy(
         providers = listOf(provider),
-        chatModelId = modelId,
-        fastModelId = modelId,
-        translateModeId = modelId,
-        compressModelId = modelId,
-        favoriteModels = favoriteModels.filter { it == modelId }.distinct(),
+        chatModelId = effectiveChatModelId,
+        fastModelId = effectiveFastModelId,
+        translateModeId = effectiveTranslateModelId,
+        compressModelId = effectiveCompressModelId,
+        favoriteModels = favoriteModels
+            .filter { it in ORCHORDS_FIRST_PARTY_MODEL_UUIDS }
+            .distinct(),
         assistantId = effectiveAssistantId,
         assistants = effectiveAssistants,
     )
 }
+
+internal fun canonicalFirstPartyModelId(modelId: Uuid): Uuid =
+    modelId.takeIf { it in ORCHORDS_FIRST_PARTY_MODEL_UUIDS }
+        ?: ORCHORDS_MODEL_UUID
 
 internal fun canonicalOrchordsProvider(
     providers: List<ProviderSetting>,
@@ -43,7 +58,9 @@ internal fun canonicalOrchordsProvider(
         .firstOrNull { it.id == template.id }
         ?: providers
             .filterIsInstance<ProviderSetting.OpenAI>()
-            .firstOrNull { it.baseUrl.trimEnd('/') == ORCHORDS_GATEWAY_BASE_URL }
+            .firstOrNull {
+                it.baseUrl.trimEnd('/') == ORCHORDS_GATEWAY_BASE_URL
+            }
 
     if (existing == null) return template.copy()
 

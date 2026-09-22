@@ -22,6 +22,7 @@ enum class ConfigurationHealthFinding {
     NONCANONICAL_PROVIDER_ID,
     UNEXPECTED_GATEWAY_ROUTE,
     MISSING_OAI_MODEL,
+    MISSING_OAI_1_2_MODEL,
     MISSING_GATEWAY_CREDENTIAL,
 }
 
@@ -73,6 +74,15 @@ fun evaluateFirstPartyChatHealth(
     if (!hasCanonicalModel) {
         findings += ConfigurationHealthFinding.MISSING_OAI_MODEL
         blocked = true
+    }
+
+    val hasOai12Model = provider.models.any { model ->
+        model.id == ORCHORDS_OAI_1_2_MODEL_UUID &&
+            model.modelId == ORCHORDS_OAI_1_2_MODEL_ID
+    }
+    if (!hasOai12Model) {
+        findings += ConfigurationHealthFinding.MISSING_OAI_1_2_MODEL
+        degraded = true
     }
 
     val missingCredential = provider.apiKey.isBlank()

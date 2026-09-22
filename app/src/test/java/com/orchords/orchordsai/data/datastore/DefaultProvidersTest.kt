@@ -24,14 +24,22 @@ class DefaultProvidersTest {
     }
 
     @Test
-    fun `OrchordsAI provider exposes only tool-capable oai-1_0`() {
+    fun `OrchordsAI provider exposes oai-1_0 and reasoning capable oai-1_2`() {
         val provider = DEFAULT_PROVIDERS.single() as ProviderSetting.OpenAI
-        assertEquals(1, provider.models.size)
-        val model = provider.models.single()
-        assertEquals(ORCHORDS_MODEL_ID, model.modelId)
-        assertEquals("Orchords oai-1.0", model.displayName)
-        assertEquals(listOf(ModelAbility.TOOL), model.abilities)
-        assertFalse(BuiltInTools.Search in model.tools)
+        assertEquals(2, provider.models.size)
+        val models = provider.models.associateBy { it.modelId }
+
+        val legacy = models.getValue(ORCHORDS_MODEL_ID)
+        assertEquals(ORCHORDS_MODEL_UUID, legacy.id)
+        assertEquals("Orchords oai-1.0", legacy.displayName)
+        assertEquals(listOf(ModelAbility.TOOL), legacy.abilities)
+        assertFalse(BuiltInTools.Search in legacy.tools)
+
+        val qpipe = models.getValue(ORCHORDS_OAI_1_2_MODEL_ID)
+        assertEquals(ORCHORDS_OAI_1_2_MODEL_UUID, qpipe.id)
+        assertEquals("Orchords oai-1.2", qpipe.displayName)
+        assertEquals(listOf(ModelAbility.TOOL, ModelAbility.REASONING), qpipe.abilities)
+        assertFalse(BuiltInTools.Search in qpipe.tools)
     }
 
     @Test
@@ -65,9 +73,10 @@ class DefaultProvidersTest {
     }
 
     @Test
-    fun `Model record keeps the Orchords identifier`() {
-        val model = Model(modelId = ORCHORDS_MODEL_ID, displayName = "Orchords oai-1.0")
-        assertEquals(ORCHORDS_MODEL_ID, model.modelId)
-        assertEquals("Orchords oai-1.0", model.displayName)
+    fun `Model records keep both Orchords identifiers`() {
+        val legacy = Model(modelId = ORCHORDS_MODEL_ID, displayName = "Orchords oai-1.0")
+        val qpipe = Model(modelId = ORCHORDS_OAI_1_2_MODEL_ID, displayName = "Orchords oai-1.2")
+        assertEquals(ORCHORDS_MODEL_ID, legacy.modelId)
+        assertEquals(ORCHORDS_OAI_1_2_MODEL_ID, qpipe.modelId)
     }
 }

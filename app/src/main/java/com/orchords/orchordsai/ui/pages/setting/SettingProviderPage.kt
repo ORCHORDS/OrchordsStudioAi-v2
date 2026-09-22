@@ -29,7 +29,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.orchords.ai.provider.ProviderSetting
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.Screen
-import com.orchords.orchordsai.data.datastore.ORCHORDS_MODEL_ID
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.AutoAIIcon
 import com.orchords.orchordsai.ui.context.LocalNavController
@@ -41,8 +40,8 @@ import org.koin.androidx.compose.koinViewModel
  * First-party provider settings surface.
  *
  * Alternate-provider add/import/recommend/reorder controls are intentionally
- * absent. #26/#416 define Orchords `oai-1.0` as the only supported AI model
- * direction; legacy provider records are migration-only data.
+ * absent. First-party chat is restricted to the canonical Orchords gateway
+ * and its built-in model registry; legacy provider records are migration-only.
  */
 @Composable
 fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
@@ -90,7 +89,7 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             AutoAIIcon(
-                                name = ORCHORDS_MODEL_ID,
+                                name = provider.models.firstOrNull()?.modelId ?: provider.name,
                                 modifier = Modifier.size(40.dp),
                             )
                             Column(
@@ -104,7 +103,7 @@ fun SettingProviderPage(vm: SettingVM = koinViewModel()) {
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    text = ORCHORDS_MODEL_ID,
+                                    text = provider.models.joinToString(" · ") { it.modelId },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

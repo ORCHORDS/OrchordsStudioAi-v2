@@ -34,7 +34,6 @@ import com.dokar.sonner.ToastType
 import com.orchords.ai.provider.ProviderSetting
 import com.orchords.orchordsai.R
 import com.orchords.orchordsai.data.datastore.ORCHORDS_GATEWAY_BASE_URL
-import com.orchords.orchordsai.data.datastore.ORCHORDS_MODEL_ID
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.AutoAIIcon
 import com.orchords.orchordsai.ui.context.LocalToaster
@@ -47,11 +46,11 @@ import org.koin.androidx.compose.koinViewModel
 import kotlin.uuid.Uuid
 
 /**
- * Configuration for the single supported first-party Orchords gateway.
+ * Configuration for the canonical first-party Orchords gateway.
  *
- * The gateway origin and model identity are product constants, not editable
- * provider/model selectors. Only the protected gateway credential is user
- * configurable here.
+ * The gateway origin and built-in model registry are product constants, not
+ * editable provider/model definitions. Only the protected gateway credential
+ * is user configurable here.
  */
 @Composable
 fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
@@ -77,7 +76,7 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         AutoAIIcon(
-                            name = ORCHORDS_MODEL_ID,
+                            name = provider.models.firstOrNull()?.modelId ?: provider.name,
                             modifier = Modifier.size(24.dp),
                         )
                         Text(provider.name)
@@ -101,7 +100,7 @@ fun SettingProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = ORCHORDS_MODEL_ID,
+                text = provider.models.joinToString(" · ") { it.modelId },
                 style = MaterialTheme.typography.titleMedium,
             )
 

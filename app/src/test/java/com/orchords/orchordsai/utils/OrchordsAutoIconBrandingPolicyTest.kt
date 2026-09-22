@@ -25,6 +25,7 @@ class OrchordsAutoIconBrandingPolicyTest {
     @Test
     fun `oai model id resolves to the Orchords icon asset`() {
         assertEquals("orchordsai.png", computeAIIconByName("oai-1.0"))
+        assertEquals("orchordsai.png", computeAIIconByName("oai-1.2"))
         assertEquals("orchordsai.png", computeAIIconByName("OrchordsAI"))
     }
 

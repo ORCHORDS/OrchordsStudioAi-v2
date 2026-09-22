@@ -74,6 +74,22 @@ class FirstPartyConfigurationHealthTest {
         assertTrue(ConfigurationHealthFinding.MISSING_OAI_MODEL in result.findings)
     }
 
+
+    @Test
+    fun `missing oai-1_2 registration is degraded and repairable`() {
+        val legacyOnly = provider().copy(
+            models = provider().models.filter { it.modelId == ORCHORDS_MODEL_ID },
+        )
+
+        val result = evaluateFirstPartyChatHealth(listOf(legacyOnly))
+
+        assertEquals(ConfigurationHealthState.DEGRADED, result.state)
+        assertEquals(
+            listOf(ConfigurationHealthFinding.MISSING_OAI_1_2_MODEL),
+            result.findings,
+        )
+    }
+
     @Test
     fun `health result never contains gateway credential value`() {
         val sentinel = "SENTINEL-DO-NOT-EXPOSE"

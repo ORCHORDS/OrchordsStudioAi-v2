@@ -11,7 +11,7 @@ import kotlin.uuid.Uuid
 
 class FirstPartyModelPolicyTest {
     @Test
-    fun `legacy providers and models are inert in effective settings`() {
+    fun `legacy providers and unknown models are inert in effective settings`() {
         val legacyModel = Model(
             id = Uuid.parse("11111111-1111-4111-8111-111111111111"),
             modelId = "legacy-model",
@@ -39,7 +39,11 @@ class FirstPartyModelPolicyTest {
             fastModelId = legacyModel.id,
             translateModeId = legacyModel.id,
             compressModelId = legacyModel.id,
-            favoriteModels = listOf(legacyModel.id, ORCHORDS_MODEL_UUID),
+            favoriteModels = listOf(
+                legacyModel.id,
+                ORCHORDS_MODEL_UUID,
+                ORCHORDS_OAI_1_2_MODEL_UUID,
+            ),
             assistants = DEFAULT_ASSISTANTS.map { it.copy(chatModelId = legacyModel.id) },
         )
 
@@ -52,21 +56,50 @@ class FirstPartyModelPolicyTest {
         assertEquals("orchords-secret", provider.apiKey)
         assertTrue(provider.builtIn)
         assertTrue(provider.enabled)
-        assertEquals(1, provider.models.size)
-        assertEquals(ORCHORDS_MODEL_UUID, provider.models.single().id)
-        assertEquals(ORCHORDS_MODEL_ID, provider.models.single().modelId)
-        assertEquals(listOf(ModelAbility.TOOL), provider.models.single().abilities)
+        assertEquals(
+            listOf(ORCHORDS_MODEL_ID, ORCHORDS_OAI_1_2_MODEL_ID),
+            provider.models.map { it.modelId },
+        )
         assertEquals(ORCHORDS_MODEL_UUID, effective.chatModelId)
         assertEquals(ORCHORDS_MODEL_UUID, effective.fastModelId)
         assertEquals(ORCHORDS_MODEL_UUID, effective.translateModeId)
         assertEquals(ORCHORDS_MODEL_UUID, effective.compressModelId)
-        assertEquals(listOf(ORCHORDS_MODEL_UUID), effective.favoriteModels)
+        assertEquals(
+            listOf(ORCHORDS_MODEL_UUID, ORCHORDS_OAI_1_2_MODEL_UUID),
+            effective.favoriteModels,
+        )
         assertTrue(effective.assistants.all { it.chatModelId == ORCHORDS_MODEL_UUID })
         assertFalse(effective.providers.any { it is ProviderSetting.Google || it is ProviderSetting.Claude })
     }
 
     @Test
-    fun `empty migrated assistant state is repaired before chat startup`() {
+    fun `valid oai-1_2 selections survive first party normalization`() {
+        val settings = Settings(
+            providers = DEFAULT_PROVIDERS,
+            chatModelId = ORCHORDS_OAI_1_2_MODEL_UUID,
+            fastModelId = ORCHORDS_OAI_1_2_MODEL_UUID,
+            translateModeId = ORCHORDS_OAI_1_2_MODEL_UUID,
+            compressModelId = ORCHORDS_OAI_1_2_MODEL_UUID,
+            favoriteModels = listOf(ORCHORDS_OAI_1_2_MODEL_UUID),
+            assistants = DEFAULT_ASSISTANTS.map {
+                it.copy(chatModelId = ORCHORDS_OAI_1_2_MODEL_UUID)
+            },
+        )
+
+        val effective = settings.enforceFirstPartyModelPolicy()
+
+        assertEquals(ORCHORDS_OAI_1_2_MODEL_UUID, effective.chatModelId)
+        assertEquals(ORCHORDS_OAI_1_2_MODEL_UUID, effective.fastModelId)
+        assertEquals(ORCHORDS_OAI_1_2_MODEL_UUID, effective.translateModeId)
+        assertEquals(ORCHORDS_OAI_1_2_MODEL_UUID, effective.compressModelId)
+        assertEquals(listOf(ORCHORDS_OAI_1_2_MODEL_UUID), effective.favoriteModels)
+        assertTrue(effective.assistants.all {
+            it.chatModelId == ORCHORDS_OAI_1_2_MODEL_UUID
+        })
+    }
+
+    @Test
+    fun `empty migrated assistant state is repaired to compatibility default`() {
         val effective = Settings(assistants = emptyList()).enforceFirstPartyModelPolicy()
 
         assertTrue(effective.assistants.isNotEmpty())
@@ -91,14 +124,21 @@ class FirstPartyModelPolicyTest {
         assertEquals("OrchordsAI", provider.name)
         assertEquals("protected-key", provider.apiKey)
         assertTrue(provider.enabled)
-        assertEquals(listOf(ORCHORDS_MODEL_ID), provider.models.map { it.modelId })
+        assertEquals(
+            listOf(ORCHORDS_MODEL_ID, ORCHORDS_OAI_1_2_MODEL_ID),
+            provider.models.map { it.modelId },
+        )
     }
 
     @Test
-    fun `canonical model internal id is stable`() {
+    fun `first party model internal ids are stable and default stays oai-1_0`() {
         assertEquals(
             Uuid.parse("0d3a4f7b-1a25-4f31-9d18-1c5f6b2a7e02"),
             ORCHORDS_MODEL_UUID,
+        )
+        assertEquals(
+            Uuid.parse("0d3a4f7b-1a25-4f31-9d18-1c5f6b2a7e03"),
+            ORCHORDS_OAI_1_2_MODEL_UUID,
         )
         assertEquals(ORCHORDS_MODEL_UUID, DEFAULT_AUTO_MODEL_ID)
     }

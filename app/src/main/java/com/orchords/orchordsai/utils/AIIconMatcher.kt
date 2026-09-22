@@ -69,7 +69,7 @@ fun computeAIIconByName(name: String): String? {
     return result
 }
 
-private val PATTERN_ORCHORDSAI = Regex("orchords|auto|^oai-1\\.0$")
+private val PATTERN_ORCHORDSAI = Regex("orchords|auto|^oai-1\\.(0|2)$")
 private val PATTERN_OPENAI = Regex("(gpt|openai|o\\d)")
 private val PATTERN_GEMINI = Regex("(gemini|nano-banana)")
 private val PATTERN_GOOGLE = Regex("google")

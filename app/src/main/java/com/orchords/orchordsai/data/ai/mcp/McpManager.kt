@@ -151,13 +151,7 @@ class McpManager(
         } catch (e: McpClientUnavailableException) {
             return listOf(UIMessagePart.Text("Failed to execute MCP tool: ${e.message ?: e.javaClass.name}"))
         }
-        return result.content.map { content ->
-            when (content) {
-                is TextContent -> UIMessagePart.Text(content.text)
-                is ImageContent -> convertImageContentToFilePart(content)
-                else -> UIMessagePart.Text(JsonInstant.encodeToString(content))
-            }
-        }
+        return result.toConversationParts(renderImage = ::convertImageContentToFilePart)
     }
 
     suspend fun addClient(config: McpServerConfig) = sessionRegistry.addClient(config)

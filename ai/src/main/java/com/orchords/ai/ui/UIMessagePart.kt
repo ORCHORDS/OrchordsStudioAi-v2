@@ -142,7 +142,6 @@ sealed class UIMessagePart {
                 arguments = arguments + other.arguments,
                 approvalState = approvalState,
                 metadata = if (other.metadata != null) other.metadata else metadata,
-                executionCompleted = other.executionCompleted ?: executionCompleted,
             )
         }
     }
@@ -212,6 +211,7 @@ sealed class UIMessagePart {
                 output = output + other.output,
                 approvalState = approvalState,
                 metadata = if (other.metadata != null) other.metadata else metadata,
+                executionCompleted = other.executionCompleted ?: executionCompleted,
             )
         }
     }

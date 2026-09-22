@@ -221,7 +221,7 @@ internal class McpSessionRegistry(
             try {
                 sdkClient.connect(transport)
                 val syncedConfig = syncTools(session, sdkClient, config)
-                if (sessions[config.id] !== session || !hasSameConnectionParameters(config, syncedConfig)) {
+                if (syncedConfig == null || sessions[config.id] !== session || !hasSameConnectionParameters(config, syncedConfig)) {
                     closeClient(sdkClient, config.commonOptions.name)
                     return@withLock ConnectResult.Stale
                 }
@@ -271,7 +271,7 @@ internal class McpSessionRegistry(
                 val connectedConfig = session.connectedConfig ?: return@withLock
                 statusStore.update(config.id, McpStatus.Connecting)
                 try {
-                    val syncedConfig = syncTools(session, sdkClient, session.config)
+                    val syncedConfig = syncTools(session, sdkClient, session.config) ?: return@withLock
                     session.config = syncedConfig
                     if (hasSameConnectionParameters(connectedConfig, syncedConfig)) {
                         session.connectedConfig = syncedConfig
@@ -299,25 +299,31 @@ internal class McpSessionRegistry(
         session: McpSession,
         sdkClient: Client,
         connectionConfig: McpServerConfig,
-    ): McpServerConfig {
-        val serverTools = sdkClient.listTools().tools
-        Log.i(TAG, "Synced ${serverTools.size} tools from ${connectionConfig.id}")
-        var updatedConfig = connectionConfig
+    ): McpServerConfig? {
+        val serverTools = fetchCompleteMcpTools(sdkClient)
+        var updatedConfig: McpServerConfig? = null
         settingsStore.update { old ->
-            old.copy(
-                mcpServers = old.mcpServers.map { storedConfig ->
-                    if (storedConfig.id != connectionConfig.id) return@map storedConfig
-                    val tools = mergeTools(
-                        storedTools = storedConfig.commonOptions.tools,
-                        serverTools = serverTools,
-                        newToolsNeedApproval = githubNewToolsNeedApproval(storedConfig),
-                    )
-                    storedConfig.clone(commonOptions = storedConfig.commonOptions.copy(tools = tools))
-                        .also { updatedConfig = it }
-                }
+            updatedConfig = null
+            val storedConfig = old.mcpServers.find { it.id == connectionConfig.id }
+                ?: return@update old
+            if (sessions[connectionConfig.id] !== session ||
+                !storedConfig.commonOptions.enable ||
+                storedConfig.commonOptions.name.isBlank() ||
+                !hasSameConnectionParameters(storedConfig, connectionConfig)
+            ) return@update old
+
+            val tools = mergeTools(
+                storedTools = storedConfig.commonOptions.tools,
+                serverTools = serverTools,
+                newToolsNeedApproval = githubNewToolsNeedApproval(storedConfig),
             )
+            val fresh = storedConfig.clone(commonOptions = storedConfig.commonOptions.copy(tools = tools))
+            updatedConfig = fresh
+            old.copy(mcpServers = old.mcpServers.map { if (it.id == fresh.id) fresh else it })
         }
-        session.config = updatedConfig
+        if (updatedConfig != null) {
+            Log.i(TAG, "Synced complete catalog of ${serverTools.size} tools from ${connectionConfig.id}")
+        }
         return updatedConfig
     }
 

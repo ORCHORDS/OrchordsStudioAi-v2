@@ -16,16 +16,15 @@ concurrency:
 jobs:
   app_tests:
     name: App Unit Tests
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           clean: false
-      - uses: ./.github/actions/setup-build
-        with:
-          gradle: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
       - name: Run app unit tests
         shell: bash
         run: |
@@ -35,16 +34,15 @@ jobs:
 
   android_lint:
     name: Android Lint
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           clean: false
-      - uses: ./.github/actions/setup-build
-        with:
-          gradle: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
       - name: Run Android lint with Gradle profile
         shell: bash
         run: |
@@ -62,17 +60,15 @@ jobs:
 
   ai_tests:
     name: AI Provider Tests
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           clean: false
-      - uses: ./.github/actions/setup-build
-        with:
-          gradle: false
-          web: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
       - name: Run AI provider tests
         shell: bash
         run: |
@@ -87,7 +83,7 @@ jobs:
       - app_tests
       - android_lint
       - ai_tests
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require every verification shard to succeed
@@ -118,16 +114,15 @@ jobs:
 
   build:
     name: Daily Build
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           clean: false
-      - uses: ./.github/actions/setup-build
-        with:
-          gradle: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
       - name: Validate unsigned APK and checksums without publishing
         shell: bash
         run: |
@@ -141,16 +136,15 @@ jobs:
 
   citations:
     name: Citation Integrity Tests
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           clean: false
-      - uses: ./.github/actions/setup-build
-        with:
-          gradle: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
       - name: Run citation integrity regressions
         shell: bash
         run: |
@@ -160,7 +154,7 @@ jobs:
 
   dependencies:
     name: Dependency Submission
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: write
@@ -180,10 +174,8 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - uses: ./.github/actions/setup-build
-        with:
-          gradle: false
-          web: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
       - name: Resolve and submit the actual dependency graph
         uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:

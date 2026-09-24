@@ -37,7 +37,7 @@ ORCHORDS AI is a private-by-design, local-first Android AI workspace for user-se
 
 ## Repository workflow
 
-This repository works directly on `main`. GitHub Actions are disabled at the repository level and normal development does not depend on hosted or self-hosted runners. Contributors verify changes on their own host before pushing.
+This repository works directly on `main`. CI workflows target standard GitHub-hosted `ubuntu-24.04` runners. Contributors still run focused local verification before pushing, and GitHub Actions provide exact-commit verification after the push.
 
 For issue work, run the lightweight local preflight first:
 

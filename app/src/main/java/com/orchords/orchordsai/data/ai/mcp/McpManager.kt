@@ -8,6 +8,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.sse.SSE
 import io.ktor.serialization.kotlinx.json.json
 import io.modelcontextprotocol.kotlin.sdk.client.Client
+import io.modelcontextprotocol.kotlin.sdk.types.AudioContent
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CancellationException
@@ -31,7 +32,6 @@ import com.orchords.orchordsai.utils.JsonInstant
 import okhttp3.OkHttpClient
 import java.math.BigInteger
 import java.util.concurrent.TimeUnit
-import kotlin.io.encoding.Base64
 import kotlin.uuid.Uuid
 
 /**
@@ -151,7 +151,10 @@ class McpManager(
         } catch (e: McpClientUnavailableException) {
             return listOf(UIMessagePart.Text("Failed to execute MCP tool: ${e.message ?: e.javaClass.name}"))
         }
-        return result.toConversationParts(renderImage = ::convertImageContentToFilePart)
+        return result.toConversationParts(
+            renderImage = ::convertImageContentToFilePart,
+            renderAudio = ::convertAudioContentToFilePart,
+        )
     }
 
     suspend fun addClient(config: McpServerConfig) = sessionRegistry.addClient(config)
@@ -174,15 +177,37 @@ class McpManager(
     }
 
     private suspend fun convertImageContentToFilePart(image: ImageContent): UIMessagePart.Image {
-        val bytes = Base64.decode(image.data)
+        val url = persistInlineMcpMedia(
+            data = image.data,
+            mimeType = image.mimeType,
+            displayNamePrefix = "mcp_image",
+        )
+        return UIMessagePart.Image(url = url)
+    }
+
+    private suspend fun convertAudioContentToFilePart(audio: AudioContent): UIMessagePart.Audio {
+        val url = persistInlineMcpMedia(
+            data = audio.data,
+            mimeType = audio.mimeType,
+            displayNamePrefix = "mcp_audio",
+        )
+        return UIMessagePart.Audio(url = url)
+    }
+
+    private suspend fun persistInlineMcpMedia(
+        data: String,
+        mimeType: String,
+        displayNamePrefix: String,
+    ): String {
+        val bytes = decodeBoundedMcpBase64(data)
         val extension = android.webkit.MimeTypeMap.getSingleton()
-            .getExtensionFromMimeType(image.mimeType) ?: "bin"
+            .getExtensionFromMimeType(mimeType) ?: "bin"
         val entity = filesManager.saveUploadFromBytes(
             bytes = bytes,
-            displayName = "mcp_image.$extension",
-            mimeType = image.mimeType,
+            displayName = "$displayNamePrefix.$extension",
+            mimeType = mimeType,
         )
-        return UIMessagePart.Image(url = filesManager.getFile(entity).toUri().toString())
+        return filesManager.getFile(entity).toUri().toString()
     }
 }
 

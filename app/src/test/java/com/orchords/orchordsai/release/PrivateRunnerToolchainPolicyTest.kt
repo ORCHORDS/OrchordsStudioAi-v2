@@ -17,12 +17,19 @@ class PrivateRunnerToolchainPolicyTest {
     fun `android verification and release lanes bootstrap the same pinned toolchain`() {
         val actionPath = ".github/actions/setup-private-android-toolchain/action.yml"
         val main = source(".github/workflows/main-verification.yml")
+        val branch = source(".github/workflows/branch-verification.yml")
+        val pr = source(".github/workflows/pr-required-checks.yml")
         val release = source(".github/workflows/release.yml")
         val action = source(actionPath)
 
-        assertTrue(main.contains("uses: ./.github/actions/setup-private-android-toolchain"))
-        assertTrue(release.contains("uses: ./.github/actions/setup-private-android-toolchain"))
+        assertTrue(main.contains("runs-on: ubuntu-24.04"))
+        assertTrue(branch.contains("runs-on: ubuntu-24.04"))
+        assertTrue(pr.contains("runs-on: ubuntu-24.04"))
         assertTrue(release.contains("runs-on: ubuntu-24.04"))
+        assertTrue(main.contains("uses: ./.github/actions/setup-private-android-toolchain"))
+        assertTrue(branch.contains("uses: ./.github/actions/setup-private-android-toolchain"))
+        assertTrue(pr.contains("uses: ./.github/actions/setup-private-android-toolchain"))
+        assertTrue(release.contains("uses: ./.github/actions/setup-private-android-toolchain"))
         assertTrue(action.contains("java-version: '21'"))
         assertTrue(action.contains("node-version: '22'"))
         assertTrue(action.contains("pnpm@11"))

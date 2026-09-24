@@ -486,6 +486,70 @@ private fun MessagePartsBlock(
                         }
                     }
 
+                    is UIMessagePart.McpResultStatus -> {
+                        if (part.isError) {
+                            Surface(
+                                tonalElevation = 2.dp,
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Text(
+                                    text = "MCP tool reported an error",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                    }
+
+                    is UIMessagePart.McpStructured -> {
+                        Surface(
+                            tonalElevation = 1.dp,
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Text(
+                                text = part.content.toString(),
+                                modifier = Modifier.padding(10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 20,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+
+                    is UIMessagePart.McpResource -> {
+                        Surface(
+                            tonalElevation = 1.dp,
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = part.title ?: part.name ?: "MCP resource",
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                                Text(
+                                    text = part.uri,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                part.mimeType?.let { mime ->
+                                    Text(text = mime, style = MaterialTheme.typography.labelSmall)
+                                }
+                                part.text?.let { embeddedText ->
+                                    Text(
+                                        text = embeddedText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 10,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     is UIMessagePart.Document -> {
                         Surface(
                             tonalElevation = 2.dp,

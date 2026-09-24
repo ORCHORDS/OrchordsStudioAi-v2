@@ -34,6 +34,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import com.orchords.ai.core.InputSchema
 import com.orchords.orchordsai.AppScope
 import com.orchords.orchordsai.data.datastore.SettingsStore
@@ -507,7 +510,7 @@ private fun McpServerConfig.resolvedHeaders(): List<Pair<String, String>> {
     }
 }
 
-private fun mergeTools(
+internal fun mergeTools(
     storedTools: List<McpTool>,
     serverTools: List<Tool>,
     newToolsNeedApproval: Boolean = false,
@@ -517,15 +520,29 @@ private fun mergeTools(
         toolsByName[serverTool.name]?.copy(
             description = serverTool.description,
             inputSchema = serverTool.inputSchema.toSchema(),
+            outputSchema = serverTool.outputSchema?.toPersistedSchema(),
         ) ?: McpTool(
             name = serverTool.name,
             description = serverTool.description,
             enable = true,
             needsApproval = newToolsNeedApproval,
             inputSchema = serverTool.inputSchema.toSchema(),
+            outputSchema = serverTool.outputSchema?.toPersistedSchema(),
         )
     }
 }
 
 private fun ToolSchema.toSchema(): InputSchema =
     InputSchema.Obj(properties = properties ?: JsonObject(emptyMap()), required = required)
+
+private fun ToolSchema.toPersistedSchema(): JsonObject = buildJsonObject {
+    put("type", "object")
+    schema?.let { put("\$schema", it) }
+    properties?.let { put("properties", it) }
+    required?.let { names ->
+        putJsonArray("required") {
+            names.forEach { add(it) }
+        }
+    }
+    defs?.let { put("\$defs", it) }
+}

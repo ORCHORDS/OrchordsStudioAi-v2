@@ -40,6 +40,7 @@ import com.orchords.ai.provider.ProviderSetting
 import com.orchords.ai.provider.providers.claude.isAnthropicNativeHost
 import com.orchords.ai.provider.TextGenerationParams
 import com.orchords.ai.ui.ToolApprovalState
+import com.orchords.ai.ui.ToolExecutionState
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.canResumeToolExecution
@@ -830,13 +831,26 @@ class ChatService(
     }
 
     private fun cancelToolByUser(tool: UIMessagePart.Tool): UIMessagePart.Tool {
+        val outcomeMayHaveEscaped = tool.executionState == ToolExecutionState.SUBMITTED ||
+            tool.executionState == ToolExecutionState.RUNNING ||
+            tool.executionState == ToolExecutionState.CANCEL_REQUESTED
         return tool.copy(
             output = listOf(
                 UIMessagePart.Text(
-                    """{"status":"cancelled","error":"Generation cancelled by user before tool execution completed."}"""
+                    if (outcomeMayHaveEscaped) {
+                        """{"status":"outcome_unknown","error":"Generation stopped after tool submission; automatic replay is blocked until the outcome is reconciled."}"""
+                    } else {
+                        """{"status":"cancelled","error":"Generation cancelled by user before tool execution was submitted."}"""
+                    }
                 )
             ),
-            approvalState = ToolApprovalState.Denied("Generation cancelled by user")
+            approvalState = ToolApprovalState.Denied("Generation cancelled by user"),
+            executionCompleted = true,
+            executionState = if (outcomeMayHaveEscaped) {
+                ToolExecutionState.OUTCOME_UNKNOWN
+            } else {
+                ToolExecutionState.CANCELLED
+            },
         )
     }
 

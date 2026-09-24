@@ -40,6 +40,31 @@ export interface DocumentPart extends BaseMessagePart {
   mime: string;
 }
 
+export type McpResourceKind = "link" | "embedded_text" | "embedded_blob" | "embedded_unknown";
+
+export interface McpResultStatusPart extends BaseMessagePart {
+  type: "mcp_result_status";
+  isError: boolean;
+}
+
+export interface McpStructuredPart extends BaseMessagePart {
+  type: "mcp_structured";
+  content: unknown;
+}
+
+export interface McpResourcePart extends BaseMessagePart {
+  type: "mcp_resource";
+  kind: McpResourceKind;
+  uri: string;
+  name?: string | null;
+  title?: string | null;
+  description?: string | null;
+  mimeType?: string | null;
+  size?: number | null;
+  text?: string | null;
+  localUrl?: string | null;
+}
+
 export interface ReasoningPart extends BaseMessagePart {
   type: "reasoning";
   reasoning: string;
@@ -66,5 +91,8 @@ export type UIMessagePart =
   | VideoPart
   | AudioPart
   | DocumentPart
+  | McpResultStatusPart
+  | McpStructuredPart
+  | McpResourcePart
   | ReasoningPart
   | ToolPart;

@@ -7,6 +7,7 @@ import kotlin.io.encoding.Base64
  * The encoded-length gate avoids allocating an unbounded decoded buffer first.
  */
 internal const val MAX_MCP_INLINE_MEDIA_BYTES: Int = 20 * 1024 * 1024
+internal const val MAX_MCP_TEXTUAL_BYTES: Int = 1024 * 1024
 
 internal fun decodeBoundedMcpBase64(
     data: String,
@@ -19,4 +20,26 @@ internal fun decodeBoundedMcpBase64(
     val decoded = Base64.decode(data)
     require(decoded.size <= maxDecodedBytes) { "MCP inline media exceeds the configured byte limit" }
     return decoded
+}
+
+
+internal fun requireBoundedMcpText(
+    value: String,
+    maxBytes: Int = MAX_MCP_TEXTUAL_BYTES,
+): String {
+    require(maxBytes > 0) { "maxBytes must be positive" }
+    // Every UTF-16 code unit contributes at least one UTF-8 byte for valid text.
+    require(value.length <= maxBytes) { "MCP text exceeds the configured byte limit" }
+    require(value.toByteArray(Charsets.UTF_8).size <= maxBytes) {
+        "MCP text exceeds the configured byte limit"
+    }
+    return value
+}
+
+internal fun <T : kotlinx.serialization.json.JsonElement> requireBoundedMcpJson(
+    value: T,
+    maxBytes: Int = MAX_MCP_TEXTUAL_BYTES,
+): T {
+    requireBoundedMcpText(value.toString(), maxBytes)
+    return value
 }

@@ -9,8 +9,11 @@ import io.ktor.client.plugins.sse.SSE
 import io.ktor.serialization.kotlinx.json.json
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.types.AudioContent
+import io.modelcontextprotocol.kotlin.sdk.types.BlobResourceContents
+import io.modelcontextprotocol.kotlin.sdk.types.EmbeddedResource
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
+import io.modelcontextprotocol.kotlin.sdk.types.UnknownResourceContents
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -154,6 +157,7 @@ class McpManager(
         return result.toConversationParts(
             renderImage = ::convertImageContentToFilePart,
             renderAudio = ::convertAudioContentToFilePart,
+            renderEmbeddedResource = ::convertEmbeddedResourceToPart,
         )
     }
 
@@ -192,6 +196,38 @@ class McpManager(
             displayNamePrefix = "mcp_audio",
         )
         return UIMessagePart.Audio(url = url)
+    }
+
+    private suspend fun convertEmbeddedResourceToPart(
+        embedded: EmbeddedResource,
+    ): UIMessagePart.McpResource = when (val resource = embedded.resource) {
+        is TextResourceContents -> UIMessagePart.McpResource(
+            kind = com.orchords.ai.ui.McpResourceKind.EMBEDDED_TEXT,
+            uri = requireBoundedMcpText(resource.uri),
+            mimeType = resource.mimeType?.let(::requireBoundedMcpText),
+            text = requireBoundedMcpText(resource.text),
+        )
+
+        is BlobResourceContents -> {
+            val mime = resource.mimeType ?: "application/octet-stream"
+            val localUrl = persistInlineMcpMedia(
+                data = resource.blob,
+                mimeType = mime,
+                displayNamePrefix = "mcp_resource",
+            )
+            UIMessagePart.McpResource(
+                kind = com.orchords.ai.ui.McpResourceKind.EMBEDDED_BLOB,
+                uri = requireBoundedMcpText(resource.uri),
+                mimeType = resource.mimeType?.let(::requireBoundedMcpText),
+                localUrl = localUrl,
+            )
+        }
+
+        is UnknownResourceContents -> UIMessagePart.McpResource(
+            kind = com.orchords.ai.ui.McpResourceKind.EMBEDDED_UNKNOWN,
+            uri = requireBoundedMcpText(resource.uri),
+            mimeType = resource.mimeType?.let(::requireBoundedMcpText),
+        )
     }
 
     private suspend fun persistInlineMcpMedia(

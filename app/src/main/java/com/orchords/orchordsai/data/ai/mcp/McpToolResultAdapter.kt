@@ -4,7 +4,9 @@ import com.orchords.ai.ui.UIMessagePart
 import com.orchords.orchordsai.utils.JsonInstant
 import io.modelcontextprotocol.kotlin.sdk.types.AudioContent
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.EmbeddedResource
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
+import io.modelcontextprotocol.kotlin.sdk.types.ResourceLink
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
@@ -17,27 +19,47 @@ import kotlinx.serialization.json.put
 internal suspend fun CallToolResult.toConversationParts(
     renderImage: suspend (ImageContent) -> UIMessagePart,
     renderAudio: suspend (AudioContent) -> UIMessagePart,
+    renderEmbeddedResource: suspend (EmbeddedResource) -> UIMessagePart,
 ): List<UIMessagePart> {
     val result = McpExecutionResult(content, structuredContent, isError == true, meta)
     return result.projectForConversation(
         renderContent = { block ->
             when (block) {
-                is TextContent -> UIMessagePart.Text(block.text)
-                is ImageContent -> renderMcpMedia("image") { renderImage(block) }
-                is AudioContent -> renderMcpMedia("audio") { renderAudio(block) }
-                else -> UIMessagePart.Text(
-                    JsonInstant.encodeToJsonElement(block).withoutMcpProtocolMetadata().toString()
-                )
+                is TextContent -> renderMcpPayload("text") {
+                    UIMessagePart.Text(requireBoundedMcpText(block.text))
+                }
+                is ImageContent -> renderMcpPayload("image") { renderImage(block) }
+                is AudioContent -> renderMcpPayload("audio") { renderAudio(block) }
+                is ResourceLink -> renderMcpPayload("resource_link") {
+                    UIMessagePart.McpResource(
+                        kind = com.orchords.ai.ui.McpResourceKind.LINK,
+                        uri = requireBoundedMcpText(block.uri),
+                        name = block.name.takeIf { it.isNotBlank() }?.let(::requireBoundedMcpText),
+                        title = block.title?.let(::requireBoundedMcpText),
+                        description = block.description?.let(::requireBoundedMcpText),
+                        mimeType = block.mimeType?.let(::requireBoundedMcpText),
+                        size = block.size,
+                    )
+                }
+                is EmbeddedResource -> renderMcpPayload("embedded_resource") {
+                    renderEmbeddedResource(block)
+                }
+                else -> renderMcpPayload("unknown") {
+                    UIMessagePart.Text(
+                        requireBoundedMcpText(
+                            JsonInstant.encodeToJsonElement(block)
+                                .withoutMcpProtocolMetadata()
+                                .toString()
+                        )
+                    )
+                }
             }
         },
         renderStructured = { payload ->
-            UIMessagePart.Text(buildJsonObject { put("structuredContent", payload) }.toString())
+            UIMessagePart.McpStructured(requireBoundedMcpJson(payload))
         },
         renderStatus = { error ->
-            UIMessagePart.Text(buildJsonObject {
-                put("isError", error)
-                put("status", if (error) "tool_error" else "completed")
-            }.toString())
+            UIMessagePart.McpResultStatus(isError = error)
         },
     )
 }
@@ -58,7 +80,7 @@ private fun JsonElement.withoutMcpProtocolMetadata(): JsonElement {
     })
 }
 
-private suspend fun renderMcpMedia(
+private suspend fun renderMcpPayload(
     contentType: String,
     render: suspend () -> UIMessagePart,
 ): UIMessagePart = try {

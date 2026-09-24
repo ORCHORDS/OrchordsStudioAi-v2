@@ -19,6 +19,19 @@ class McpContentBoundsTest {
     }
 
     @Test
+    fun `bounded text rejects multi byte content beyond byte budget`() {
+        val error = runCatching {
+            requireBoundedMcpText("éé", maxBytes = 3)
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test
+    fun `bounded text accepts content at byte budget`() {
+        assertTrue(requireBoundedMcpText("abc", maxBytes = 3) == "abc")
+    }
+
+    @Test
     fun `bounded base64 decoder rejects oversized encoded input before decoding`() {
         val error = runCatching {
             decodeBoundedMcpBase64("AAAAA", maxDecodedBytes = 2)

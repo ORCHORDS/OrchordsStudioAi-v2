@@ -126,6 +126,12 @@ function getQuickJumpPreview(
             name: truncatePreviewText(fallbackPart.fileName.trim(), 32),
           })
         : t("conversations.preview.document");
+    case "mcp_result_status":
+      return fallbackPart.isError ? "MCP tool error" : "MCP tool completed";
+    case "mcp_structured":
+      return "MCP structured result";
+    case "mcp_resource":
+      return fallbackPart.title?.trim() || fallbackPart.name?.trim() || "MCP resource";
     case "reasoning":
       return fallbackPart.reasoning.trim().length > 0
         ? truncatePreviewText(fallbackPart.reasoning.trim().replace(/\s+/g, " "))

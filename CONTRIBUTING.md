@@ -11,8 +11,8 @@ We welcome focused fixes, tests, documentation improvements, and discussed enhan
 ## Working model
 
 1. **Work on `main` only.** This repository does not use topic branches, feature branches, or long-lived working branches. Push commits directly to `main`. Do not open a Pull Request for normal project work; PRs are treated as superseded by the direct-main workflow.
-2. **No runner dependency.** GitHub Actions are disabled at the repository level. Normal development must not rely on hosted or self-hosted runners.
-3. **Verify locally before pushing.** Run `bash scripts/preflight-local.sh`, then run the focused build, tests, lint, or other checks appropriate to the files you changed.
+2. **GitHub-hosted CI.** Repository workflows use standard GitHub-hosted `ubuntu-24.04` runners; do not introduce private/self-hosted runner labels without an explicit architecture decision.
+3. **Verify locally before pushing.** Run `bash scripts/preflight-local.sh`, then run the focused build, tests, lint, or other checks appropriate to the files you changed. GitHub-hosted CI is an additional exact-commit gate, not a substitute for focused local checks.
 4. **Research before changing behavior.** Start issue work from the current repository state. For external APIs, platform behavior, policies, dependencies, security guidance, or other version-sensitive facts, check current authoritative web documentation before deciding what is correct. Previous notes, cached assumptions, or model memory are not a source of truth.
 5. **Multiple issues may be handled together.** Independent issues may be inspected and worked in parallel, then landed in one direct-to-`main` batch when the combined change is coherent and locally verified. Do not create branches merely to separate concurrent investigations.
 6. **Keep public communication human.** Issue comments, commit messages, and documentation should be plain, specific, and natural rather than padded with generic automated wording.

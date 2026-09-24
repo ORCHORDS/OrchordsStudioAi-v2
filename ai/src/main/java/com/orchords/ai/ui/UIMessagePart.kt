@@ -46,6 +46,56 @@ fun ToolApprovalState.canResumeToolExecution(): Boolean {
  *
  */
 @Serializable
+enum class ToolExecutionState {
+    @SerialName("prepared")
+    PREPARED,
+
+    @SerialName("awaiting_approval")
+    AWAITING_APPROVAL,
+
+    @SerialName("awaiting_auth")
+    AWAITING_AUTH,
+
+    @SerialName("submitted")
+    SUBMITTED,
+
+    @SerialName("running")
+    RUNNING,
+
+    @SerialName("succeeded")
+    SUCCEEDED,
+
+    @SerialName("failed")
+    FAILED,
+
+    @SerialName("cancel_requested")
+    CANCEL_REQUESTED,
+
+    @SerialName("cancelled")
+    CANCELLED,
+
+    @SerialName("outcome_unknown")
+    OUTCOME_UNKNOWN;
+
+    /**
+     * States that must never be replayed automatically after reconnect/restart.
+     * OUTCOME_UNKNOWN is terminal for the local conversation but is not proof
+     * that a remote side effect succeeded or failed.
+     */
+    val blocksAutomaticReplay: Boolean
+        get() = this == AWAITING_AUTH ||
+            this == SUBMITTED ||
+            this == RUNNING ||
+            this == CANCEL_REQUESTED
+
+    val isTerminalForConversation: Boolean
+        get() = this == SUCCEEDED ||
+            this == FAILED ||
+            this == CANCELLED ||
+            this == OUTCOME_UNKNOWN
+}
+
+@Serializable
 enum class ServerToolStatus {
     @SerialName("in_progress")
     IN_PROGRESS,
@@ -188,15 +238,26 @@ sealed class UIMessagePart {
          * legacy persisted tools still infer completion from non-empty output.
          */
         val executionCompleted: Boolean? = null,
+        /**
+         * Durable execution lifecycle for new tool calls. Null preserves legacy
+         * persisted messages that only had output/executionCompleted.
+         */
+        val executionState: ToolExecutionState? = null,
     ) : UIMessagePart() {
-        /** Whether this tool call reached a terminal local execution outcome. */
-        val isExecuted: Boolean get() = executionCompleted ?: output.isNotEmpty()
+        /** Whether this tool call is terminal from the conversation's perspective. */
+        val isExecuted: Boolean
+            get() = executionState?.isTerminalForConversation
+                ?: executionCompleted
+                ?: output.isNotEmpty()
 
         /** Whether the tool is pending user approval */
         val isPending: Boolean get() = approvalState is ToolApprovalState.Pending
 
         /** Whether generation can resume and handle this tool immediately */
-        val canResumeExecution: Boolean get() = !isExecuted && approvalState.canResumeToolExecution()
+        val canResumeExecution: Boolean
+            get() = !isExecuted &&
+                executionState?.blocksAutomaticReplay != true &&
+                approvalState.canResumeToolExecution()
 
         /** Parse input string as JsonElement */
         fun inputAsJson(): JsonElement = runCatching {
@@ -212,6 +273,7 @@ sealed class UIMessagePart {
                 approvalState = approvalState,
                 metadata = if (other.metadata != null) other.metadata else metadata,
                 executionCompleted = other.executionCompleted ?: executionCompleted,
+                executionState = other.executionState ?: executionState,
             )
         }
     }

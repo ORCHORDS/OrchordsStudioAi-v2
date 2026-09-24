@@ -34,9 +34,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import com.orchords.ai.core.InputSchema
 import com.orchords.orchordsai.AppScope
 import com.orchords.orchordsai.data.datastore.SettingsStore
@@ -320,7 +317,12 @@ internal class McpSessionRegistry(
                 serverTools = serverTools,
                 newToolsNeedApproval = githubNewToolsNeedApproval(storedConfig),
             )
-            val fresh = storedConfig.clone(commonOptions = storedConfig.commonOptions.copy(tools = tools))
+            val fresh = storedConfig.clone(
+                commonOptions = storedConfig.commonOptions.copy(
+                    tools = tools,
+                    catalogRevision = mcpCatalogRevision(serverTools),
+                )
+            )
             updatedConfig = fresh
             old.copy(mcpServers = old.mcpServers.map { if (it.id == fresh.id) fresh else it })
         }
@@ -517,17 +519,27 @@ internal fun mergeTools(
 ): List<McpTool> {
     val toolsByName = storedTools.associateBy { it.name }
     return serverTools.map { serverTool ->
-        toolsByName[serverTool.name]?.copy(
+        val fingerprint = mcpToolContractFingerprint(serverTool)
+        val stored = toolsByName[serverTool.name]
+        stored?.copy(
             description = serverTool.description,
             inputSchema = serverTool.inputSchema.toSchema(),
+            inputSchemaDocument = serverTool.inputSchema.toPersistedSchema(),
             outputSchema = serverTool.outputSchema?.toPersistedSchema(),
+            schemaFingerprint = fingerprint,
+            // Existing installs with no fingerprint are migrated without changing policy.
+            // Once a fingerprint exists, contract changes require a fresh approval.
+            needsApproval = stored.needsApproval ||
+                (stored.schemaFingerprint != null && stored.schemaFingerprint != fingerprint),
         ) ?: McpTool(
             name = serverTool.name,
             description = serverTool.description,
             enable = true,
             needsApproval = newToolsNeedApproval,
             inputSchema = serverTool.inputSchema.toSchema(),
+            inputSchemaDocument = serverTool.inputSchema.toPersistedSchema(),
             outputSchema = serverTool.outputSchema?.toPersistedSchema(),
+            schemaFingerprint = fingerprint,
         )
     }
 }
@@ -535,14 +547,3 @@ internal fun mergeTools(
 private fun ToolSchema.toSchema(): InputSchema =
     InputSchema.Obj(properties = properties ?: JsonObject(emptyMap()), required = required)
 
-private fun ToolSchema.toPersistedSchema(): JsonObject = buildJsonObject {
-    put("type", "object")
-    schema?.let { put("\$schema", it) }
-    properties?.let { put("properties", it) }
-    required?.let { names ->
-        putJsonArray("required") {
-            names.forEach { add(it) }
-        }
-    }
-    defs?.let { put("\$defs", it) }
-}

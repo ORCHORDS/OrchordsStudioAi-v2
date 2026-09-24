@@ -2,7 +2,7 @@ name: Branch Verification
 
 # Speculative same-repository branch feedback. This is intentionally not a
 # protected required gate; pull-request validation owns full Android lint and
-# all required contexts. Private-repo execution uses the same dedicated runner.
+# all required contexts. Branch feedback runs on the standard GitHub-hosted Ubuntu runner.
 on:
   push:
     branches-ignore:
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout repository
@@ -32,10 +32,8 @@ jobs:
           persist-credentials: false
           clean: false
 
-      - name: Set up build toolchain
-        uses: ./.github/actions/setup-build
-        with:
-          gradle: false
+      - name: Install pinned Android toolchain
+        uses: ./.github/actions/setup-private-android-toolchain
 
       - name: Verify branch tests, providers and debug APK
         shell: bash

@@ -13,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class McpToolSchemaSnapshotTest {
+    // Regression coverage for architecture issue #23.
     @Test
     fun `catalog refresh preserves declared output schema and local policy`() {
         val serverTool = Tool(

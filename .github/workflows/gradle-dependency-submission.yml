@@ -19,7 +19,7 @@ permissions: {}
 
 jobs:
   submit:
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
@@ -30,10 +30,10 @@ jobs:
           persist-credentials: false
           clean: false
 
-      - name: Install private Android toolchain
+      - name: Install pinned Android toolchain
         uses: ./.github/actions/setup-private-android-toolchain
 
-      - name: Verify JDK 21 on private runner
+      - name: Verify JDK 21
         shell: bash
         run: |
           set -euo pipefail

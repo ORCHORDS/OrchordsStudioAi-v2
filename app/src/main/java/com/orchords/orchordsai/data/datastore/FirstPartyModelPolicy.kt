@@ -45,8 +45,8 @@ internal fun Settings.enforceFirstPartyModelPolicy(): Settings {
     )
 }
 
-internal fun canonicalFirstPartyModelId(modelId: Uuid): Uuid =
-    modelId.takeIf { it in ORCHORDS_FIRST_PARTY_MODEL_UUIDS }
+internal fun canonicalFirstPartyModelId(modelId: Uuid?): Uuid =
+    modelId?.takeIf { it in ORCHORDS_FIRST_PARTY_MODEL_UUIDS }
         ?: ORCHORDS_MODEL_UUID
 
 internal fun canonicalOrchordsProvider(

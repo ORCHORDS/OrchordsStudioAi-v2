@@ -109,6 +109,18 @@ class FirstPartyModelPolicyTest {
     }
 
     @Test
+    fun `assistant without a selected model falls back to oai-1_0`() {
+        val settings = Settings(
+            providers = DEFAULT_PROVIDERS,
+            assistants = DEFAULT_ASSISTANTS.map { it.copy(chatModelId = null) },
+        )
+
+        val effective = settings.enforceFirstPartyModelPolicy()
+
+        assertTrue(effective.assistants.all { it.chatModelId == ORCHORDS_MODEL_UUID })
+    }
+
+    @Test
     fun `canonical route cannot be retargeted but keeps its gateway credential`() {
         val stored = (DEFAULT_PROVIDERS.single() as ProviderSetting.OpenAI).copy(
             apiKey = "protected-key",

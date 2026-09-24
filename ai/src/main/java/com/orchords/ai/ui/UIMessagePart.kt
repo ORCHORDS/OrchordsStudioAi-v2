@@ -57,6 +57,22 @@ enum class ServerToolStatus {
     FAILED,
 }
 
+/** MCP resource representation kept separate from generic documents to avoid implicit fetches. */
+@Serializable
+enum class McpResourceKind {
+    @SerialName("link")
+    LINK,
+
+    @SerialName("embedded_text")
+    EMBEDDED_TEXT,
+
+    @SerialName("embedded_blob")
+    EMBEDDED_BLOB,
+
+    @SerialName("embedded_unknown")
+    EMBEDDED_UNKNOWN,
+}
+
 /** The kind of text carried by a reasoning part. */
 @Serializable
 enum class ReasoningType {
@@ -107,6 +123,53 @@ sealed class UIMessagePart {
         val mime: String = "text/*",
         override var metadata: JsonObject? = null
     ) : UIMessagePart()
+
+    @Serializable
+    @SerialName("mcp_result_status")
+    data class McpResultStatus(
+        val isError: Boolean,
+        override var metadata: JsonObject? = null,
+    ) : UIMessagePart() {
+        fun modelFallbackText(): String =
+            """{"isError":$isError,"status":"${if (isError) "tool_error" else "completed"}"}"""
+    }
+
+    @Serializable
+    @SerialName("mcp_structured")
+    data class McpStructured(
+        val content: JsonElement,
+        override var metadata: JsonObject? = null,
+    ) : UIMessagePart() {
+        fun modelFallbackText(): String = """{"structuredContent":$content}"""
+    }
+
+    @Serializable
+    @SerialName("mcp_resource")
+    data class McpResource(
+        val kind: McpResourceKind,
+        val uri: String,
+        val name: String? = null,
+        val title: String? = null,
+        val description: String? = null,
+        val mimeType: String? = null,
+        val size: Long? = null,
+        val text: String? = null,
+        /** Managed local copy only for embedded binary content; never a fetched remote resource. */
+        val localUrl: String? = null,
+        override var metadata: JsonObject? = null,
+    ) : UIMessagePart() {
+        fun modelFallbackText(): String = buildString {
+            append("[MCP resource ")
+            append(kind.name.lowercase())
+            append("] ")
+            append(title?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: uri)
+            append(" (")
+            append(uri)
+            append(")")
+            mimeType?.takeIf { it.isNotBlank() }?.let { append(" mime=").append(it) }
+            text?.takeIf { it.isNotBlank() }?.let { append("\n").append(it) }
+        }
+    }
 
     @Serializable
     @SerialName("reasoning")

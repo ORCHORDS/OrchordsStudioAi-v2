@@ -164,5 +164,6 @@ private fun UIMessagePart.fileUri(): Uri? = when (this) {
     is UIMessagePart.Document -> url.takeIf { it.startsWith("file://") }?.toUri()
     is UIMessagePart.Video -> url.takeIf { it.startsWith("file://") }?.toUri()
     is UIMessagePart.Audio -> url.takeIf { it.startsWith("file://") }?.toUri()
+    is UIMessagePart.McpResource -> localUrl?.takeIf { it.startsWith("file://") }?.toUri()
     else -> null
 }

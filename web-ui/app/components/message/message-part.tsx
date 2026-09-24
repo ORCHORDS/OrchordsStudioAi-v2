@@ -87,6 +87,29 @@ function renderContentPart(
       return <AudioPart url={part.url} />;
     case "document":
       return <DocumentPart url={part.url} fileName={part.fileName} mime={part.mime} />;
+    case "mcp_result_status":
+      return part.isError ? (
+        <div className="rounded-md border px-3 py-2 text-sm text-destructive">
+          MCP tool reported an error
+        </div>
+      ) : null;
+    case "mcp_structured":
+      return (
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md border p-3 text-xs">
+          {JSON.stringify(part.content, null, 2)}
+        </pre>
+      );
+    case "mcp_resource":
+      return (
+        <div className="rounded-md border px-3 py-2 text-sm">
+          <div className="font-medium">{part.title ?? part.name ?? "MCP resource"}</div>
+          <div className="break-all text-xs text-muted-foreground">{part.uri}</div>
+          {part.mimeType ? <div className="text-xs text-muted-foreground">{part.mimeType}</div> : null}
+          {part.text ? (
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{part.text}</pre>
+          ) : null}
+        </div>
+      );
     case "reasoning":
       return (
         <ReasoningFallbackPart reasoning={part.reasoning} isFinished={part.finishedAt != null} />

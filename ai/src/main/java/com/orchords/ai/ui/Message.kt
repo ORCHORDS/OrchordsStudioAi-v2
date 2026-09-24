@@ -216,6 +216,9 @@ fun List<UIMessagePart>.isEmptyUIMessage(): Boolean {
             is UIMessagePart.Audio -> message.url.isBlank()
             is UIMessagePart.Tool,
             is UIMessagePart.ServerTool,
+            is UIMessagePart.McpResultStatus,
+            is UIMessagePart.McpStructured,
+            is UIMessagePart.McpResource,
                 -> false
             else -> true
         }

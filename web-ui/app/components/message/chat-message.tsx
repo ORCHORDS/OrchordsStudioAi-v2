@@ -67,6 +67,11 @@ function hasRenderablePart(part: UIMessagePart): boolean {
       return part.url.trim().length > 0;
     case "document":
       return part.url.trim().length > 0 || part.fileName.trim().length > 0;
+    case "mcp_result_status":
+      return part.isError;
+    case "mcp_structured":
+    case "mcp_resource":
+      return true;
     case "reasoning":
       return part.reasoning.trim().length > 0;
     case "tool":
@@ -86,6 +91,14 @@ function formatPartForCopy(part: UIMessagePart, t: TFunction): string | null {
       return `[${t("chat_message.copy_audio")}] ${part.url}`;
     case "document":
       return `[${t("chat_message.copy_document")}] ${part.fileName}`;
+    case "mcp_result_status":
+      return part.isError ? "[MCP tool error]" : "[MCP tool completed]";
+    case "mcp_structured":
+      return JSON.stringify({ structuredContent: part.content }, null, 2);
+    case "mcp_resource": {
+      const label = part.title ?? part.name ?? part.uri;
+      return `[MCP resource ${part.kind}] ${label} (${part.uri})${part.text ? "\n" + part.text : ""}`;
+    }
     case "reasoning":
       return part.reasoning;
     case "tool":

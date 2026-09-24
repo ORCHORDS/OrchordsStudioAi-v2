@@ -22,6 +22,25 @@ export function convertMessageToMarkdown(
     } else if (part.type === "document" && part.fileName) {
       lines.push(`[${part.fileName}](${part.url})`);
       lines.push("");
+    } else if (part.type === "mcp_result_status" && part.isError) {
+      lines.push("**MCP tool result:** error");
+      lines.push("");
+    } else if (part.type === "mcp_structured") {
+      lines.push("**MCP structured result:**");
+      lines.push("~~~json");
+      lines.push(JSON.stringify(part.content, null, 2));
+      lines.push("~~~");
+      lines.push("");
+    } else if (part.type === "mcp_resource") {
+      lines.push(`**MCP resource (${part.kind}):** ${part.title ?? part.name ?? part.uri}`);
+      lines.push("URI: " + part.uri);
+      if (part.mimeType) lines.push("MIME: " + part.mimeType);
+      if (part.text) {
+        lines.push("~~~text");
+        lines.push(part.text);
+        lines.push("~~~");
+      }
+      lines.push("");
     }
   }
 
@@ -68,6 +87,25 @@ export function convertConversationToMarkdown(
         lines.push("");
       } else if (part.type === "document" && part.fileName) {
         lines.push(`[${part.fileName}](${part.url})`);
+        lines.push("");
+      } else if (part.type === "mcp_result_status" && part.isError) {
+        lines.push("**MCP tool result:** error");
+        lines.push("");
+      } else if (part.type === "mcp_structured") {
+        lines.push("**MCP structured result:**");
+        lines.push("~~~json");
+        lines.push(JSON.stringify(part.content, null, 2));
+        lines.push("~~~");
+        lines.push("");
+      } else if (part.type === "mcp_resource") {
+        lines.push(`**MCP resource (${part.kind}):** ${part.title ?? part.name ?? part.uri}`);
+        lines.push("URI: " + part.uri);
+        if (part.mimeType) lines.push("MIME: " + part.mimeType);
+        if (part.text) {
+          lines.push("~~~text");
+          lines.push(part.text);
+          lines.push("~~~");
+        }
         lines.push("");
       }
     }

@@ -3,6 +3,7 @@ package com.orchords.orchordsai.data.ai.mcp
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlinx.serialization.json.JsonObject
 import com.orchords.ai.core.InputSchema
 import kotlin.uuid.Uuid
 
@@ -51,6 +52,7 @@ data class McpTool(
     val name: String = "",
     val description: String? = null,
     val inputSchema: InputSchema? = null,
+    val outputSchema: JsonObject? = null,
     val needsApproval: Boolean = false
 )
 

@@ -684,6 +684,18 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             }
         }
 
+        is UIMessagePart.McpResultStatus -> buildJsonObject {
+            put("text", modelFallbackText())
+        }
+
+        is UIMessagePart.McpStructured -> buildJsonObject {
+            put("text", modelFallbackText())
+        }
+
+        is UIMessagePart.McpResource -> buildJsonObject {
+            put("text", modelFallbackText())
+        }
+
         is UIMessagePart.Image -> {
             encodeBase64(false).getOrNull()?.let { encoded ->
                 buildJsonObject {
@@ -735,7 +747,15 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
             put("name", toolName)
             metadataAs<GoogleThoughtMetadata>()?.functionCallId?.let { put("id", it) }
 
-            val textParts = output.filterIsInstance<UIMessagePart.Text>()
+            val textParts = output.mapNotNull { part ->
+                when (part) {
+                    is UIMessagePart.Text -> part.text
+                    is UIMessagePart.McpResultStatus -> part.modelFallbackText()
+                    is UIMessagePart.McpStructured -> part.modelFallbackText()
+                    is UIMessagePart.McpResource -> part.modelFallbackText()
+                    else -> null
+                }
+            }
             val mediaGoogleParts = output
                 .filter { it !is UIMessagePart.Text }
                 .mapNotNull { it.toGooglePart() }
@@ -743,7 +763,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
 
             put("response", buildJsonObject {
                 if (textParts.isNotEmpty()) {
-                    put("result", textParts.joinToString("\n") { it.text })
+                    put("result", textParts.joinToString("\n"))
                 } else if (mediaGoogleParts.isEmpty()) {
                     put("result", " ")
                 }

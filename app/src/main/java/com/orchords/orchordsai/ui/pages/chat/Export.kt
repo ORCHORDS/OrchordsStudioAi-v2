@@ -321,6 +321,44 @@ private fun exportToMarkdown(
                                         appendLine()
                                     }
 
+                                    is UIMessagePart.McpResultStatus -> {
+                                        append(if (outputPart.isError) "**MCP tool result:** error" else "**MCP tool result:** completed")
+                                        appendLine()
+                                    }
+
+                                    is UIMessagePart.McpStructured -> {
+                                        append("**MCP structured result:**")
+                                        appendLine()
+                                        append("~~~json")
+                                        appendLine()
+                                        append(outputPart.content.toString())
+                                        appendLine()
+                                        append("~~~")
+                                        appendLine()
+                                    }
+
+                                    is UIMessagePart.McpResource -> {
+                                        append("**MCP resource (${outputPart.kind.name.lowercase()}):** ")
+                                        append(outputPart.title ?: outputPart.name ?: outputPart.uri)
+                                        appendLine()
+                                        append("URI: ")
+                                        append(outputPart.uri)
+                                        appendLine()
+                                        outputPart.mimeType?.let {
+                                            append("MIME: ")
+                                            append(it)
+                                            appendLine()
+                                        }
+                                        outputPart.text?.let {
+                                            append("~~~text")
+                                            appendLine()
+                                            append(it)
+                                            appendLine()
+                                            append("~~~")
+                                            appendLine()
+                                        }
+                                    }
+
                                     is UIMessagePart.Document -> {
                                         append("[Document: ${outputPart.fileName}](${outputPart.url})")
                                         appendLine()

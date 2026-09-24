@@ -422,6 +422,15 @@ class ResponseAPI(
                         add(buildJsonObject {
                             put("type", "function_call_output")
                             put("call_id", tool.toolCallId)
+                            val textOutput = tool.output.mapNotNull { part ->
+                                when (part) {
+                                    is UIMessagePart.Text -> part.text
+                                    is UIMessagePart.McpResultStatus -> part.modelFallbackText()
+                                    is UIMessagePart.McpStructured -> part.modelFallbackText()
+                                    is UIMessagePart.McpResource -> part.modelFallbackText()
+                                    else -> null
+                                }
+                            }
                             val hasImage = tool.output.any { it is UIMessagePart.Image }
                             if (hasImage) {
                                 putJsonArray("output") {
@@ -441,16 +450,24 @@ class ResponseAPI(
                                                 put("type", "input_text")
                                                 put("text", part.text)
                                             })
+                                            is UIMessagePart.McpResultStatus -> add(buildJsonObject {
+                                                put("type", "input_text")
+                                                put("text", part.modelFallbackText())
+                                            })
+                                            is UIMessagePart.McpStructured -> add(buildJsonObject {
+                                                put("type", "input_text")
+                                                put("text", part.modelFallbackText())
+                                            })
+                                            is UIMessagePart.McpResource -> add(buildJsonObject {
+                                                put("type", "input_text")
+                                                put("text", part.modelFallbackText())
+                                            })
                                             else -> {}
                                         }
                                     }
                                 }
                             } else {
-                                put(
-                                    "output",
-                                    tool.output.filterIsInstance<UIMessagePart.Text>()
-                                        .joinToString("\n") { it.text }
-                                )
+                                put("output", textOutput.joinToString("\n"))
                             }
                         })
                     }

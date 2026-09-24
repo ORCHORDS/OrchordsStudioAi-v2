@@ -41,7 +41,7 @@ releaseVersionCode=1000002
 
 ## Local preflight
 
-Normal issue development does not depend on repository runners. Before a direct push to `main`, run:
+Normal issue development still starts with local verification. Before a direct push to `main`, run:
 
 ```bash
 bash scripts/preflight-local.sh
@@ -65,7 +65,7 @@ Keep `local.properties`, signing configuration, API credentials, and other machi
 
 ## GitHub Release build
 
-GitHub Releases are produced by `.github/workflows/release.yml` on the independent private `ubuntu-24.04-x64` runner. The workflow runs when the canonical version changes, can be dispatched manually, and can recover from completion of the retired legacy Daily Build.
+GitHub Releases are produced by `.github/workflows/release.yml` on the standard GitHub-hosted `ubuntu-24.04` runner. The workflow runs when the canonical version changes, can be dispatched manually, and can recover from completion of the retired legacy Daily Build.
 
 The release path intentionally performs a stronger verification/build pass than normal issue work:
 
@@ -81,7 +81,7 @@ The release path intentionally performs a stronger verification/build pass than 
 - verifies the new Release before deleting older GitHub Releases;
 - verifies that the Releases page contains exactly the newly published Release afterward.
 
-The release workflow is the repository exception to the normal no-runner development policy. A release is not complete until the workflow reaches its final live-release verification step successfully.
+GitHub-hosted Actions provide repository verification, while local focused checks remain the first development gate. A release is not complete until the workflow reaches its final live-release verification step successfully.
 
 ## Brand
 

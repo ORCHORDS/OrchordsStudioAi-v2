@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   close-blank-issues:
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       issues: write

@@ -162,6 +162,24 @@ fun DefaultToolPreview(
                                 modifier = Modifier.fillMaxWidth(),
                             )
 
+                            is UIMessagePart.McpResultStatus -> HighlightCodeBlock(
+                                code = part.modelFallbackText(),
+                                language = "json",
+                                style = TextStyle(fontSize = 10.sp, lineHeight = 12.sp),
+                            )
+
+                            is UIMessagePart.McpStructured -> HighlightCodeBlock(
+                                code = part.modelFallbackText(),
+                                language = "json",
+                                style = TextStyle(fontSize = 10.sp, lineHeight = 12.sp),
+                            )
+
+                            is UIMessagePart.McpResource -> HighlightCodeBlock(
+                                code = part.modelFallbackText(),
+                                language = "text",
+                                style = TextStyle(fontSize = 10.sp, lineHeight = 12.sp),
+                            )
+
                             else -> {}
                         }
                     }

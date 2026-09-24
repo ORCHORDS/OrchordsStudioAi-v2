@@ -80,6 +80,18 @@ internal fun lowerOpenAIChatToolResultMessages(
                                 add(UIMessagePart.Text("[Image output omitted: current model does not support image input]"))
                             }
                         }
+                        is UIMessagePart.McpResultStatus -> {
+                            changed = true
+                            add(UIMessagePart.Text(output.modelFallbackText()))
+                        }
+                        is UIMessagePart.McpStructured -> {
+                            changed = true
+                            add(UIMessagePart.Text(output.modelFallbackText()))
+                        }
+                        is UIMessagePart.McpResource -> {
+                            changed = true
+                            add(UIMessagePart.Text(output.modelFallbackText()))
+                        }
                         is UIMessagePart.Document -> {
                             changed = true
                             add(UIMessagePart.Text("[Document tool output omitted from Chat Completions tool content]"))

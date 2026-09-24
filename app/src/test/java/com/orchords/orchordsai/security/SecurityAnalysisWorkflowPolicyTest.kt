@@ -88,8 +88,8 @@ class SecurityAnalysisWorkflowPolicyTest {
         else source.substring(jobMatch.range.first, nextMatch.range.first)
 
         assertTrue(
-            "aab-artifact must run on the self-hosted Android runner",
-            jobBlock.contains("runs-on: main-verification"),
+            "aab-artifact must run on the standard GitHub-hosted Ubuntu runner",
+            jobBlock.contains("runs-on: ubuntu-24.04"),
         )
         assertTrue(
             "aab-artifact must build the release bundle",

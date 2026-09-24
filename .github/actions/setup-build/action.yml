@@ -38,10 +38,8 @@ runs:
 
     - name: Set up pnpm
       # Shell guard instead of pnpm/action-setup: the action installs into
-      # ~/setup-pnpm, which two concurrent agents sharing $HOME race on
-      # (ENOTEMPTY during cold start). A stale Corepack shim can still satisfy
-      # command -v while failing at runtime, so verify pnpm 11 itself and fall
-      # back to a runner-temp install when the preinstalled command is broken.
+      # ~/setup-pnpm, so verify pnpm 11 explicitly and fall back to a runner-temp install
+      # when the image does not already provide the required version.
       if: inputs.web == 'true'
       shell: bash
       run: |
@@ -55,23 +53,13 @@ runs:
         fi
         pnpm --version | grep -Eq '^11([.]|$)'
 
-    - name: Set up Node (hosted)
-      if: inputs.web == 'true' && inputs.gradle == 'true'
+    - name: Set up Node 22
+      if: inputs.web == 'true'
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: 22
         cache: pnpm
         cache-dependency-path: web-ui/pnpm-lock.yaml
-
-    - name: Verify Node (dedicated runner)
-      # The dedicated runner keeps Node/pnpm preinstalled; setup-node's
-      # Actions-cache post step fails there because the pnpm store path
-      # does not match, so this lane only checks the versions.
-      if: inputs.web == 'true' && inputs.gradle != 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-        node -v | grep -q '^v22' || { echo "::error::Node 22 required on the dedicated runner"; exit 1; }
 
     - name: Install web-ui dependencies
       if: inputs.web == 'true'

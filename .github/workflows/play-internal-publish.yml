@@ -20,7 +20,7 @@ concurrency:
 jobs:
   internal:
     name: Upload to Play internal track
-    runs-on: main-verification
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: play-internal
     steps:
@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
           clean: true
 
-      - name: Install private Android toolchain
+      - name: Install pinned Android toolchain
         uses: ./.github/actions/setup-private-android-toolchain
 
       - name: Materialize signing material

@@ -1,6 +1,7 @@
 name: Main Verification
 
 # Hosted-runner activation probe.
+# Post-enable hosted runner trigger.
 
 on:
   push:

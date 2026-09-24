@@ -17,6 +17,7 @@ class McpToolResultAdapterTest {
     private suspend fun render(wire: String): List<UIMessagePart> =
         codec.decodeFromString<CallToolResult>(wire).toConversationParts(
             renderImage = { UIMessagePart.Image("fixture://managed-image") },
+            renderAudio = { UIMessagePart.Audio("fixture://managed-audio") },
         )
 
     @Test
@@ -50,6 +51,28 @@ class McpToolResultAdapterTest {
         assertFalse(serialized.contains("HOST_SENTINEL"))
         assertTrue(serialized.contains("notes://example"))
         assertTrue(serialized.contains("USER_DATA_FIELD"))
+    }
+
+    @Test
+    fun `audio content uses typed managed-file projection`() = runTest {
+        val parts = render("""{"content":[{"type":"audio","data":"AA==","mimeType":"audio/wav"}]}""")
+        assertEquals(UIMessagePart.Audio("fixture://managed-audio"), parts.single())
+    }
+
+    @Test
+    fun `media conversion failure is bounded and does not leak the payload`() = runTest {
+        val sentinel = "PRIVATE_BASE64_SENTINEL"
+        val result = codec.decodeFromString<CallToolResult>(
+            """{"content":[{"type":"audio","data":"$sentinel","mimeType":"audio/wav"}]}"""
+        )
+        val parts = result.toConversationParts(
+            renderImage = { UIMessagePart.Image("fixture://managed-image") },
+            renderAudio = { error("decode failed: $sentinel") },
+        )
+        val text = (parts.single() as UIMessagePart.Text).text
+        assertFalse(text.contains(sentinel))
+        assertTrue(text.contains("\"status\":\"omitted\""))
+        assertTrue(text.contains("\"reason\":\"invalid_or_too_large\""))
     }
 
     @Test

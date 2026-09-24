@@ -1366,6 +1366,9 @@ class ChatService(
             is UIMessagePart.Document -> copy(url = copyLocalFileIfNeeded(url))
             is UIMessagePart.Video -> copy(url = copyLocalFileIfNeeded(url))
             is UIMessagePart.Audio -> copy(url = copyLocalFileIfNeeded(url))
+            is UIMessagePart.McpResource -> copy(
+                localUrl = localUrl?.let(::copyLocalFileIfNeeded)
+            )
             else -> this
         }
     }

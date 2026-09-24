@@ -1,4 +1,4 @@
-name: Private Runner Policy
+name: Hosted Runner Policy
 
 on:
   push:
@@ -18,25 +18,23 @@ permissions:
 
 jobs:
   policy:
-    name: Private Runner Policy
-    # Second Lenovo agent label; keep the policy independent of the
-    # main-verification queue so it also acts as a private-runner canary.
-    runs-on: ubuntu-24.04-x64
+    name: Hosted Runner Policy
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          clean: false
+          clean: true
 
-      - name: Reject GitHub-hosted runner labels outside Release
+      - name: Reject legacy self-hosted runner labels
         shell: bash
         run: |
           set -euo pipefail
-          violations="$(grep -RInE '^\s*runs-on:\s*(ubuntu-(latest|24\.04|22\.04|20\.04|slim)|windows-(latest|2025|2022|2019)|macos-(latest|[0-9]+))\s*$' .github/workflows --exclude='release.yml' || true)"
+          violations="$(grep -RInE '^\s*runs-on:\s*(main-verification|ubuntu-24\.04-x64|self-hosted)\s*$' .github/workflows || true)"
           if [ -n "$violations" ]; then
             printf '%s\n' "$violations"
-            echo '::error::Only .github/workflows/release.yml may use a GitHub-hosted runner; normal workflows must use ORCHORDS private/self-hosted runners.'
+            echo '::error::Legacy ORCHORDS self-hosted runner labels remain in active workflows.'
             exit 1
           fi
-          echo 'Hosted-runner exception is limited to release.yml.'
+          echo 'All active workflows are free of legacy self-hosted runner labels.'

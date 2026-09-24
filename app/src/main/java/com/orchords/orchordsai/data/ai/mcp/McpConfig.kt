@@ -13,6 +13,8 @@ data class McpCommonOptions(
     val name: String = "",
     val headers: List<Pair<String, String>> = emptyList(),
     val tools: List<McpTool> = emptyList(),
+    /** Fingerprint of the last complete published tool catalog. */
+    val catalogRevision: String? = null,
     val oauth: McpOAuthState? = null,
 )
 
@@ -51,8 +53,13 @@ data class McpTool(
     val enable: Boolean = true,
     val name: String = "",
     val description: String? = null,
+    /** Provider-facing projection retained for existing tool invocation code. */
     val inputSchema: InputSchema? = null,
+    /** Full input schema document supported by the pinned MCP SDK. */
+    val inputSchemaDocument: JsonObject? = null,
     val outputSchema: JsonObject? = null,
+    /** Stable hash of execution-relevant schema/effect/task declarations. */
+    val schemaFingerprint: String? = null,
     val needsApproval: Boolean = false
 )
 

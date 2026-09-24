@@ -741,6 +741,21 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
             }
         }
 
+        is UIMessagePart.McpResultStatus -> buildJsonObject {
+            put("type", "text")
+            put("text", modelFallbackText())
+        }
+
+        is UIMessagePart.McpStructured -> buildJsonObject {
+            put("type", "text")
+            put("text", modelFallbackText())
+        }
+
+        is UIMessagePart.McpResource -> buildJsonObject {
+            put("type", "text")
+            put("text", modelFallbackText())
+        }
+
         is UIMessagePart.Reasoning -> buildJsonObject {
             put("type", "thinking")
             put("thinking", reasoning)

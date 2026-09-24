@@ -1,5 +1,5 @@
-name: Set up private Android toolchain
-description: Install the reproducible Android/JDK/Node toolchain required by StudioAi self-hosted runners.
+name: Set up pinned Android toolchain
+description: Install the reproducible Android/JDK/Node toolchain required by StudioAi CI.
 
 runs:
   using: composite

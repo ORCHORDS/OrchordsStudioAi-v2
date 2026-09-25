@@ -557,7 +557,12 @@ internal fun mergeTools(
 }
 
 private fun ToolSchema.toSchema(): InputSchema =
-    InputSchema.Obj(properties = properties ?: JsonObject(emptyMap()), required = required)
+    InputSchema.Obj(
+        properties = properties ?: JsonObject(emptyMap()),
+        required = required,
+        schema = schema,
+        defs = defs,
+    )
 
 private fun ToolSchema.toPersistedSchema(): JsonObject = buildJsonObject {
     put("type", "object")

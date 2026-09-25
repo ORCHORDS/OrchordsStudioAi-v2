@@ -20,10 +20,16 @@ class McpToolSchemaSnapshotTest {
             name = "weather",
             description = "Returns current weather",
             inputSchema = ToolSchema(
+                schema = "https://json-schema.org/draft/2020-12/schema",
                 properties = buildJsonObject {
-                    put("city", buildJsonObject { put("type", "string") })
+                    put("city", buildJsonObject {
+                        put("\$ref", "#/\$defs/City")
+                    })
                 },
                 required = listOf("city"),
+                defs = buildJsonObject {
+                    put("City", buildJsonObject { put("type", "string") })
+                },
             ),
             outputSchema = ToolSchema(
                 schema = "https://json-schema.org/draft/2020-12/schema",
@@ -49,6 +55,17 @@ class McpToolSchemaSnapshotTest {
 
         assertFalse(merged.enable)
         assertTrue(merged.needsApproval)
+
+        val input = merged.inputSchema as com.orchords.ai.core.InputSchema.Obj
+        assertEquals("https://json-schema.org/draft/2020-12/schema", input.schema)
+        assertEquals(
+            "#/\$defs/City",
+            input.properties["city"]?.jsonObject?.get("\$ref")?.jsonPrimitive?.content,
+        )
+        assertEquals(
+            "string",
+            input.defs?.get("City")?.jsonObject?.get("type")?.jsonPrimitive?.content,
+        )
 
         val schema = requireNotNull(merged.outputSchema)
         assertEquals("object", schema["type"]?.jsonPrimitive?.content)

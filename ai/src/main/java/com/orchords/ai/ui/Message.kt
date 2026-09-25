@@ -316,6 +316,9 @@ fun List<UIMessagePart>.toSortedMessageParts(): List<UIMessagePart> {
             is UIMessagePart.ServerTool -> 0
             is UIMessagePart.ToolCall -> 0
             is UIMessagePart.ToolResult -> 0
+            is UIMessagePart.McpResultStatus -> 0
+            is UIMessagePart.McpStructured -> 0
+            is UIMessagePart.McpResource -> 0
             is UIMessagePart.Search -> 0
             is UIMessagePart.Image -> 1
             is UIMessagePart.Video -> 1

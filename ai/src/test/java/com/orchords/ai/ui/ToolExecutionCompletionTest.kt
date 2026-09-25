@@ -97,4 +97,22 @@ class ToolExecutionCompletionTest {
         assertTrue(decoded.executionCompleted == true)
         assertTrue(decoded.isExecuted)
     }
+    @Test
+    fun `approved durable approval state becomes resumable after transition to prepared`() {
+        val pending = UIMessagePart.Tool(
+            toolCallId = "call-approval-resume",
+            toolName = "approval_tool",
+            input = "{}",
+            approvalState = ToolApprovalState.Pending,
+            executionState = ToolExecutionState.AWAITING_APPROVAL,
+        )
+        assertFalse(pending.canResumeExecution)
+
+        val approved = pending.copy(
+            approvalState = ToolApprovalState.Approved,
+            executionState = ToolExecutionState.PREPARED,
+        )
+        assertTrue(approved.canResumeExecution)
+    }
+
 }

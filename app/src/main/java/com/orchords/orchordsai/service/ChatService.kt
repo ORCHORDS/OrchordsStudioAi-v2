@@ -40,6 +40,7 @@ import com.orchords.ai.provider.ProviderSetting
 import com.orchords.ai.provider.providers.claude.isAnthropicNativeHost
 import com.orchords.ai.provider.TextGenerationParams
 import com.orchords.ai.ui.ToolApprovalState
+import com.orchords.ai.ui.ToolExecutionState
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.canResumeToolExecution
@@ -544,7 +545,16 @@ class ChatService(
                                 parts = msg.parts.map { part ->
                                     when {
                                         part is UIMessagePart.Tool && part.toolCallId == toolCallId -> {
-                                            part.copy(approvalState = newApprovalState)
+                                            part.copy(
+                                                approvalState = newApprovalState,
+                                                executionState = if (
+                                                    part.executionState == ToolExecutionState.AWAITING_APPROVAL
+                                                ) {
+                                                    ToolExecutionState.PREPARED
+                                                } else {
+                                                    part.executionState
+                                                },
+                                            )
                                         }
 
                                         else -> part

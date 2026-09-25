@@ -13,9 +13,12 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolListChangedNotification
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -221,6 +224,7 @@ internal class McpSessionRegistry(
             val sdkClient = createSdkClient(config)
             val transport = createTransport(config)
             installTransportCallbacks(config, sdkClient, transport)
+            installToolCatalogChangeHandler(config.id, sdkClient)
 
             try {
                 sdkClient.connect(transport)
@@ -347,6 +351,22 @@ internal class McpSessionRegistry(
         }
     }
 
+    private fun installToolCatalogChangeHandler(
+        configId: Uuid,
+        sdkClient: Client,
+    ) {
+        sdkClient.setNotificationHandler<ToolListChangedNotification>(
+            ToolListChangedNotification().method
+        ) { _ ->
+            appScope.async {
+                if (!supportsToolListChanges(sdkClient.serverCapabilities)) return@async
+                val session = sessions[configId] ?: return@async
+                if (session.client !== sdkClient) return@async
+                syncSession(session)
+            }
+        }
+    }
+
     private fun requestReconnect(
         configId: Uuid,
         sourceClient: Client?,
@@ -467,6 +487,9 @@ internal class McpSessionRegistry(
         return message.contains("Maximum reconnection attempts exceeded", ignoreCase = true)
     }
 }
+
+internal fun supportsToolListChanges(capabilities: ServerCapabilities?): Boolean =
+    capabilities?.tools?.listChanged == true
 
 internal data class McpConnectionKey(
     val transportType: String,

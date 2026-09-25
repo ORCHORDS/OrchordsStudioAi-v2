@@ -25,6 +25,80 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
+internal fun buildCalendarListTool(context: Context): Tool = Tool(
+    name = "calendar_list",
+    description = """
+        List calendars available on the user's device with stable local calendar IDs,
+        account/display identity, visibility, primary status, and whether event writes are allowed.
+        Use the returned calendar_id for calendar_create when the user specifies an account/calendar.
+        Requires Calendar read permission.
+    """.trimIndent().replace("\n", " "),
+    parameters = {
+        InputSchema.Obj(properties = buildJsonObject { })
+    },
+    execute = {
+        if (!hasCalendarReadPermission(context)) {
+            val payload = buildJsonObject {
+                put("error", "NO_PERMISSION")
+                put(
+                    "message",
+                    "Calendar read permission is not granted. Please ask the user to enable " +
+                        "the calendar permission in the assistant\'s local tools settings."
+                )
+            }
+            return@Tool listOf(UIMessagePart.Text(payload.toString()))
+        }
+
+        val projection = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.ACCOUNT_TYPE,
+            CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+            CalendarContract.Calendars.SYNC_EVENTS,
+            CalendarContract.Calendars.VISIBLE,
+            CalendarContract.Calendars.IS_PRIMARY,
+            CalendarContract.Calendars.MAX_REMINDERS,
+        )
+
+        val calendars = buildJsonArray {
+            context.contentResolver.query(
+                CalendarContract.Calendars.CONTENT_URI,
+                projection,
+                null,
+                null,
+                CalendarContract.Calendars.IS_PRIMARY + " DESC, " + CalendarContract.Calendars.CALENDAR_DISPLAY_NAME + " ASC",
+            )?.use { cursor ->
+                var count = 0
+                while (cursor.moveToNext() && count < 100) {
+                    val accessLevel = cursor.getInt(4)
+                    val syncEvents = cursor.getInt(5) == 1
+                    add(buildJsonObject {
+                        put("calendar_id", cursor.getLong(0))
+                        put("display_name", cursor.getString(1) ?: "")
+                        put("account_name", cursor.getString(2) ?: "")
+                        put("account_type", cursor.getString(3) ?: "")
+                        put("access_level", accessLevel)
+                        put("writable", isWritableCalendar(accessLevel, syncEvents))
+                        put("visible", cursor.getInt(6) == 1)
+                        put("primary", cursor.getInt(7) == 1)
+                        put("max_reminders", cursor.getInt(8))
+                    })
+                    count++
+                }
+            }
+        }
+        listOf(
+            UIMessagePart.Text(
+                buildJsonObject {
+                    put("count", calendars.size)
+                    put("calendars", calendars)
+                }.toString()
+            )
+        )
+    }
+)
+
 internal fun buildCalendarQueryTool(context: Context): Tool = Tool(
     name = "calendar_query",
     description = """
@@ -223,6 +297,7 @@ internal fun buildCalendarCreateTool(context: Context): Tool = Tool(
     description = """
         Create a new calendar event on the user's device.
         Requires title and start time at minimum. End time defaults to 1 hour after start.
+        Accepts an optional calendar_id from calendar_list; when supplied, that exact writable calendar is used.
         ${localToolTimeParsingGuidance()}
         Requires the 'Calendar' permission; if it is not granted, an error is returned.
     """.trimIndent().replace("\n", " "),
@@ -261,6 +336,10 @@ internal fun buildCalendarCreateTool(context: Context): Tool = Tool(
                     put("type", "boolean")
                     put("description", "Whether this is an all-day event. Default false.")
                 })
+                put("calendar_id", buildJsonObject {
+                    put("type", "integer")
+                    put("description", "Optional stable local calendar ID returned by calendar_list.")
+                })
             },
             required = listOf("title", "start")
         )
@@ -283,6 +362,15 @@ internal fun buildCalendarCreateTool(context: Context): Tool = Tool(
         val startRaw = params["start"]?.jsonPrimitive?.contentOrNull
         val endRaw = params["end"]?.jsonPrimitive?.contentOrNull
         val allDay = params["all_day"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: false
+        val requestedCalendarIdRaw = params["calendar_id"]?.jsonPrimitive?.contentOrNull
+        val requestedCalendarId = requestedCalendarIdRaw?.toLongOrNull()?.takeIf { it > 0L }
+        if (requestedCalendarIdRaw != null && requestedCalendarId == null) {
+            val payload = buildJsonObject {
+                put("error", "INVALID_CALENDAR_ID")
+                put("message", "calendar_id must be a positive integer returned by calendar_list.")
+            }
+            return@Tool listOf(UIMessagePart.Text(payload.toString()))
+        }
 
         if (title.isNullOrBlank() || startRaw.isNullOrBlank()) {
             val payload = buildJsonObject {
@@ -345,11 +433,20 @@ internal fun buildCalendarCreateTool(context: Context): Tool = Tool(
             eventTimeZone = zone.id
         }
 
-        val calendarId = getDefaultCalendarId(context)
+        val calendarId = if (requestedCalendarId != null) {
+            requestedCalendarId.takeIf { isWritableCalendarId(context, it) }
+        } else {
+            getDefaultCalendarId(context)
+        }
         if (calendarId == null) {
             val payload = buildJsonObject {
-                put("error", "NO_CALENDAR")
-                put("message", "No calendar account found on this device. Please add a calendar account first.")
+                if (requestedCalendarId != null) {
+                    put("error", "CALENDAR_NOT_WRITABLE")
+                    put("message", "The selected calendar no longer exists or does not allow event writes.")
+                } else {
+                    put("error", "NO_CALENDAR")
+                    put("message", "No writable calendar account found on this device. Please add or select a writable calendar.")
+                }
             }
             return@Tool listOf(UIMessagePart.Text(payload.toString()))
         }
@@ -396,6 +493,31 @@ private fun hasCalendarReadPermission(context: Context): Boolean =
 private fun hasCalendarWritePermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
+
+internal fun isWritableCalendar(accessLevel: Int, syncEvents: Boolean): Boolean =
+    accessLevel >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR && syncEvents
+
+private fun isWritableCalendarId(context: Context, calendarId: Long): Boolean {
+    val projection = arrayOf(
+        CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+        CalendarContract.Calendars.SYNC_EVENTS,
+    )
+    context.contentResolver.query(
+        ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId),
+        projection,
+        null,
+        null,
+        null,
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            return isWritableCalendar(
+                accessLevel = cursor.getInt(0),
+                syncEvents = cursor.getInt(1) == 1,
+            )
+        }
+    }
+    return false
+}
 
 private fun getDefaultCalendarId(context: Context): Long? {
     val projection = arrayOf(CalendarContract.Calendars._ID)

@@ -27,6 +27,8 @@ class LocalTools(
 
     val screenTimeTool by lazy { buildScreenTimeTool(context, eventBus) }
 
+    val calendarListTool by lazy { buildCalendarListTool(context) }
+
     val calendarQueryTool by lazy { buildCalendarQueryTool(context) }
 
     val calendarCreateTool by lazy { buildCalendarCreateTool(context) }
@@ -59,6 +61,7 @@ class LocalTools(
             tools.add(screenTimeTool)
         }
         if (options.contains(LocalToolOption.Calendar)) {
+            tools.add(calendarListTool)
             tools.add(calendarQueryTool)
             tools.add(calendarCreateTool)
         }

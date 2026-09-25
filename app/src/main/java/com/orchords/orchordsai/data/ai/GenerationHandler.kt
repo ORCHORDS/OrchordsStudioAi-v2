@@ -37,6 +37,7 @@ import com.orchords.ai.ui.applyToolResultRetention
 import com.orchords.ai.ui.limitContext
 import com.orchords.ai.ui.ToolResultRetentionMode
 import com.orchords.orchordsai.R
+import com.orchords.orchordsai.data.ai.mcp.McpAuthorizationRequiredException
 import com.orchords.orchordsai.data.ai.planning.isPlanningModeActive
 import com.orchords.orchordsai.data.ai.planning.withPlanningApprovalOverlay
 import com.orchords.orchordsai.data.ai.transformers.InputMessageTransformer
@@ -72,6 +73,13 @@ private const val MAX_PROVIDER_NETWORK_RETRIES = 3
 private const val INITIAL_PROVIDER_RETRY_DELAY_MS = 1_000L
 
 private class StreamChunkHandlingException(cause: Throwable) : RuntimeException(cause)
+
+internal fun toolExecutionStateForFailure(error: Throwable): ToolExecutionState =
+    if (error is McpAuthorizationRequiredException) {
+        ToolExecutionState.AWAITING_AUTH
+    } else {
+        ToolExecutionState.FAILED
+    }
 
 @Serializable
 sealed interface GenerationChunk {
@@ -259,7 +267,9 @@ class GenerationHandler(
             }
 
             val executedTools = arrayListOf<UIMessagePart.Tool>()
+            var hasPausedTool = false
             toolsToProcess.forEach { tool ->
+                if (hasPausedTool) return@forEach
                 when (tool.approvalState) {
                     is ToolApprovalState.Denied -> {
                         val reason = (tool.approvalState as ToolApprovalState.Denied).reason
@@ -314,26 +324,37 @@ class GenerationHandler(
                             )
                         }.onFailure {
                             if (it is CancellationException) throw it
-                            Log.w(TAG, "generateText: tool execution failed type=${it.javaClass.simpleName}")
-                            executedTools += tool.copy(
-                                executionCompleted = true,
-                                executionState = ToolExecutionState.FAILED,
-                                output = listOf(
-                                    UIMessagePart.Text(
-                                        json.encodeToString(
-                                            buildJsonObject {
-                                                put(
-                                                    "error",
-                                                    JsonPrimitive(buildString {
-                                                        append("[${it.javaClass.name}] ${it.message}")
-                                                        append("\n${it.stackTraceToString()}")
-                                                    })
-                                                )
-                                            }
+                            val failureState = toolExecutionStateForFailure(it)
+                            if (failureState == ToolExecutionState.AWAITING_AUTH) {
+                                Log.i(TAG, "generateText: MCP tool paused for authorization")
+                                hasPausedTool = true
+                                executedTools += tool.copy(
+                                    executionCompleted = false,
+                                    executionState = ToolExecutionState.AWAITING_AUTH,
+                                    output = emptyList(),
+                                )
+                            } else {
+                                Log.w(TAG, "generateText: tool execution failed type=${it.javaClass.simpleName}")
+                                executedTools += tool.copy(
+                                    executionCompleted = true,
+                                    executionState = failureState,
+                                    output = listOf(
+                                        UIMessagePart.Text(
+                                            json.encodeToString(
+                                                buildJsonObject {
+                                                    put(
+                                                        "error",
+                                                        JsonPrimitive(buildString {
+                                                            append("[${it.javaClass.name}] ${it.message}")
+                                                            append("\n${it.stackTraceToString()}")
+                                                        })
+                                                    )
+                                                }
+                                            )
                                         )
                                     )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -361,6 +382,10 @@ class GenerationHandler(
                     )
                 )
             )
+            if (hasPausedTool) {
+                Log.i(TAG, "generateText: paused on authorization-required tool")
+                break
+            }
         }
 
     }.flowOn(Dispatchers.IO)

@@ -322,6 +322,16 @@ sealed class UIMessagePart {
                 ) &&
                 approvalState.canResumeToolExecution()
 
+        /** States that require explicit recovery or reconciliation before any replay. */
+        val requiresExplicitRecovery: Boolean
+            get() = executionState in setOf(
+                ToolExecutionState.AWAITING_AUTH,
+                ToolExecutionState.SUBMITTED,
+                ToolExecutionState.RUNNING,
+                ToolExecutionState.CANCEL_REQUESTED,
+                ToolExecutionState.OUTCOME_UNKNOWN,
+            )
+
         /** Parse input string as JsonElement */
         fun inputAsJson(): JsonElement = runCatching {
             json.parseToJsonElement(input.ifBlank { "{}" })

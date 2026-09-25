@@ -72,6 +72,12 @@ private sealed interface ConnectResult {
 
 internal class McpClientUnavailableException(message: String) : IllegalStateException(message)
 
+internal class McpAuthorizationRequiredException(
+    val serverId: Uuid,
+    val toolName: String,
+    cause: Throwable,
+) : IllegalStateException("MCP authorization required", cause)
+
 internal class McpStatusStore {
     private val _status = MutableStateFlow<Map<Uuid, McpStatus>>(emptyMap())
     val status: StateFlow<Map<Uuid, McpStatus>> = _status.asStateFlow()
@@ -151,11 +157,16 @@ internal class McpSessionRegistry(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            when {
-                oauthCoordinator.needsAuthorization(config, e) ->
-                    statusStore.update(config.id, McpStatus.NeedsAuthorization)
-                oauthCoordinator.permissionDenied(e) ->
-                    statusStore.update(config.id, McpStatus.PermissionDenied(permissionMessage(e)))
+            if (oauthCoordinator.needsAuthorization(config, e)) {
+                statusStore.update(config.id, McpStatus.NeedsAuthorization)
+                throw McpAuthorizationRequiredException(
+                    serverId = serverId,
+                    toolName = toolName,
+                    cause = e,
+                )
+            }
+            if (oauthCoordinator.permissionDenied(e)) {
+                statusStore.update(config.id, McpStatus.PermissionDenied(permissionMessage(e)))
             }
             throw e
         }

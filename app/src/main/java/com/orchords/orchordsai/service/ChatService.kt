@@ -809,6 +809,14 @@ class ChatService(
                     return@mapIndexed node
                 }
 
+                // Auth-paused/in-flight/unknown states must survive cleanup until explicit recovery.
+                val hasExplicitRecoveryTool = node.currentMessage.getTools().any {
+                    !it.isExecuted && it.requiresExplicitRecovery
+                }
+                if (hasExplicitRecoveryTool) {
+                    return@mapIndexed node
+                }
+
                 // If all tools are executed, it's valid
                 val allToolsExecuted = node.currentMessage.getTools().all { it.isExecuted }
                 if (allToolsExecuted && node.currentMessage.getTools().isNotEmpty()) {
@@ -840,13 +848,30 @@ class ChatService(
     }
 
     private fun cancelToolByUser(tool: UIMessagePart.Tool): UIMessagePart.Tool {
+        val mayHaveRemoteEffect = tool.executionState in setOf(
+            ToolExecutionState.SUBMITTED,
+            ToolExecutionState.RUNNING,
+            ToolExecutionState.CANCEL_REQUESTED,
+            ToolExecutionState.OUTCOME_UNKNOWN,
+        )
+        val nextState = if (mayHaveRemoteEffect) {
+            ToolExecutionState.OUTCOME_UNKNOWN
+        } else {
+            ToolExecutionState.CANCELLED
+        }
         return tool.copy(
             output = listOf(
                 UIMessagePart.Text(
-                    """{"status":"cancelled","error":"Generation cancelled by user before tool execution completed."}"""
+                    if (mayHaveRemoteEffect) {
+                        """{"status":"outcome_unknown","error":"Local generation stopped after the tool may have been submitted. Reconcile before retrying."}"""
+                    } else {
+                        """{"status":"cancelled","error":"Generation cancelled by user before tool execution completed."}"""
+                    }
                 )
             ),
-            approvalState = ToolApprovalState.Denied("Generation cancelled by user")
+            approvalState = ToolApprovalState.Denied("Generation cancelled by user"),
+            executionCompleted = !mayHaveRemoteEffect,
+            executionState = nextState,
         )
     }
 

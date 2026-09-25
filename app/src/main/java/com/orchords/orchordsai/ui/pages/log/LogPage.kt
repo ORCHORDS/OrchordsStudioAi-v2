@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,7 @@ import kotlinx.coroutines.launch
 import com.orchords.common.android.LogEntry
 import com.orchords.common.android.Logging
 import com.orchords.orchordsai.R
+import com.orchords.orchordsai.release.resolveBuildIdentity
 import com.orchords.orchordsai.ui.components.nav.BackButton
 import com.orchords.orchordsai.ui.components.ui.JsonTree
 import com.orchords.orchordsai.ui.theme.CustomColors
@@ -56,6 +58,10 @@ import java.util.Locale
 
 @Composable
 fun LogPage() {
+    val context = LocalContext.current
+    val buildIdentityText = remember(context) {
+        resolveBuildIdentity(context).diagnosticText(context.packageName)
+    }
     var logs by remember { mutableStateOf(Logging.getRecentLogs()) }
     var requestLoggingEnabled by remember { mutableStateOf(Logging.isRequestLoggingEnabled()) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -84,6 +90,7 @@ fun LogPage() {
     ) { contentPadding ->
         UnifiedLogList(
             logs = logs,
+            buildIdentityText = buildIdentityText,
             requestLoggingEnabled = requestLoggingEnabled,
             onRequestLoggingChange = {
                 requestLoggingEnabled = it
@@ -99,6 +106,7 @@ fun LogPage() {
 @Composable
 private fun UnifiedLogList(
     logs: List<LogEntry>,
+    buildIdentityText: String,
     requestLoggingEnabled: Boolean,
     onRequestLoggingChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -118,6 +126,10 @@ private fun UnifiedLogList(
                 enabled = requestLoggingEnabled,
                 onEnabledChange = onRequestLoggingChange
             )
+        }
+
+        item {
+            BuildIdentityCard(buildIdentityText)
         }
 
         items(sortedLogs, key = { it.id }, contentType = { it.javaClass.simpleName }) { log ->
@@ -141,6 +153,32 @@ private fun UnifiedLogList(
             sheetState = sheetState
         ) {
             RequestLogDetail(log)
+        }
+    }
+}
+
+@Composable
+private fun BuildIdentityCard(buildIdentityText: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CustomColors.cardColorsOnSurfaceContainer,
+    ) {
+        SelectionContainer {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "Installed build",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = buildIdentityText,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = JetbrainsMono,
+                )
+            }
         }
     }
 }

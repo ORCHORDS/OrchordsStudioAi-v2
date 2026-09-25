@@ -17,6 +17,14 @@ data class BuildIdentity(
             ?: "local"
 
     fun displayText(): String = "$versionName ($versionCode) • $channel • $shortSha"
+
+    /** Stable, copy-safe identity for QA/diagnostics. Includes the full source SHA when available. */
+    fun diagnosticText(packageName: String): String = buildString {
+        append("Package: ").append(packageName).append('\n')
+        append("Version: ").append(versionName).append(" (").append(versionCode).append(")\n")
+        append("Channel: ").append(channel).append('\n')
+        append("Source SHA: ").append(buildSha.takeIf { it.matches(Regex("[0-9a-fA-F]{40}")) } ?: "local")
+    }
 }
 
 /** Read the identity of the APK that is actually installed, then add immutable build metadata. */

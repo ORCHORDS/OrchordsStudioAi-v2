@@ -46,6 +46,39 @@ fun ToolApprovalState.canResumeToolExecution(): Boolean {
  *
  */
 @Serializable
+enum class ToolExecutionState {
+    @SerialName("prepared")
+    PREPARED,
+
+    @SerialName("awaiting_approval")
+    AWAITING_APPROVAL,
+
+    @SerialName("awaiting_auth")
+    AWAITING_AUTH,
+
+    @SerialName("submitted")
+    SUBMITTED,
+
+    @SerialName("running")
+    RUNNING,
+
+    @SerialName("succeeded")
+    SUCCEEDED,
+
+    @SerialName("failed")
+    FAILED,
+
+    @SerialName("cancel_requested")
+    CANCEL_REQUESTED,
+
+    @SerialName("cancelled")
+    CANCELLED,
+
+    @SerialName("outcome_unknown")
+    OUTCOME_UNKNOWN,
+}
+
+@Serializable
 enum class ServerToolStatus {
     @SerialName("in_progress")
     IN_PROGRESS,
@@ -251,15 +284,43 @@ sealed class UIMessagePart {
          * legacy persisted tools still infer completion from non-empty output.
          */
         val executionCompleted: Boolean? = null,
+        /** Explicit lifecycle for new persisted executions; null keeps legacy messages readable. */
+        val executionState: ToolExecutionState? = null,
     ) : UIMessagePart() {
         /** Whether this tool call reached a terminal local execution outcome. */
-        val isExecuted: Boolean get() = executionCompleted ?: output.isNotEmpty()
+        val isExecuted: Boolean get() = when (executionState) {
+            ToolExecutionState.SUCCEEDED,
+            ToolExecutionState.FAILED,
+            ToolExecutionState.CANCELLED,
+                -> true
+            ToolExecutionState.PREPARED,
+            ToolExecutionState.AWAITING_APPROVAL,
+            ToolExecutionState.AWAITING_AUTH,
+            ToolExecutionState.SUBMITTED,
+            ToolExecutionState.RUNNING,
+            ToolExecutionState.CANCEL_REQUESTED,
+            ToolExecutionState.OUTCOME_UNKNOWN,
+                -> false
+            null -> executionCompleted ?: output.isNotEmpty()
+        }
 
         /** Whether the tool is pending user approval */
-        val isPending: Boolean get() = approvalState is ToolApprovalState.Pending
+        val isPending: Boolean get() =
+            executionState == ToolExecutionState.AWAITING_APPROVAL ||
+                approvalState is ToolApprovalState.Pending
 
-        /** Whether generation can resume and handle this tool immediately */
-        val canResumeExecution: Boolean get() = !isExecuted && approvalState.canResumeToolExecution()
+        /** Whether generation can resume and handle this tool immediately. */
+        val canResumeExecution: Boolean get() =
+            !isExecuted &&
+                executionState !in setOf(
+                    ToolExecutionState.AWAITING_APPROVAL,
+                    ToolExecutionState.AWAITING_AUTH,
+                    ToolExecutionState.SUBMITTED,
+                    ToolExecutionState.RUNNING,
+                    ToolExecutionState.CANCEL_REQUESTED,
+                    ToolExecutionState.OUTCOME_UNKNOWN,
+                ) &&
+                approvalState.canResumeToolExecution()
 
         /** Parse input string as JsonElement */
         fun inputAsJson(): JsonElement = runCatching {
@@ -275,6 +336,7 @@ sealed class UIMessagePart {
                 approvalState = approvalState,
                 metadata = if (other.metadata != null) other.metadata else metadata,
                 executionCompleted = other.executionCompleted ?: executionCompleted,
+                executionState = other.executionState ?: executionState,
             )
         }
     }

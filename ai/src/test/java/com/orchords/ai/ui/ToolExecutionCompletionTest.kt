@@ -2,6 +2,7 @@ package com.orchords.ai.ui
 
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,5 +54,47 @@ class ToolExecutionCompletionTest {
         val decoded = json.decodeFromString(UIMessagePart.serializer(), encoded) as UIMessagePart.Tool
         assertTrue(decoded.isExecuted)
         assertTrue(decoded.executionCompleted == true)
+    }
+
+    @Test
+    fun `explicit lifecycle distinguishes paused and terminal states`() {
+        val awaitingApproval = UIMessagePart.Tool(
+            toolCallId = "call-approval",
+            toolName = "approval_tool",
+            input = "{}",
+            approvalState = ToolApprovalState.Pending,
+            executionState = ToolExecutionState.AWAITING_APPROVAL,
+        )
+        val awaitingAuth = awaitingApproval.copy(
+            approvalState = ToolApprovalState.Approved,
+            executionState = ToolExecutionState.AWAITING_AUTH,
+        )
+        val succeeded = awaitingAuth.copy(executionState = ToolExecutionState.SUCCEEDED)
+        val failed = awaitingAuth.copy(executionState = ToolExecutionState.FAILED)
+
+        assertTrue(awaitingApproval.isPending)
+        assertFalse(awaitingApproval.canResumeExecution)
+        assertFalse(awaitingAuth.isExecuted)
+        assertFalse(awaitingAuth.canResumeExecution)
+        assertTrue(succeeded.isExecuted)
+        assertTrue(failed.isExecuted)
+    }
+
+    @Test
+    fun `lifecycle survives serialization without breaking legacy completion marker`() {
+        val json = Json { encodeDefaults = true }
+        val original = UIMessagePart.Tool(
+            toolCallId = "call-state",
+            toolName = "stateful_tool",
+            input = "{}",
+            executionCompleted = true,
+            executionState = ToolExecutionState.SUCCEEDED,
+        )
+        val encoded = json.encodeToString(UIMessagePart.serializer(), original)
+        val decoded = json.decodeFromString(UIMessagePart.serializer(), encoded) as UIMessagePart.Tool
+
+        assertEquals(ToolExecutionState.SUCCEEDED, decoded.executionState)
+        assertTrue(decoded.executionCompleted == true)
+        assertTrue(decoded.isExecuted)
     }
 }

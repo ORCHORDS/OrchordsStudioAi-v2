@@ -30,6 +30,7 @@ import com.orchords.ai.provider.TextGenerationParams
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.ToolApprovalState
+import com.orchords.ai.ui.ToolExecutionState
 import com.orchords.ai.ui.StreamChunkHandler
 import com.orchords.ai.ui.handleTextGenerationResult
 import com.orchords.ai.ui.applyToolResultRetention
@@ -219,7 +220,10 @@ class GenerationHandler(
                         toolDef?.needsApproval(tool.inputAsJson()) == true &&
                             tool.approvalState is ToolApprovalState.Auto -> {
                             hasPendingApproval = true
-                            tool.copy(approvalState = ToolApprovalState.Pending)
+                            tool.copy(
+                                approvalState = ToolApprovalState.Pending,
+                                executionState = ToolExecutionState.AWAITING_APPROVAL,
+                            )
                         }
                         tool.approvalState is ToolApprovalState.Pending -> {
                             hasPendingApproval = true
@@ -261,6 +265,7 @@ class GenerationHandler(
                         val reason = (tool.approvalState as ToolApprovalState.Denied).reason
                         executedTools += tool.copy(
                             executionCompleted = true,
+                            executionState = ToolExecutionState.FAILED,
                             output = listOf(
                                 UIMessagePart.Text(
                                     json.encodeToString(
@@ -280,6 +285,7 @@ class GenerationHandler(
                         val answer = (tool.approvalState as ToolApprovalState.Answered).answer
                         executedTools += tool.copy(
                             executionCompleted = true,
+                            executionState = ToolExecutionState.SUCCEEDED,
                             output = listOf(
                                 UIMessagePart.Text(answer)
                             )
@@ -304,12 +310,14 @@ class GenerationHandler(
                             executedTools += tool.copy(
                                 output = maybeTruncateToolOutput(tool.toolCallId, result, hasShellAccess),
                                 executionCompleted = true,
+                                executionState = ToolExecutionState.SUCCEEDED,
                             )
                         }.onFailure {
                             if (it is CancellationException) throw it
                             Log.w(TAG, "generateText: tool execution failed type=${it.javaClass.simpleName}")
                             executedTools += tool.copy(
                                 executionCompleted = true,
+                                executionState = ToolExecutionState.FAILED,
                                 output = listOf(
                                     UIMessagePart.Text(
                                         json.encodeToString(

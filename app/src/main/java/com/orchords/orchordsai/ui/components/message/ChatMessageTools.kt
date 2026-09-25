@@ -44,6 +44,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.orchords.ai.ui.ToolApprovalState
+import com.orchords.ai.ui.ToolExecutionState
 import com.orchords.ai.ui.UIMessagePart
 import me.orchid.hugeicons.HugeIcons
 import me.orchid.hugeicons.stroke.BubbleChatQuestion
@@ -125,9 +126,12 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
     var expanded by remember { mutableStateOf(true) }
     val isPending = tool.approvalState is ToolApprovalState.Pending
     val isDenied = tool.approvalState is ToolApprovalState.Denied
+    val isAwaitingAuth = tool.executionState == ToolExecutionState.AWAITING_AUTH
+    val isOutcomeUnknown = tool.executionState == ToolExecutionState.OUTCOME_UNKNOWN
     val images = tool.output.filterIsInstance<UIMessagePart.Image>()
 
-    val hasExtraContent = renderer.hasSummary(context) || isDenied || images.isNotEmpty()
+    val hasExtraContent =
+        renderer.hasSummary(context) || isDenied || isAwaitingAuth || isOutcomeUnknown || images.isNotEmpty()
 
     ControlledChainOfThoughtStep(
         expanded = expanded,
@@ -186,7 +190,9 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
         } else {
             null
         },
-        onClick = if (context.content != null || isPending || images.isNotEmpty()) {
+        onClick = if (
+            context.content != null || isPending || isAwaitingAuth || isOutcomeUnknown || images.isNotEmpty()
+        ) {
             { showResult = true }
         } else {
             null
@@ -216,6 +222,22 @@ fun ChainOfThoughtScope.ChatMessageToolStep(
                         Text(
                             text = stringResource(R.string.chat_message_tool_denied) +
                                 if (reason.isNotBlank()) ": $reason" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    if (isAwaitingAuth) {
+                        Text(
+                            text = stringResource(R.string.chat_message_tool_awaiting_auth),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+
+                    if (isOutcomeUnknown) {
+                        Text(
+                            text = stringResource(R.string.chat_message_tool_outcome_unknown),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                         )

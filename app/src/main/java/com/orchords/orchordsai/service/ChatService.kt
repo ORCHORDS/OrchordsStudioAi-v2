@@ -41,6 +41,7 @@ import com.orchords.ai.provider.providers.claude.isAnthropicNativeHost
 import com.orchords.ai.provider.TextGenerationParams
 import com.orchords.ai.ui.ToolApprovalState
 import com.orchords.ai.ui.ToolExecutionState
+import com.orchords.ai.ui.toolInputDigest
 import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.canResumeToolExecution
@@ -530,6 +531,12 @@ class ChatService(
                     .filter { it.toolCallId == toolCallId && it.isPending }
                 if (matchingTools.size != 1) {
                     throw NotFoundException("Pending tool not found")
+                }
+                val pendingTool = matchingTools.single()
+                pendingTool.approvalInputDigest?.let { reviewedDigest ->
+                    if (reviewedDigest != toolInputDigest(pendingTool.input)) {
+                        throw IllegalStateException("Tool arguments changed after review; approve the updated action instead")
+                    }
                 }
                 val newApprovalState = when {
                     answer != null -> ToolApprovalState.Answered(answer)

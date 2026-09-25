@@ -115,4 +115,12 @@ class ToolExecutionCompletionTest {
         assertTrue(approved.canResumeExecution)
     }
 
+    @Test
+    fun `tool input digest binds approval to exact reviewed arguments`() {
+        val reviewed = """{"repo":"ORCHORDS/demo","title":"Fix"}"""
+        assertEquals(toolInputDigest(reviewed), toolInputDigest(reviewed))
+        assertFalse(toolInputDigest(reviewed) == toolInputDigest("""{"repo":"ORCHORDS/demo","title":"Fix!"}"""))
+        assertFalse(toolInputDigest(reviewed) == toolInputDigest("""{ "repo":"ORCHORDS/demo","title":"Fix" }"""))
+    }
+
 }

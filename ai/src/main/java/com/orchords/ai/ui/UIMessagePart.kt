@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import com.orchords.ai.util.json
+import java.security.MessageDigest
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -39,6 +40,18 @@ fun ToolApprovalState.canResumeToolExecution(): Boolean {
         ToolApprovalState.Auto,
         ToolApprovalState.Pending,
             -> false
+    }
+}
+
+fun toolInputDigest(input: String): String {
+    val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+    val hex = "0123456789abcdef"
+    return buildString(bytes.size * 2) {
+        bytes.forEach { byte ->
+            val value = byte.toInt() and 0xff
+            append(hex[value ushr 4])
+            append(hex[value and 0x0f])
+        }
     }
 }
 
@@ -286,6 +299,8 @@ sealed class UIMessagePart {
         val executionCompleted: Boolean? = null,
         /** Explicit lifecycle for new persisted executions; null keeps legacy messages readable. */
         val executionState: ToolExecutionState? = null,
+        /** SHA-256 of the exact tool input reviewed when approval was requested. */
+        val approvalInputDigest: String? = null,
     ) : UIMessagePart() {
         /** Whether this tool call reached a terminal local execution outcome. */
         val isExecuted: Boolean get() = when (executionState) {
@@ -347,6 +362,7 @@ sealed class UIMessagePart {
                 metadata = if (other.metadata != null) other.metadata else metadata,
                 executionCompleted = other.executionCompleted ?: executionCompleted,
                 executionState = other.executionState ?: executionState,
+                approvalInputDigest = other.approvalInputDigest ?: approvalInputDigest,
             )
         }
     }

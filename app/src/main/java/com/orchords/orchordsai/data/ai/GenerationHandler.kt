@@ -31,6 +31,7 @@ import com.orchords.ai.ui.UIMessage
 import com.orchords.ai.ui.UIMessagePart
 import com.orchords.ai.ui.ToolApprovalState
 import com.orchords.ai.ui.ToolExecutionState
+import com.orchords.ai.ui.toolInputDigest
 import com.orchords.ai.ui.StreamChunkHandler
 import com.orchords.ai.ui.handleTextGenerationResult
 import com.orchords.ai.ui.applyToolResultRetention
@@ -231,6 +232,7 @@ class GenerationHandler(
                             tool.copy(
                                 approvalState = ToolApprovalState.Pending,
                                 executionState = ToolExecutionState.AWAITING_APPROVAL,
+                                approvalInputDigest = toolInputDigest(tool.input),
                             )
                         }
                         tool.approvalState is ToolApprovalState.Pending -> {
@@ -270,6 +272,24 @@ class GenerationHandler(
             var hasPausedTool = false
             toolsToProcess.forEach { tool ->
                 if (hasPausedTool) return@forEach
+
+                val reviewedDigest = tool.approvalInputDigest
+                val currentDigest = if (reviewedDigest != null) toolInputDigest(tool.input) else null
+                val approvalDependsOnInput =
+                    tool.approvalState is ToolApprovalState.Approved ||
+                        tool.approvalState is ToolApprovalState.Answered
+                if (approvalDependsOnInput && reviewedDigest != null && reviewedDigest != currentDigest) {
+                    Log.w(TAG, "generateText: tool input changed after approval; requesting review again")
+                    hasPausedTool = true
+                    executedTools += tool.copy(
+                        approvalState = ToolApprovalState.Pending,
+                        executionCompleted = false,
+                        executionState = ToolExecutionState.AWAITING_APPROVAL,
+                        approvalInputDigest = currentDigest,
+                    )
+                    return@forEach
+                }
+
                 when (tool.approvalState) {
                     is ToolApprovalState.Denied -> {
                         val reason = (tool.approvalState as ToolApprovalState.Denied).reason
